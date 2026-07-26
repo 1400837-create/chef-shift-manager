@@ -1,15 +1,21 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail } from 'lucide-react'
-import { Section, Field, inputClass, BigButton, Badge } from '../components/UI'
+import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X } from 'lucide-react'
+import { Section, Field, inputClass, BigButton, Badge, PrintButton } from '../components/UI'
 import { MENU_SLOTS } from '../utils/constants'
 import { MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex } from '../utils/dateUtils'
+import { parseMenuImport } from '../utils/importParsers'
 
-export default function MenuPlanner({ menuData, setMenuData, settings, setSettings }) {
+export default function MenuPlanner({ menuData, setMenuData, settings, setSettings, requestPrint }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
   })
   const [openDay, setOpenDay] = useState(null)
+
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [overwriteExisting, setOverwriteExisting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
 
   const monthKey = `${cursor.year}-${String(cursor.month + 1).padStart(2, '0')}`
   const monthData = menuData[monthKey] || {}
@@ -21,6 +27,7 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     const d = new Date(cursor.year, cursor.month + delta, 1)
     setCursor({ year: d.getFullYear(), month: d.getMonth() })
     setOpenDay(null)
+    setImportResult(null)
   }
 
   function updateDay(day, patch) {
@@ -60,6 +67,59 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     window.location.href = `mailto:${to}?subject=${subject}&body=${body}`
   }
 
+  function printMenu() {
+    requestPrint({
+      type: 'menu',
+      title: `Меню на ${MONTHS_RU[cursor.month]} ${cursor.year}`,
+      rows: days.map((day) => {
+        const dayData = monthData[day] || {}
+        return {
+          day: String(day).padStart(2, '0'),
+          weekday: dayLabel(day),
+          soup: dayData.soup || '',
+          soupKosher: !!dayData.soupKosher,
+          main: dayData.main || '',
+          mainKosher: !!dayData.mainKosher,
+          side: dayData.side || '',
+          sideKosher: !!dayData.sideKosher,
+          salad: dayData.salad || '',
+          saladKosher: !!dayData.saladKosher,
+        }
+      }),
+    })
+  }
+
+  function runImport() {
+    const { rows, skipped } = parseMenuImport(importText)
+    let imported = 0
+    let skippedExisting = 0
+
+    setMenuData((prev) => {
+      const cur = { ...(prev[monthKey] || {}) }
+      rows.forEach(({ day, soup, main, side, salad, kosher }) => {
+        if (day > totalDays) return
+        const existing = cur[day]
+        const hasExisting = existing && MENU_SLOTS.some((s) => existing[s.key])
+        if (hasExisting && !overwriteExisting) {
+          skippedExisting += 1
+          return
+        }
+        imported += 1
+        cur[day] = {
+          soup, main, side, salad,
+          soupKosher: kosher, mainKosher: kosher, sideKosher: kosher, saladKosher: kosher,
+        }
+      })
+      return { ...prev, [monthKey]: cur }
+    })
+
+    const parts = [`Импортировано дней: ${imported}`]
+    if (skippedExisting) parts.push(`пропущено (уже заполнено): ${skippedExisting}`)
+    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
+    setImportResult(parts.join(', '))
+    setImportText('')
+  }
+
   return (
     <div className="pb-4">
       <Section title="Email Küchenleiterin" icon={Mail}>
@@ -73,6 +133,59 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         </Field>
       </Section>
 
+      <Section
+        title="Импорт из Google Таблиц"
+        icon={Upload}
+        right={
+          <button
+            onClick={() => setShowImport((v) => !v)}
+            className="text-xs font-semibold text-orange-600"
+          >
+            {showImport ? 'Скрыть' : 'Показать'}
+          </button>
+        }
+      >
+        {showImport && (
+          <>
+            <p className="text-xs text-slate-500 mb-2">
+              В Google Таблице выделите столбцы <b>День, Суп, Горячее, Гарнир, Салат</b> (и, при желании,
+              шестой столбец «Кошер»: да/нет) → Ctrl+C → вставьте сюда → «Импортировать».
+            </p>
+            <textarea
+              className={inputClass + ' h-28 py-2'}
+              placeholder={'1\tБорщ\tКурица\tРис\tОвощи\tда\n2\tСуп овощной\tРыба\tКартофель\tСалат'}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+            />
+            <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={overwriteExisting}
+                onChange={(e) => setOverwriteExisting(e.target.checked)}
+                className="w-5 h-5"
+              />
+              Перезаписывать уже заполненные дни
+            </label>
+            <div className="flex gap-2">
+              <BigButton onClick={runImport} icon={Upload} disabled={!importText.trim()}>
+                Импортировать в {MONTHS_RU[cursor.month]}
+              </BigButton>
+              <button
+                onClick={() => { setShowImport(false); setImportText(''); setImportResult(null) }}
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {importResult && (
+              <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+                {importResult}
+              </p>
+            )}
+          </>
+        )}
+      </Section>
+
       <div className="flex items-center justify-between mb-3 bg-white rounded-2xl border border-slate-200 px-2 py-2 shadow-sm">
         <button onClick={() => changeMonth(-1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
           <ChevronLeft size={22} />
@@ -81,6 +194,10 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         <button onClick={() => changeMonth(1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
           <ChevronRight size={22} />
         </button>
+      </div>
+
+      <div className="flex justify-end mb-2">
+        <PrintButton onClick={printMenu} label="Печать меню на месяц" />
       </div>
 
       <div className="flex flex-col gap-2 mb-4">

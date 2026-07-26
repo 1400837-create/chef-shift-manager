@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChefHat } from 'lucide-react'
 import BottomNav from './components/BottomNav'
+import PrintArea from './components/PrintArea'
 import Dashboard from './pages/Dashboard'
 import MenuPlanner from './pages/MenuPlanner'
 import Inventory from './pages/Inventory'
@@ -29,6 +30,25 @@ export default function App() {
 
   const [advances, setAdvances] = useLocalStorage('advances', {})
   const [receipts, setReceipts] = useLocalStorage('receipts', [])
+
+  const [recountCatalog, setRecountCatalog] = useLocalStorage('recountCatalog', [])
+  const [recounts, setRecounts] = useLocalStorage('recounts', {})
+
+  const [printPayload, setPrintPayload] = useState(null)
+
+  useEffect(() => {
+    if (!printPayload) return
+    const id = requestAnimationFrame(() => window.print())
+    return () => cancelAnimationFrame(id)
+  }, [printPayload])
+
+  useEffect(() => {
+    function clearAfterPrint() {
+      setPrintPayload(null)
+    }
+    window.addEventListener('afterprint', clearAfterPrint)
+    return () => window.removeEventListener('afterprint', clearAfterPrint)
+  }, [])
 
   const now = new Date()
   const today = todayKey()
@@ -80,6 +100,7 @@ export default function App() {
             setKuchenhilfeTasks={setKuchenhilfeTasks}
             stockTracker={stockTracker}
             setStockTracker={setStockTracker}
+            requestPrint={setPrintPayload}
           />
         )}
         {tab === 'menu' && (
@@ -88,6 +109,7 @@ export default function App() {
             setMenuData={setMenuData}
             settings={settings}
             setSettings={setSettings}
+            requestPrint={setPrintPayload}
           />
         )}
         {tab === 'inventory' && (
@@ -96,6 +118,11 @@ export default function App() {
             setItems={setInventoryItems}
             audits={audits}
             setAudits={setAudits}
+            recountCatalog={recountCatalog}
+            setRecountCatalog={setRecountCatalog}
+            recounts={recounts}
+            setRecounts={setRecounts}
+            requestPrint={setPrintPayload}
           />
         )}
         {tab === 'cleaning' && (
@@ -117,6 +144,7 @@ export default function App() {
       </main>
 
       <BottomNav active={tab} onChange={setTab} alerts={alerts} />
+      <PrintArea payload={printPayload} />
     </div>
   )
 }

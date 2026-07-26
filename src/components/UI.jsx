@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react'
+import { Check, Printer } from 'lucide-react'
 
 export function Section({ title, icon: Icon, children, right }) {
   return (
@@ -88,6 +88,17 @@ export function Field({ label, children }) {
       {label && <label className="block text-sm font-medium text-slate-600 mb-1">{label}</label>}
       {children}
     </div>
+  )
+}
+
+export function PrintButton({ onClick, label = 'Печать' }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 text-xs font-semibold"
+    >
+      <Printer size={15} /> {label}
+    </button>
   )
 }
 

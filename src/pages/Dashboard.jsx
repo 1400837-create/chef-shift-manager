@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ClipboardList, AlertTriangle, PackageCheck, Plus, Trash2, CalendarClock, Sunrise, Sunset } from 'lucide-react'
-import { Section, CheckRow, Badge, Field, inputClass } from '../components/UI'
+import { Section, CheckRow, Badge, Field, inputClass, PrintButton } from '../components/UI'
 import { STRATEGIC_CATEGORIES, TASK_CATEGORIES } from '../utils/constants'
 import { todayKey, formatRu, daysBetween, parseLocalDate } from '../utils/dateUtils'
 import { menuDeadlineInfo, financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
@@ -9,6 +9,7 @@ export default function Dashboard({
   shiftChecklist, setShiftChecklist,
   kuchenhilfeTasks, setKuchenhilfeTasks,
   stockTracker, setStockTracker,
+  requestPrint,
 }) {
   const today = todayKey()
   const now = new Date()
@@ -67,6 +68,17 @@ export default function Dashboard({
   const menuDl = menuDeadlineInfo(now)
   const financeDl = financeDeadlineInfo(now)
 
+  function printTasks() {
+    requestPrint({
+      type: 'tasks',
+      date: formatRu(now),
+      tasksByCategory: TASK_CATEGORIES.map((cat) => ({
+        label: cat.label,
+        items: tasksToday.filter((t) => t.category === cat.key).map((t) => t.text),
+      })),
+    })
+  }
+
   return (
     <div className="pb-4">
       <Section title="Открытие смены" icon={Sunrise}>
@@ -89,7 +101,11 @@ export default function Dashboard({
         />
       </Section>
 
-      <Section title="Задачи для Küchenhilfe" icon={ClipboardList}>
+      <Section
+        title="Задачи для Küchenhilfe"
+        icon={ClipboardList}
+        right={<PrintButton onClick={printTasks} />}
+      >
         <div className="flex flex-col gap-2 mb-3">
           <Field label="Новая задача">
             <input
