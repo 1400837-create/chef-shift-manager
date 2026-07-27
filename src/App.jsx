@@ -8,7 +8,9 @@ import Inventory from './pages/Inventory'
 import ShoppingList from './pages/ShoppingList'
 import Cleaning from './pages/Cleaning'
 import Finances from './pages/Finances'
+import { UndoRedoBar } from './components/UI'
 import { useLocalStorage } from './hooks/useLocalStorage'
+import { useTabHistory } from './hooks/useTabHistory'
 import { todayKey, addDays, daysBetween, startOfDay, parseLocalDate } from './utils/dateUtils'
 import { menuDeadlineInfo, financeDeadlineInfo } from './utils/deadlines'
 import { DAILY_CLEANING_ITEMS } from './utils/constants'
@@ -44,6 +46,39 @@ export default function App() {
   const [plannedPurchases, setPlannedPurchases] = useLocalStorage('plannedPurchases', [])
   const [notifiedLog, setNotifiedLog] = useLocalStorage('notifiedLog', {})
   const [darkMode, setDarkMode] = useLocalStorage('darkMode', false)
+
+  // One undo/redo stack per tab, except Склад+Закупка share a single stack —
+  // they edit the same underlying catalog/purchase data (catalog auto-create
+  // on import, "mark purchased" writing into Приход), so two independent
+  // stacks over the same arrays could let an undo on one tab silently skip
+  // over a change made from the other.
+  const dashboardHistory = useTabHistory({
+    shiftChecklist: [shiftChecklist, setShiftChecklist],
+    kuchenhilfeTasks: [kuchenhilfeTasks, setKuchenhilfeTasks],
+    stockTracker: [stockTracker, setStockTracker],
+  })
+  const menuHistory = useTabHistory({
+    menuData: [menuData, setMenuData],
+    dishLibrary: [dishLibrary, setDishLibrary],
+  })
+  const inventoryHistory = useTabHistory({
+    inventoryItems: [inventoryItems, setInventoryItems],
+    audits: [audits, setAudits],
+    recountCatalog: [recountCatalog, setRecountCatalog],
+    recounts: [recounts, setRecounts],
+    recipes: [recipes, setRecipes],
+    purchases: [purchases, setPurchases],
+    productions: [productions, setProductions],
+    plannedPurchases: [plannedPurchases, setPlannedPurchases],
+  })
+  const cleaningHistory = useTabHistory({
+    dailyCleaning: [dailyCleaning, setDailyCleaning],
+    weeklyCleaning: [weeklyCleaning, setWeeklyCleaning],
+  })
+  const financesHistory = useTabHistory({
+    advances: [advances, setAdvances],
+    receipts: [receipts, setReceipts],
+  })
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
@@ -203,77 +238,95 @@ export default function App() {
 
       <main className="max-w-lg mx-auto px-3 pt-3 pb-24">
         {tab === 'dashboard' && (
-          <Dashboard
-            shiftChecklist={shiftChecklist}
-            setShiftChecklist={setShiftChecklist}
-            kuchenhilfeTasks={kuchenhilfeTasks}
-            setKuchenhilfeTasks={setKuchenhilfeTasks}
-            stockTracker={stockTracker}
-            setStockTracker={setStockTracker}
-          />
+          <>
+            <UndoRedoBar {...dashboardHistory} />
+            <Dashboard
+              shiftChecklist={shiftChecklist}
+              setShiftChecklist={setShiftChecklist}
+              kuchenhilfeTasks={kuchenhilfeTasks}
+              setKuchenhilfeTasks={setKuchenhilfeTasks}
+              stockTracker={stockTracker}
+              setStockTracker={setStockTracker}
+            />
+          </>
         )}
         {tab === 'menu' && (
-          <MenuPlanner
-            menuData={menuData}
-            setMenuData={setMenuData}
-            settings={settings}
-            setSettings={setSettings}
-            dishLibrary={dishLibrary}
-            setDishLibrary={setDishLibrary}
-            recipes={recipes}
-          />
+          <>
+            <UndoRedoBar {...menuHistory} />
+            <MenuPlanner
+              menuData={menuData}
+              setMenuData={setMenuData}
+              settings={settings}
+              setSettings={setSettings}
+              dishLibrary={dishLibrary}
+              setDishLibrary={setDishLibrary}
+              recipes={recipes}
+            />
+          </>
         )}
         {tab === 'inventory' && (
-          <Inventory
-            items={inventoryItems}
-            setItems={setInventoryItems}
-            audits={audits}
-            setAudits={setAudits}
-            recountCatalog={recountCatalog}
-            setRecountCatalog={setRecountCatalog}
-            recounts={recounts}
-            setRecounts={setRecounts}
-            recipes={recipes}
-            setRecipes={setRecipes}
-            purchases={purchases}
-            setPurchases={setPurchases}
-            productions={productions}
-            setProductions={setProductions}
-            plannedPurchases={plannedPurchases}
-            setPlannedPurchases={setPlannedPurchases}
-            staffName={staffName}
-          />
+          <>
+            <UndoRedoBar {...inventoryHistory} />
+            <Inventory
+              items={inventoryItems}
+              setItems={setInventoryItems}
+              audits={audits}
+              setAudits={setAudits}
+              recountCatalog={recountCatalog}
+              setRecountCatalog={setRecountCatalog}
+              recounts={recounts}
+              setRecounts={setRecounts}
+              recipes={recipes}
+              setRecipes={setRecipes}
+              purchases={purchases}
+              setPurchases={setPurchases}
+              productions={productions}
+              setProductions={setProductions}
+              plannedPurchases={plannedPurchases}
+              setPlannedPurchases={setPlannedPurchases}
+              staffName={staffName}
+            />
+          </>
         )}
         {tab === 'shopping' && (
-          <ShoppingList
-            recountCatalog={recountCatalog}
-            setRecountCatalog={setRecountCatalog}
-            recounts={recounts}
-            purchases={purchases}
-            productions={productions}
-            recipes={recipes}
-            plannedPurchases={plannedPurchases}
-            setPlannedPurchases={setPlannedPurchases}
-            setPurchases={setPurchases}
-          />
+          <>
+            <UndoRedoBar {...inventoryHistory} />
+            <ShoppingList
+              recountCatalog={recountCatalog}
+              setRecountCatalog={setRecountCatalog}
+              recounts={recounts}
+              purchases={purchases}
+              productions={productions}
+              recipes={recipes}
+              plannedPurchases={plannedPurchases}
+              setPlannedPurchases={setPlannedPurchases}
+              setPurchases={setPurchases}
+            />
+          </>
         )}
         {tab === 'cleaning' && (
-          <Cleaning
-            dailyCleaning={dailyCleaning}
-            setDailyCleaning={setDailyCleaning}
-            weeklyCleaning={weeklyCleaning}
-            setWeeklyCleaning={setWeeklyCleaning}
-            staffName={staffName}
-          />
+          <>
+            <UndoRedoBar {...cleaningHistory} />
+            <Cleaning
+              dailyCleaning={dailyCleaning}
+              setDailyCleaning={setDailyCleaning}
+              weeklyCleaning={weeklyCleaning}
+              setWeeklyCleaning={setWeeklyCleaning}
+              staffName={staffName}
+            />
+          </>
         )}
         {tab === 'finances' && (
-          <Finances
-            advances={advances}
-            setAdvances={setAdvances}
-            receipts={receipts}
-            setReceipts={setReceipts}
-            staffName={staffName}
-          />
+          <>
+            <UndoRedoBar {...financesHistory} />
+            <Finances
+              advances={advances}
+              setAdvances={setAdvances}
+              receipts={receipts}
+              setReceipts={setReceipts}
+              staffName={staffName}
+            />
+          </>
         )}
       </main>
 

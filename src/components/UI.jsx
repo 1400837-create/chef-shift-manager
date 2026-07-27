@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Printer, Trash2 } from 'lucide-react'
+import { Check, Printer, Trash2, Undo2, Redo2 } from 'lucide-react'
 
 export function Section({ title, icon: Icon, children, right }) {
   return (
@@ -152,23 +152,20 @@ export function ConfirmDeleteButton({ onConfirm, size = 'w-9 h-9', iconSize = 16
 // non-destructive action that still deserves a guard against accidental taps
 // — marking something bought immediately moves it into the actual purchase
 // log, so a stray tap shouldn't do that. The color swap (green → orange) on
-// the first tap is the visible "are you sure" signal.
+// the first tap is the visible "are you sure" signal. Unlike
+// ConfirmDeleteButton, this stays armed indefinitely (no auto-revert timer)
+// since the item sits in a list the user may come back to after a pause.
 export function ConfirmMarkButton({ onConfirm, icon: Icon = Check, size = 'w-11 h-11', iconSize = 18 }) {
   const [confirming, setConfirming] = useState(false)
-  const timerRef = useRef(null)
-
-  useEffect(() => () => clearTimeout(timerRef.current), [])
 
   function handleClick(e) {
     e.stopPropagation()
     if (confirming) {
-      clearTimeout(timerRef.current)
       setConfirming(false)
       onConfirm()
       return
     }
     setConfirming(true)
-    timerRef.current = setTimeout(() => setConfirming(false), 2500)
   }
 
   return (
@@ -181,6 +178,29 @@ export function ConfirmMarkButton({ onConfirm, icon: Icon = Check, size = 'w-11 
     >
       <Icon size={iconSize} />
     </button>
+  )
+}
+
+// Per-tab undo/redo controls — see useTabHistory for how the history stack
+// itself works. Rendered once at the top of each tab's content.
+export function UndoRedoBar({ undo, redo, canUndo, canRedo }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <button
+        onClick={undo}
+        disabled={!canUndo}
+        className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:active:bg-slate-600 dark:text-slate-300 text-xs font-semibold disabled:opacity-40"
+      >
+        <Undo2 size={15} /> Отменить
+      </button>
+      <button
+        onClick={redo}
+        disabled={!canRedo}
+        className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:active:bg-slate-600 dark:text-slate-300 text-xs font-semibold disabled:opacity-40"
+      >
+        <Redo2 size={15} /> Повтор
+      </button>
+    </div>
   )
 }
 
