@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload
 import { Section, Field, inputClass, BigButton, Badge, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { DEFAULT_MENU_COURSES } from '../utils/constants'
 import { MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex } from '../utils/dateUtils'
-import { parseMenuImport } from '../utils/importParsers'
+import { parseMenuImport, parsePlannedPurchaseImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { coursesForDay } from '../utils/menuCourses'
 
@@ -27,6 +27,8 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
   const [overwriteExisting, setOverwriteExisting] = useState(false)
   const [importResult, setImportResult] = useState(null)
   const [sendMessage, setSendMessage] = useState(null)
+  const [dayPasteText, setDayPasteText] = useState('')
+  const [showDayPaste, setShowDayPaste] = useState(false)
 
   const monthKey = `${cursor.year}-${String(cursor.month + 1).padStart(2, '0')}`
   const monthData = menuData[monthKey] || {}
@@ -55,13 +57,31 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
 
   function addCourse(day) {
     const courses = coursesForDay(monthData[day])
-    const newCourse = { id: `c-${Date.now()}`, label: `Блюдо ${courses.length + 1}`, dish: '', kosher: false }
+    const newCourse = { id: `c-${Date.now()}`, label: `Блюдо ${courses.length + 1}`, dish: '', qty: '', kosher: false }
     setDayCourses(day, [...courses, newCourse])
   }
 
   function removeCourse(day, courseId) {
     const courses = coursesForDay(monthData[day]).filter((c) => c.id !== courseId)
     setDayCourses(day, courses)
+  }
+
+  // For event/banquet-style days: one dish per line, no fixed course labels,
+  // each optionally followed by a quantity ("Брускетта с лососем\t40 шт").
+  // Reuses the shopping-list paste parser since the shape (name, qty[+unit])
+  // is identical — always appends, never overwrites existing rows.
+  function pasteDayList(day, text) {
+    const { items } = parsePlannedPurchaseImport(text)
+    if (items.length === 0) return
+    const existing = coursesForDay(monthData[day])
+    const added = items.map((item, i) => ({
+      id: `c-${Date.now()}-${i}`,
+      label: '',
+      dish: item.name,
+      qty: item.unit ? `${item.qty} ${item.unit}` : item.qty,
+      kosher: false,
+    }))
+    setDayCourses(day, [...existing, ...added])
   }
 
   function commitDish(label, value) {
@@ -82,7 +102,10 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
   function summaryText(day) {
     const dayData = monthData[day]
     if (!dayData) return ''
-    return coursesForDay(dayData).map((c) => c.dish).filter(Boolean).join(' · ')
+    return coursesForDay(dayData)
+      .filter((c) => c.dish)
+      .map((c) => c.dish + (c.qty ? ` (${c.qty})` : ''))
+      .join(' · ')
   }
 
   function buildMenuText() {
@@ -94,7 +117,9 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
       lines.push(`${String(day).padStart(2, '0')}.${String(cursor.month + 1).padStart(2, '0')} (${dayLabel(day)}):`)
       courses.forEach((c) => {
         if (!c.dish) return
-        lines.push(`  ${c.label}: ${c.dish}${c.kosher ? ' [кошер]' : ''}`)
+        const label = c.label ? `${c.label}: ` : ''
+        const qty = c.qty ? ` — ${c.qty}` : ''
+        lines.push(`  ${label}${c.dish}${qty}${c.kosher ? ' [кошер]' : ''}`)
       })
       lines.push('')
     })
@@ -294,36 +319,50 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
               {isOpen && (
                 <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
                   {courses.map((course) => (
-                    <div key={course.id} className="flex items-center gap-1.5 mb-2">
-                      <div className="w-20 shrink-0">
-                        <input
-                          className={inputClass + ' text-xs px-2'}
-                          value={course.label}
-                          onChange={(e) => updateCourse(day, course.id, { label: e.target.value })}
-                        />
+                    <div key={course.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-2 mb-2">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <div className="w-20 shrink-0">
+                          <input
+                            className={inputClass + ' text-xs px-2'}
+                            placeholder="Курс"
+                            value={course.label}
+                            onChange={(e) => updateCourse(day, course.id, { label: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <input
+                            className={inputClass}
+                            placeholder="Блюдо"
+                            list={`dishlist-${slugify(course.label)}`}
+                            value={course.dish}
+                            onChange={(e) => updateCourse(day, course.id, { dish: e.target.value })}
+                            onBlur={(e) => commitDish(course.label, e.target.value)}
+                          />
+                        </div>
+                        <button
+                          onClick={() => updateCourse(day, course.id, { kosher: !course.kosher })}
+                          className={`shrink-0 w-11 h-11 rounded-xl border-2 flex items-center justify-center ${
+                            course.kosher
+                              ? 'bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-700 text-green-600 dark:text-green-400'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-300'
+                          }`}
+                          title="Кашрут"
+                        >
+                          <ShieldCheck size={18} />
+                        </button>
+                        <ConfirmDeleteButton onConfirm={() => removeCourse(day, course.id)} size="w-9 h-9" iconSize={14} />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <input
-                          className={inputClass}
-                          placeholder="Блюдо"
-                          list={`dishlist-${slugify(course.label)}`}
-                          value={course.dish}
-                          onChange={(e) => updateCourse(day, course.id, { dish: e.target.value })}
-                          onBlur={(e) => commitDish(course.label, e.target.value)}
-                        />
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-400 shrink-0">Кол-во:</span>
+                        <div className="w-28 shrink-0">
+                          <input
+                            className={inputClass + ' text-xs px-2'}
+                            placeholder="напр. 40 шт"
+                            value={course.qty || ''}
+                            onChange={(e) => updateCourse(day, course.id, { qty: e.target.value })}
+                          />
+                        </div>
                       </div>
-                      <button
-                        onClick={() => updateCourse(day, course.id, { kosher: !course.kosher })}
-                        className={`shrink-0 w-11 h-11 rounded-xl border-2 flex items-center justify-center ${
-                          course.kosher
-                            ? 'bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-700 text-green-600 dark:text-green-400'
-                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-300'
-                        }`}
-                        title="Кашрут"
-                      >
-                        <ShieldCheck size={18} />
-                      </button>
-                      <ConfirmDeleteButton onConfirm={() => removeCourse(day, course.id)} size="w-9 h-9" iconSize={14} />
                     </div>
                   ))}
                   <button
@@ -332,6 +371,35 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
                   >
                     <Plus size={16} /> Добавить блюдо
                   </button>
+
+                  <button
+                    onClick={() => setShowDayPaste((v) => !v)}
+                    className="text-xs font-semibold text-orange-600 mt-2"
+                  >
+                    {showDayPaste ? 'Скрыть вставку списка' : 'Вставить список (например, для банкета)'}
+                  </button>
+                  {showDayPaste && (
+                    <div className="mt-2">
+                      <p className="text-xs text-slate-500 mb-2">
+                        По одной позиции на строку: <b>Блюдо, Кол-во</b> (можно с единицей — «40 шт»,
+                        «20 порций»). Список добавится к уже существующим блюдам этого дня, не заменит их.
+                        Выделите в Google Таблице или в тексте → Ctrl+C → вставьте сюда.
+                      </p>
+                      <textarea
+                        className={inputClass + ' h-24 py-2'}
+                        placeholder={'Брускетта классическая с лососем\t40 шт\nКапрезе на шпажках\t20 шт'}
+                        value={dayPasteText}
+                        onChange={(e) => setDayPasteText(e.target.value)}
+                      />
+                      <BigButton
+                        onClick={() => { pasteDayList(day, dayPasteText); setDayPasteText(''); setShowDayPaste(false) }}
+                        icon={Upload}
+                        disabled={!dayPasteText.trim()}
+                      >
+                        Добавить блюда из списка
+                      </BigButton>
+                    </div>
+                  )}
                   <p className="text-xs text-slate-400 mt-2">Значок щита отмечает блюдо как кошерное (кашрут)</p>
                 </div>
               )}

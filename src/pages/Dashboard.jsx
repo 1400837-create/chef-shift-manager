@@ -152,7 +152,7 @@ export default function Dashboard({
               <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="text-slate-500 dark:text-slate-400 shrink-0">{c.label}</span>
                 <span className="font-medium text-slate-800 dark:text-slate-100 text-right truncate">
-                  {c.dish}{c.kosher ? ' ✡' : ''}
+                  {c.dish}{c.qty ? ` — ${c.qty}` : ''}{c.kosher ? ' ✡' : ''}
                 </span>
               </div>
             ))}

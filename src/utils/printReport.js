@@ -39,7 +39,11 @@ function buildMenuHtml(payload) {
   const days = payload.days.map((d) => {
     const filled = d.courses.filter((c) => c.dish)
     const rows = filled.length
-      ? filled.map((c) => `<div>${escapeHtml(c.label)}: ${escapeHtml(c.dish)}${c.kosher ? ' ✡' : ''}</div>`).join('')
+      ? filled.map((c) => {
+          const label = c.label ? `${escapeHtml(c.label)}: ` : ''
+          const qty = c.qty ? ` — ${escapeHtml(c.qty)}` : ''
+          return `<div>${label}${escapeHtml(c.dish)}${qty}${c.kosher ? ' ✡' : ''}</div>`
+        }).join('')
       : '<div class="muted">—</div>'
     return `
       <div class="print-no-break" style="margin-bottom:10px;">
