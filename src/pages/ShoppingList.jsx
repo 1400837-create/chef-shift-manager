@@ -8,7 +8,7 @@ import { sanitizeDecimal } from '../utils/number'
 import { parsePlannedPurchaseImport } from '../utils/importParsers'
 
 export default function ShoppingList({
-  recountCatalog, recounts, purchases, productions, recipes,
+  recountCatalog, setRecountCatalog, recounts, purchases, productions, recipes,
   plannedPurchases, setPlannedPurchases, setPurchases,
 }) {
   const [form, setForm] = useState({ productName: '', qty: '' })
@@ -67,26 +67,38 @@ export default function ShoppingList({
   function importPlanned() {
     const { items: parsed, skipped } = parsePlannedPurchaseImport(importText)
     let added = 0
-    let notFound = 0
     let alreadyPlanned = 0
-    const toAdd = []
+    let createdProducts = 0
+    const toAddPlanned = []
+    const toAddCatalog = []
+
+    function findOrCreateProduct(row) {
+      const existing =
+        findProductByName(row.name) ||
+        toAddCatalog.find((p) => p.name.trim().toLowerCase() === row.name.trim().toLowerCase())
+      if (existing) return existing
+      const created = { id: Date.now() + Math.random(), name: row.name, unit: row.unit || 'шт', zone: 'dry', category: 'other' }
+      toAddCatalog.push(created)
+      createdProducts += 1
+      return created
+    }
+
     parsed.forEach((row) => {
-      const product = findProductByName(row.name)
-      if (!product) {
-        notFound += 1
-        return
-      }
-      if (findPlannedByProduct(product.id) || toAdd.some((p) => p.productId === product.id)) {
+      const product = findOrCreateProduct(row)
+      if (findPlannedByProduct(product.id) || toAddPlanned.some((p) => p.productId === product.id)) {
         alreadyPlanned += 1
         return
       }
-      toAdd.push({ id: Date.now() + Math.random(), productId: product.id, qty: row.qty })
+      toAddPlanned.push({ id: Date.now() + Math.random(), productId: product.id, qty: row.qty })
       added += 1
     })
-    setPlannedPurchases((prev) => [...prev, ...toAdd])
-    const parts = [`Добавлено: ${added}`]
+
+    if (toAddCatalog.length) setRecountCatalog((prev) => [...prev, ...toAddCatalog])
+    if (toAddPlanned.length) setPlannedPurchases((prev) => [...prev, ...toAddPlanned])
+
+    const parts = [`Добавлено в закупку: ${added}`]
+    if (createdProducts) parts.push(`новых товаров создано в каталоге: ${createdProducts}`)
     if (alreadyPlanned) parts.push(`уже в списке: ${alreadyPlanned}`)
-    if (notFound) parts.push(`не найдено в каталоге: ${notFound}`)
     if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
     setImportResult(parts.join(', '))
     setImportText('')
@@ -156,8 +168,9 @@ export default function ShoppingList({
         {showImport && (
           <>
             <p className="text-xs text-slate-500 mb-2">
-              Столбцы: <b>Продукт, Кол-во</b> — по одной позиции на строку. Выделите в Google
-              Таблице → Ctrl+C → вставьте сюда.
+              Столбцы: <b>Продукт, Кол-во</b> (можно с единицей: «600 г», «4 шт.») — по одной
+              позиции на строку. Выделите в Google Таблице → Ctrl+C → вставьте сюда. Товары,
+              которых ещё нет в каталоге, будут созданы автоматически.
             </p>
             <textarea
               className={inputClass + ' h-28 py-2'}

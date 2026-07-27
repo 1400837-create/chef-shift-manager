@@ -247,6 +247,7 @@ export default function App() {
         {tab === 'shopping' && (
           <ShoppingList
             recountCatalog={recountCatalog}
+            setRecountCatalog={setRecountCatalog}
             recounts={recounts}
             purchases={purchases}
             productions={productions}

@@ -7,6 +7,10 @@
 function splitCells(line) {
   if (line.includes('\t')) return line.split('\t')
   if (line.includes(';')) return line.split(';')
+  // Pasting a table as plain text (not straight from a spreadsheet cell
+  // selection) often collapses tabs into a run of spaces instead — treat
+  // 2+ spaces as a column break before falling back to a bare comma split.
+  if (/\s{2,}/.test(line)) return line.split(/\s{2,}/)
   return line.split(',')
 }
 
@@ -150,7 +154,20 @@ export function parseRecountCatalogImport(text) {
   return { items: result, skipped }
 }
 
+// A pasted "Кол-во" cell is often "4 шт." or "0,5 кг" or "20+ шт." rather than
+// a bare number — split off the leading numeric run as qty and keep the rest
+// as unit, so a product that doesn't exist yet in the catalog can still be
+// auto-created with a sensible unit. Falls back to treating the whole cell
+// as qty (e.g. "База") when there's no leading number.
+function splitQtyUnit(raw) {
+  const s = (raw || '').trim()
+  const m = s.match(/^(\d+(?:[.,]\d+)?\+?)\s*(.*)$/)
+  if (m) return { qty: m[1].replace(',', '.'), unit: m[2].trim() }
+  return { qty: s, unit: '' }
+}
+
 // Expects columns: Продукт, Кол-во — one row per item on the shopping list.
+// Кол-во may include a unit ("4 шт.", "600 г") — see splitQtyUnit above.
 export function parsePlannedPurchaseImport(text) {
   const rows = parseRows(text)
   const result = []
@@ -161,12 +178,13 @@ export function parsePlannedPurchaseImport(text) {
     if (idx === 0 && (firstCell.includes('продукт') || firstCell.includes('назван') || firstCell.includes('name'))) return
 
     const name = (cells[0] || '').trim()
-    const qty = (cells[1] || '').trim()
-    if (!name || !qty) {
+    const rawQty = (cells[1] || '').trim()
+    if (!name || !rawQty) {
       skipped.push(cells.join(' | '))
       return
     }
-    result.push({ name, qty })
+    const { qty, unit } = splitQtyUnit(rawQty)
+    result.push({ name, qty: qty || rawQty, unit })
   })
 
   return { items: result, skipped }
