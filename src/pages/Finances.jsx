@@ -5,6 +5,7 @@ import { RECEIPT_CATEGORIES } from '../utils/constants'
 import { biweekKey, formatRu, parseLocalDate } from '../utils/dateUtils'
 import { financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
 import { savePhoto, getPhoto, deletePhoto } from '../utils/photoStore'
+import { compressImage } from '../utils/imageCompress'
 
 export default function Finances({ advances, setAdvances, receipts, setReceipts }) {
   const now = new Date()
@@ -17,6 +18,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
   })
   const [formError, setFormError] = useState(null)
   const [copyMessage, setCopyMessage] = useState(null)
+  const [photoProcessing, setPhotoProcessing] = useState(false)
 
   const periodReceipts = useMemo(
     () => receipts.filter((r) => r.periodKey === periodKey),
@@ -167,15 +169,25 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
         <Field label="Фото чека">
           <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 cursor-pointer active:bg-slate-50">
             <Camera size={20} />
-            <span className="text-sm">{receiptForm.fileName || 'Сфотографировать / выбрать чек'}</span>
+            <span className="text-sm">
+              {photoProcessing ? 'Обработка фото…' : receiptForm.fileName || 'Сфотографировать / выбрать чек'}
+            </span>
             <input
               type="file"
               accept="image/*"
               capture="environment"
               className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0] || null
-                setReceiptForm((f) => ({ ...f, file, fileName: file?.name || '' }))
+              onChange={async (e) => {
+                const rawFile = e.target.files?.[0] || null
+                e.target.value = ''
+                if (!rawFile) return
+                setPhotoProcessing(true)
+                try {
+                  const compressed = await compressImage(rawFile)
+                  setReceiptForm((f) => ({ ...f, file: compressed, fileName: rawFile.name }))
+                } finally {
+                  setPhotoProcessing(false)
+                }
               }}
             />
           </label>
@@ -185,7 +197,9 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
             {formError}
           </p>
         )}
-        <BigButton onClick={addReceipt} icon={Plus}>Добавить чек</BigButton>
+        <BigButton onClick={addReceipt} icon={Plus} disabled={photoProcessing}>
+          {photoProcessing ? 'Обработка фото…' : 'Добавить чек'}
+        </BigButton>
         <p className="text-xs text-slate-400 mt-2">
           Сумма — обязательна. Фото можно приложить, но само по себе без суммы чек не сохранится.
         </p>
