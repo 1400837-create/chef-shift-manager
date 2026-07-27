@@ -31,7 +31,7 @@ function coursesForDay(dayData) {
   return DEFAULT_MENU_COURSES.map((label, i) => ({ id: `default-${i}`, label, dish: '', kosher: false }))
 }
 
-export default function MenuPlanner({ menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary }) {
+export default function MenuPlanner({ menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary, recipes }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -180,7 +180,24 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     setImportText('')
   }
 
-  const allLabels = useMemo(() => Object.keys(dishLibrary || {}), [dishLibrary])
+  const allLabels = useMemo(
+    () => [...new Set([...DEFAULT_MENU_COURSES, ...Object.keys(dishLibrary || {})])],
+    [dishLibrary]
+  )
+  const recipeNames = useMemo(() => (recipes || []).map((r) => r.name), [recipes])
+
+  function suggestionsFor(label) {
+    const fromLibrary = dishLibrary?.[label] || []
+    const seen = new Set()
+    const combined = []
+    for (const dish of [...recipeNames, ...fromLibrary]) {
+      const key = dish.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      combined.push(dish)
+    }
+    return combined
+  }
 
   return (
     <div className="pb-4">
@@ -354,7 +371,7 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
 
       {allLabels.map((label) => (
         <datalist key={label} id={`dishlist-${slugify(label)}`}>
-          {(dishLibrary[label] || []).map((dish) => (
+          {suggestionsFor(label).map((dish) => (
             <option key={dish} value={dish} />
           ))}
         </datalist>

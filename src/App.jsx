@@ -98,6 +98,7 @@ export default function App() {
             setSettings={setSettings}
             dishLibrary={dishLibrary}
             setDishLibrary={setDishLibrary}
+            recipes={recipes}
           />
         )}
         {tab === 'inventory' && (
