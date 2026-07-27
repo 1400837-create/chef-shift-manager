@@ -124,13 +124,13 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
           />
         </Field>
         <div className="grid grid-cols-2 gap-2 mt-2">
-          <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-center">
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 p-3 text-center">
             <p className="text-xs text-slate-500">Потрачено (авто, по чекам)</p>
-            <p className="font-bold text-slate-800 text-lg">{spent}</p>
+            <p className="font-bold text-slate-800 dark:text-slate-100 text-lg">{spent}</p>
           </div>
-          <div className={`rounded-xl border p-3 text-center ${remaining < 0 ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
+          <div className={`rounded-xl border p-3 text-center ${remaining < 0 ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700' : 'bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-700'}`}>
             <p className="text-xs text-slate-500">Остаток</p>
-            <p className={`font-bold text-lg ${remaining < 0 ? 'text-red-700' : 'text-green-700'}`}>{remaining}</p>
+            <p className={`font-bold text-lg ${remaining < 0 ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>{remaining}</p>
           </div>
         </div>
         <div className="flex items-center justify-between mt-3">
@@ -172,7 +172,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
           </select>
         </Field>
         <Field label="Фото чека (необязательно)">
-          <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 cursor-pointer active:bg-slate-50">
+          <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50">
             <Camera size={20} />
             <span className="text-sm">
               {photoProcessing ? 'Обработка фото…' : receiptForm.fileName || 'Сфотографировать / выбрать чек'}
@@ -207,12 +207,12 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
           </label>
         </Field>
         {photoError && (
-          <p className="text-sm text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2 mb-2">
+          <p className="text-sm text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-xl px-3 py-2 mb-2">
             {photoError}
           </p>
         )}
         {formError && (
-          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-2">
+          <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
             {formError}
           </p>
         )}
@@ -234,7 +234,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
           {periodReceipts.map((r) => (
             <li key={r.id} className="flex items-center justify-between py-2.5">
               <div>
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
                   {RECEIPT_CATEGORIES.find((c) => c.key === r.category)?.label} · {r.amount}
                 </p>
                 <p className="text-xs text-slate-400">
@@ -259,7 +259,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
         <BigButton onClick={copyReport} icon={Copy} color="outline" full={false}>Копировать</BigButton>
       </div>
       {copyMessage && (
-        <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+        <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
           {copyMessage}
         </p>
       )}

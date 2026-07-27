@@ -130,7 +130,7 @@ export default function Dashboard({
           tone="urgent"
         />
         {!day.kitchenClean && (
-          <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-2">
+          <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
             <AlertTriangle size={16} className="shrink-0" />
             Если кухня грязная — смену начинаем с уборки, прежде чем готовить.
           </div>
@@ -214,13 +214,13 @@ export default function Dashboard({
                 onClick={() => toggleStockChecked(cat.key)}
                 className={`min-h-[64px] rounded-xl border-2 px-3 py-2 text-left transition-colors ${
                   checkedToday
-                    ? 'bg-green-50 border-green-400'
+                    ? 'bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-700'
                     : stale
-                    ? 'bg-red-50 border-red-300'
-                    : 'bg-white border-slate-200'
+                    ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
                 }`}
               >
-                <p className="font-semibold text-slate-800 text-sm">{cat.label}</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{cat.label}</p>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {checkedToday
                     ? 'Проверено сегодня'
@@ -265,7 +265,7 @@ export default function Dashboard({
           <ul className="divide-y divide-slate-100">
             {stockTracker.produce.map((p) => (
               <li key={p.id} className="flex items-center justify-between py-2">
-                <span className="text-sm text-slate-700">
+                <span className="text-sm text-slate-700 dark:text-slate-200">
                   {p.name} {p.qty && <span className="text-slate-400">· {p.qty}</span>}
                 </span>
                 <div className="flex items-center gap-2">
@@ -320,7 +320,7 @@ export default function Dashboard({
                 const closingDone = d.leftoversPacked && d.cleaningDone
                 return (
                   <li key={dateKey} className="py-2.5 flex items-center justify-between">
-                    <span className="text-sm text-slate-700">{formatRu(parseLocalDate(dateKey))}</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-200">{formatRu(parseLocalDate(dateKey))}</span>
                     <div className="flex items-center gap-1.5">
                       {tasks.length > 0 && <Badge color="slate">Задачи {tasksDone}/{tasks.length}</Badge>}
                       <Badge color={openingDone ? 'green' : 'slate'}>Открытие</Badge>
@@ -342,15 +342,15 @@ export default function Dashboard({
         <div className="flex gap-2 mb-2">
           <BigButton onClick={downloadBackup} icon={Download} color="outline">Скачать копию (JSON)</BigButton>
         </div>
-        <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 cursor-pointer active:bg-slate-50">
+        <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50">
           <Upload size={18} />
           <span className="text-sm">Загрузить копию из файла</span>
           <input type="file" accept="application/json" className="hidden" onChange={handleBackupFileSelected} />
         </label>
 
         {importPreview && (
-          <div className="mt-3 rounded-xl border-2 border-yellow-300 bg-yellow-50 p-3">
-            <p className="text-sm text-slate-700 mb-2">
+          <div className="mt-3 rounded-xl border-2 border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/30 p-3">
+            <p className="text-sm text-slate-700 dark:text-slate-200 mb-2">
               Найден файл от {importPreview.exportedAt ? formatRu(new Date(importPreview.exportedAt)) : '—'},
               разделов данных: {Object.keys(importPreview.data).length}. Импорт{' '}
               <b>заменит текущие данные в приложении</b>. Продолжить?
@@ -362,7 +362,7 @@ export default function Dashboard({
           </div>
         )}
         {importMessage && (
-          <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+          <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
             {importMessage}
           </p>
         )}
@@ -374,9 +374,9 @@ export default function Dashboard({
 function DeadlineRow({ label, date, daysLeft }) {
   const color = urgencyColor(daysLeft)
   return (
-    <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
+    <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2.5">
       <div>
-        <p className="text-sm font-medium text-slate-700">{label}</p>
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</p>
         <p className="text-xs text-slate-400">до {date}</p>
       </div>
       <Badge color={color}>{daysLeft <= 0 ? 'Сегодня!' : `${daysLeft} дн.`}</Badge>

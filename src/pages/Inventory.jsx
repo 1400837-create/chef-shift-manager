@@ -26,9 +26,9 @@ function statusFor(daysLeft) {
 }
 
 const toneClasses = {
-  red: 'border-red-300 bg-red-50',
-  yellow: 'border-yellow-300 bg-yellow-50',
-  green: 'border-slate-200 bg-white',
+  red: 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30',
+  yellow: 'border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/30',
+  green: 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800',
 }
 
 export default function Inventory({
@@ -529,7 +529,7 @@ export default function Inventory({
         <button
           onClick={() => setTab('fifo')}
           className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
-            tab === 'fifo' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
+            tab === 'fifo' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
           }`}
         >
           <PackageSearch size={16} /> FIFO
@@ -537,7 +537,7 @@ export default function Inventory({
         <button
           onClick={() => setTab('audit')}
           className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
-            tab === 'audit' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
+            tab === 'audit' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
           }`}
         >
           <ClipboardCheck size={16} /> Проверка
@@ -545,7 +545,7 @@ export default function Inventory({
         <button
           onClick={() => setTab('recount')}
           className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
-            tab === 'recount' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
+            tab === 'recount' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
           }`}
         >
           <ClipboardList size={16} /> Переучёт
@@ -553,7 +553,7 @@ export default function Inventory({
         <button
           onClick={() => setTab('balance')}
           className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
-            tab === 'balance' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
+            tab === 'balance' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
           }`}
         >
           <Scale size={16} /> Остатки
@@ -561,7 +561,7 @@ export default function Inventory({
         <button
           onClick={() => setTab('catalog')}
           className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
-            tab === 'catalog' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
+            tab === 'catalog' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
           }`}
         >
           <Tags size={16} /> Каталог
@@ -569,12 +569,12 @@ export default function Inventory({
       </div>
 
       {(tab === 'audit' || tab === 'recount') && (
-        <div className="flex items-center justify-between mb-4 bg-white rounded-2xl border border-slate-200 px-2 py-2 shadow-sm">
+        <div className="flex items-center justify-between mb-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
           <button onClick={() => setMonthOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
             <ChevronLeft size={20} />
           </button>
           <div className="text-center">
-            <p className="font-semibold text-slate-800 text-sm">{monthLabel}</p>
+            <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{monthLabel}</p>
             {!isThisMonth && <button onClick={() => setMonthOffset(0)} className="text-[11px] text-orange-600 font-semibold">Вернуться к этому месяцу</button>}
           </div>
           <button
@@ -632,7 +632,7 @@ export default function Inventory({
                   <div key={item.id} className={`rounded-xl border-2 p-3 ${toneClasses[status.tone]}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-semibold text-slate-800">{item.name}</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">{item.name}</p>
                         <p className="text-xs text-slate-500">
                           Упаковано {formatRu(parseLocalDate(item.packDate))} · годен {item.shelfLifeDays} дн.
                         </p>
@@ -653,7 +653,7 @@ export default function Inventory({
                           className={`flex-1 min-h-[40px] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border ${
                             item.status === a.key
                               ? 'bg-slate-800 text-white border-slate-800'
-                              : 'bg-white text-slate-600 border-slate-200'
+                              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                           }`}
                         >
                           {a.key === 'freezing' && <Snowflake size={14} />}
@@ -664,7 +664,7 @@ export default function Inventory({
                       ))}
                     </div>
                     {disposalPromptId === item.id && (
-                      <div className="mt-2 pt-2 border-t border-slate-200">
+                      <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                         <div className="flex items-center justify-between mb-1.5">
                           <p className="text-xs font-semibold text-slate-500">Причина списания:</p>
                           <button onClick={() => setDisposalPromptId(null)} className="text-slate-400">
@@ -676,7 +676,7 @@ export default function Inventory({
                             <button
                               key={r.key}
                               onClick={() => confirmDisposal(item.id, r.key)}
-                              className="min-h-[32px] px-2.5 rounded-lg text-xs font-semibold bg-red-50 border border-red-200 text-red-700 active:bg-red-100"
+                              className="min-h-[32px] px-2.5 rounded-lg text-xs font-semibold bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 active:bg-red-100"
                             >
                               {r.label}
                             </button>
@@ -694,9 +694,9 @@ export default function Inventory({
             <Section title={`Журнал списаний (${wasteLog.length})`} icon={Trash}>
               <div className="flex flex-col gap-2">
                 {wasteLog.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                  <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-700 truncate">{item.name}</p>
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{item.name}</p>
                       <p className="text-xs text-slate-400">
                         {wasteReasonLabel(item.wasteReason)}
                         {item.wasteDate && ` · ${formatRu(parseLocalDate(item.wasteDate))}`}
@@ -714,8 +714,8 @@ export default function Inventory({
 
       {tab === 'audit' && (
         <>
-          <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-4 shadow-sm">
-            <p className="text-sm font-medium text-slate-600">Проверка зон — {monthLabel}</p>
+          <div className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 mb-4 shadow-sm">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Проверка зон — {monthLabel}</p>
             <Badge color={auditDone === auditTotal ? 'green' : 'slate'}>{auditDone}/{auditTotal}</Badge>
           </div>
 
@@ -744,8 +744,8 @@ export default function Inventory({
 
       {tab === 'recount' && (
         <>
-          <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-2 shadow-sm">
-            <p className="text-sm font-medium text-slate-600">Переучёт — {monthLabel}</p>
+          <div className="flex items-center justify-between bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 mb-2 shadow-sm">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Переучёт — {monthLabel}</p>
             <Badge color={catalogFilled === catalogTotal && catalogTotal > 0 ? 'green' : 'slate'}>
               {catalogFilled}/{catalogTotal}
             </Badge>
@@ -774,7 +774,7 @@ export default function Inventory({
             <PrintButton onClick={() => printRecount(false)} label="С текущими данными" />
             <button
               onClick={exportMonthCsv}
-              className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 text-xs font-semibold"
+              className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
             >
               <Download size={15} /> Экспорт за месяц (CSV)
             </button>
@@ -796,14 +796,14 @@ export default function Inventory({
                     )
                     const shrinkage = expected !== null && actual !== null ? actual - expected : null
                     return (
-                      <div key={item.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                      <div key={item.id} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-700 truncate">{item.name}</p>
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{item.name}</p>
                           <p className="text-xs text-slate-400">
                             {item.unit}
                             {expected !== null && ` · ожидалось ${expected}`}
                             {shrinkage !== null && shrinkage !== 0 && (
-                              <span className={shrinkage > 0 ? 'text-green-600' : 'text-red-600'}>
+                              <span className={shrinkage > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                                 {' '}({shrinkage > 0 ? '+' : ''}{shrinkage}{shrinkage < 0 ? ' недостача' : ' излишек'})
                               </span>
                             )}
@@ -890,7 +890,7 @@ export default function Inventory({
                   </BigButton>
                   <button
                     onClick={() => { setShowCatalogImport(false); setCatalogImportText(''); setCatalogImportResult(null) }}
-                    className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500"
+                    className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500"
                   >
                     <X size={18} />
                   </button>
@@ -898,7 +898,7 @@ export default function Inventory({
               </>
             )}
             {catalogImportResult && (
-              <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+              <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
                 {catalogImportResult}
               </p>
             )}
@@ -976,7 +976,7 @@ export default function Inventory({
                   key={opt.key}
                   onClick={() => setCatalogSort(opt.key)}
                   className={`flex-1 min-h-[36px] rounded-lg text-xs font-semibold ${
-                    catalogSort === opt.key ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+                    catalogSort === opt.key ? 'bg-slate-800 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                   }`}
                 >
                   {opt.label}
@@ -988,7 +988,7 @@ export default function Inventory({
             )}
             <div className="flex flex-col gap-2">
               {sortedCatalog.map((item) => (
-                <div key={item.id} className="rounded-xl border border-slate-200 px-2 py-2">
+                <div key={item.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-2">
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <div className="flex-1 min-w-0">
                       <input
@@ -1080,7 +1080,7 @@ export default function Inventory({
             }
           >
             {showRecipeImport && (
-              <div className="mb-3 pb-3 border-b border-slate-100">
+              <div className="mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
                 <p className="text-xs text-slate-500 mb-2">
                   Столбцы: <b>Блюдо, Ингредиент, Кол-во</b> — по одной строке на ингредиент.
                   Несколько строк с одинаковым названием блюда объединятся в один рецепт.
@@ -1092,7 +1092,7 @@ export default function Inventory({
                   value={recipeImportText}
                   onChange={(e) => setRecipeImportText(e.target.value)}
                 />
-                <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600">
+                <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
                   <input
                     type="checkbox"
                     checked={recipeImportOverwrite}
@@ -1105,7 +1105,7 @@ export default function Inventory({
                   Импортировать рецепты
                 </BigButton>
                 {recipeImportResult && (
-                  <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
                     {recipeImportResult}
                   </p>
                 )}
@@ -1115,9 +1115,9 @@ export default function Inventory({
             {recipes.length === 0 && <p className="text-sm text-slate-400 text-center py-2">Рецептов пока нет</p>}
             <div className="flex flex-col gap-2 mb-3">
               {recipes.map((r) => (
-                <div key={r.id} className={`rounded-xl border px-3 py-2 ${editingRecipeId === r.id ? 'border-orange-400 bg-orange-50' : 'border-slate-200'}`}>
+                <div key={r.id} className={`rounded-xl border px-3 py-2 ${editingRecipeId === r.id ? 'border-orange-400 bg-orange-50' : 'border-slate-200 dark:border-slate-700'}`}>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-800 min-w-0 truncate">{r.name}</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 min-w-0 truncate">{r.name}</p>
                     <div className="flex items-center gap-1 shrink-0">
                       {recipeCost(r) !== null && <Badge color="green">≈ {recipeCost(r).toFixed(2)}</Badge>}
                       <button
@@ -1180,7 +1180,7 @@ export default function Inventory({
                 </div>
                 <button
                   onClick={() => removeIngredientRow(idx)}
-                  className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500"
+                  className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500"
                 >
                   <X size={16} />
                 </button>
@@ -1188,12 +1188,12 @@ export default function Inventory({
             ))}
             <button
               onClick={addIngredientRow}
-              className="w-full min-h-[40px] flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 text-sm font-semibold active:bg-slate-50 mb-2"
+              className="w-full min-h-[40px] flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 text-sm font-semibold active:bg-slate-50 mb-2"
             >
               <Plus size={14} /> Ингредиент
             </button>
             {recipeError && (
-              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-2">
+              <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
                 {recipeError}
               </p>
             )}
@@ -1241,7 +1241,7 @@ export default function Inventory({
               </button>
             </div>
             {purchaseError && (
-              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-2">
+              <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mt-2">
                 {purchaseError}
               </p>
             )}
@@ -1249,8 +1249,8 @@ export default function Inventory({
             {purchases.slice(0, 8).map((p) => {
               const product = recountCatalog.find((pr) => pr.id === Number(p.productId) || pr.id === p.productId)
               return (
-                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
-                  <span className="text-sm text-slate-700">
+                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                  <span className="text-sm text-slate-700 dark:text-slate-200">
                     {product?.name || '?'} <span className="text-slate-400">+{p.qty} {product?.unit}</span>
                   </span>
                   <div className="flex items-center gap-2">
@@ -1311,8 +1311,8 @@ export default function Inventory({
             {productions.slice(0, 8).map((p) => {
               const recipe = recipes.find((r) => r.id === Number(p.recipeId) || r.id === p.recipeId)
               return (
-                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
-                  <span className="text-sm text-slate-700">
+                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                  <span className="text-sm text-slate-700 dark:text-slate-200">
                     {recipe?.name || '?'} <span className="text-slate-400">× {p.qty}</span>
                   </span>
                   <div className="flex items-center gap-2">
@@ -1331,7 +1331,7 @@ export default function Inventory({
                   key={opt.key}
                   onClick={() => setBalanceSort(opt.key)}
                   className={`flex-1 min-h-[36px] rounded-lg text-xs font-semibold ${
-                    balanceSort === opt.key ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+                    balanceSort === opt.key ? 'bg-slate-800 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                   }`}
                 >
                   {opt.label}
@@ -1349,11 +1349,11 @@ export default function Inventory({
                 return (
                   <div
                     key={product.id}
-                    className={`rounded-xl border-2 px-3 py-2 ${low ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
+                    className={`rounded-xl border-2 px-3 py-2 ${low ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30' : 'border-slate-200 dark:border-slate-700'}`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-700 truncate">{product.name}</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{product.name}</p>
                         <p className="text-xs text-slate-400">
                           {baselineDate ? `с переучёта ${formatRu(baselineDate)}` : 'нет данных переучёта'}
                           {low && ' · мало на складе'}

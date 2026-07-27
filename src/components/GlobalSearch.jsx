@@ -35,12 +35,12 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col">
-      <div className="safe-top flex items-center gap-2 px-3 py-3 border-b border-slate-100 shrink-0">
+    <div className="fixed inset-0 z-50 bg-white dark:bg-slate-800 flex flex-col">
+      <div className="safe-top flex items-center gap-2 px-3 py-3 border-b border-slate-100 dark:border-slate-700 shrink-0">
         <Search size={18} className="text-slate-400 shrink-0" />
         <input
           autoFocus
-          className="flex-1 min-w-0 text-[15px] focus:outline-none"
+          className="flex-1 min-w-0 text-[15px] text-slate-900 dark:text-slate-100 bg-transparent focus:outline-none"
           placeholder="Поиск по продуктам и рецептам…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -63,11 +63,11 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Продукты</p>
             <div className="flex flex-col gap-2">
               {products.map((row) => (
-                <div key={row.product.id} className="rounded-xl border border-slate-200 px-3 py-2">
+                <div key={row.product.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-slate-700 truncate">{row.product.name}</p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
                     {row.balance !== null ? (
-                      <span className="shrink-0 text-xs font-semibold text-slate-600">{row.balance} {row.product.unit}</span>
+                      <span className="shrink-0 text-xs font-semibold text-slate-600 dark:text-slate-300">{row.balance} {row.product.unit}</span>
                     ) : (
                       <span className="shrink-0 text-xs text-slate-400">—</span>
                     )}
@@ -89,10 +89,10 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
               {matchedRecipes.map((r) => {
                 const cost = computeRecipeCost(r, recountCatalog)
                 return (
-                  <div key={r.id} className="rounded-xl border border-slate-200 px-3 py-2">
+                  <div key={r.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{r.name}</p>
-                      {cost !== null && <span className="shrink-0 text-xs font-semibold text-green-700">≈ {cost.toFixed(2)}</span>}
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{r.name}</p>
+                      {cost !== null && <span className="shrink-0 text-xs font-semibold text-green-700 dark:text-green-300">≈ {cost.toFixed(2)}</span>}
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
                       {r.ingredients.map((ing) => {

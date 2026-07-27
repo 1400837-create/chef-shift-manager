@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { ChefHat, User, Search } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChefHat, User, Search, Bell, BellOff, Moon, Sun } from 'lucide-react'
 import BottomNav from './components/BottomNav'
 import GlobalSearch from './components/GlobalSearch'
 import Dashboard from './pages/Dashboard'
@@ -42,12 +42,39 @@ export default function App() {
   const [purchases, setPurchases] = useLocalStorage('purchases', [])
   const [productions, setProductions] = useLocalStorage('productions', [])
   const [plannedPurchases, setPlannedPurchases] = useLocalStorage('plannedPurchases', [])
+  const [notifiedLog, setNotifiedLog] = useLocalStorage('notifiedLog', {})
+  const [darkMode, setDarkMode] = useLocalStorage('darkMode', false)
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode)
+  }, [darkMode])
 
   const now = new Date()
   const today = todayKey()
   const staffName = settings.currentStaffName || ''
   function setStaffName(name) {
     setSettings((s) => ({ ...s, currentStaffName: name }))
+  }
+
+  const notificationsEnabled = !!settings.notificationsEnabled
+
+  function toggleNotifications() {
+    if (typeof Notification === 'undefined') {
+      alert('Этот браузер не поддерживает уведомления.')
+      return
+    }
+    if (notificationsEnabled) {
+      setSettings((s) => ({ ...s, notificationsEnabled: false }))
+      return
+    }
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') {
+        setSettings((s) => ({ ...s, notificationsEnabled: true }))
+        new Notification('Kitchen OS', {
+          body: 'Уведомления включены — напомним о дедлайнах меню/финансов и о низком остатке на складе, пока приложение открыто.',
+        })
+      }
+    })
   }
 
   const alerts = useMemo(() => {
@@ -85,26 +112,78 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inventoryItems, dailyCleaning, shiftChecklist, today, recountCatalog, recounts, purchases, productions, recipes, plannedPurchases])
 
+  // Best-effort reminders: GitHub Pages is static (no server), so there is no
+  // real background push — this only fires while the app/tab is open.
+  useEffect(() => {
+    if (!notificationsEnabled) return
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+
+    function notifyOnce(key, title, body) {
+      setNotifiedLog((prev) => {
+        if (prev[key]) return prev
+        try {
+          new Notification(title, { body })
+        } catch {
+          // ignore — best-effort only
+        }
+        return { ...prev, [key]: true }
+      })
+    }
+
+    function check() {
+      const d = todayKey()
+      const menuInfo = menuDeadlineInfo(new Date())
+      if (menuInfo.daysLeft <= 1) {
+        notifyOnce(`menu_${d}`, 'Kitchen OS — дедлайн меню', `Меню нужно сдать: ${menuInfo.label}`)
+      }
+      const finInfo = financeDeadlineInfo(new Date())
+      if (finInfo.daysLeft <= 1) {
+        notifyOnce(`finance_${d}`, 'Kitchen OS — финансовый отчёт', `Отчёт нужно сдать: ${finInfo.label}`)
+      }
+      if (alerts.shopping) {
+        notifyOnce(`shopping_${d}`, 'Kitchen OS — мало на складе', 'Есть товары с низким остатком, ещё не добавленные в закупку')
+      }
+    }
+
+    check()
+    const id = setInterval(check, 5 * 60 * 1000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notificationsEnabled, alerts.shopping])
+
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="safe-top sticky top-0 z-30 bg-slate-900 text-white px-4 py-3 flex items-center gap-2 shadow-md">
-        <ChefHat size={22} className="text-orange-400 shrink-0" />
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+      <header className="safe-top sticky top-0 z-30 bg-slate-900 text-white px-3 py-3 flex items-center gap-1 shadow-md">
+        <ChefHat size={20} className="text-orange-400 shrink-0 mr-1" />
         <div className="min-w-0 flex-1">
-          <p className="font-bold leading-tight">Kitchen OS</p>
-          <p className="text-[11px] text-slate-400 leading-tight">
+          <p className="font-bold leading-tight truncate text-[15px]">Kitchen OS</p>
+          <p className="text-[10px] text-slate-400 leading-tight truncate">
             {now.toLocaleDateString('ru-RU', { weekday: 'long', day: '2-digit', month: 'long' })}
           </p>
         </div>
         <button
-          onClick={() => setSearchOpen(true)}
-          className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg active:bg-slate-800 text-slate-300"
+          onClick={() => setDarkMode((v) => !v)}
+          className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg active:bg-slate-800 text-slate-300"
         >
-          <Search size={19} />
+          {darkMode ? <Sun size={16} /> : <Moon size={16} />}
         </button>
-        <div className="flex items-center gap-1 shrink-0 bg-slate-800 rounded-lg px-2 py-1">
-          <User size={13} className="text-slate-400 shrink-0" />
+        <button
+          onClick={toggleNotifications}
+          className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg active:bg-slate-800 ${notificationsEnabled ? 'text-orange-400' : 'text-slate-500'}`}
+          title={notificationsEnabled ? 'Напоминания включены' : 'Включить напоминания'}
+        >
+          {notificationsEnabled ? <Bell size={16} /> : <BellOff size={16} />}
+        </button>
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg active:bg-slate-800 text-slate-300"
+        >
+          <Search size={17} />
+        </button>
+        <div className="flex items-center gap-1 shrink-0 bg-slate-800 rounded-lg px-1.5 py-1 ml-0.5">
+          <User size={12} className="text-slate-400 shrink-0" />
           <input
-            className="bg-transparent text-[12px] text-white placeholder-slate-500 focus:outline-none w-16"
+            className="bg-transparent text-[12px] text-white placeholder-slate-500 focus:outline-none w-12"
             placeholder="Имя"
             value={staffName}
             onChange={(e) => setStaffName(e.target.value)}

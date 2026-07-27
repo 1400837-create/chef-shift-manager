@@ -237,7 +237,7 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
             />
-            <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
               <input
                 type="checkbox"
                 checked={overwriteExisting}
@@ -252,13 +252,13 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
               </BigButton>
               <button
                 onClick={() => { setShowImport(false); setImportText(''); setImportResult(null) }}
-                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500"
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500"
               >
                 <X size={18} />
               </button>
             </div>
             {importResult && (
-              <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+              <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
                 {importResult}
               </p>
             )}
@@ -266,11 +266,11 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         )}
       </Section>
 
-      <div className="flex items-center justify-between mb-3 bg-white rounded-2xl border border-slate-200 px-2 py-2 shadow-sm">
+      <div className="flex items-center justify-between mb-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
         <button onClick={() => changeMonth(-1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
           <ChevronLeft size={22} />
         </button>
-        <p className="font-bold text-slate-800">{MONTHS_RU[cursor.month]} {cursor.year}</p>
+        <p className="font-bold text-slate-800 dark:text-slate-100">{MONTHS_RU[cursor.month]} {cursor.year}</p>
         <button onClick={() => changeMonth(1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
           <ChevronRight size={22} />
         </button>
@@ -287,17 +287,17 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
           const courses = isOpen || dayData ? coursesForDay(dayData) : []
           const anyKosher = courses.some((c) => c.kosher)
           return (
-            <div key={day} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div key={day} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
               <button
                 onClick={() => setOpenDay(isOpen ? null : day)}
                 className="w-full flex items-center justify-between px-3 py-3 min-h-[56px] active:bg-slate-50"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-slate-100 flex flex-col items-center justify-center leading-none">
-                    <span className="font-bold text-slate-800 text-sm">{day}</span>
+                  <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-700 flex flex-col items-center justify-center leading-none">
+                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{day}</span>
                     <span className="text-[10px] text-slate-500">{dayLabel(day)}</span>
                   </div>
-                  <p className="text-sm text-slate-600 text-left line-clamp-1 max-w-[45vw]">
+                  <p className="text-sm text-slate-600 dark:text-slate-300 text-left line-clamp-1 max-w-[45vw]">
                     {summaryText(day) || <span className="text-slate-300">Не заполнено</span>}
                   </p>
                 </div>
@@ -308,7 +308,7 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
               </button>
 
               {isOpen && (
-                <div className="px-3 pb-3 pt-1 border-t border-slate-100">
+                <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
                   {courses.map((course) => (
                     <div key={course.id} className="flex items-center gap-1.5 mb-2">
                       <div className="w-20 shrink-0">
@@ -332,8 +332,8 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
                         onClick={() => updateCourse(day, course.id, { kosher: !course.kosher })}
                         className={`shrink-0 w-11 h-11 rounded-xl border-2 flex items-center justify-center ${
                           course.kosher
-                            ? 'bg-green-50 border-green-400 text-green-600'
-                            : 'bg-white border-slate-200 text-slate-300'
+                            ? 'bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-700 text-green-600 dark:text-green-400'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-300'
                         }`}
                         title="Кашрут"
                       >
@@ -344,7 +344,7 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
                   ))}
                   <button
                     onClick={() => addCourse(day)}
-                    className="w-full min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 text-sm font-semibold active:bg-slate-50 mt-1"
+                    className="w-full min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 text-sm font-semibold active:bg-slate-50 mt-1"
                   >
                     <Plus size={16} /> Добавить блюдо
                   </button>
@@ -361,7 +361,7 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         <BigButton onClick={copyMenu} icon={Copy} color="outline" full={false}>Копировать</BigButton>
       </div>
       {sendMessage && (
-        <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+        <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
           {sendMessage}
         </p>
       )}

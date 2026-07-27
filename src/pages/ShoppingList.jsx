@@ -126,11 +126,11 @@ export default function ShoppingList({
             {lowStockNotPlanned.map((row) => (
               <div
                 key={row.product.id}
-                className="flex items-center justify-between gap-2 rounded-xl border-2 border-red-300 bg-red-50 px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-xl border-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30 px-3 py-2"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-700 truncate">{row.product.name}</p>
-                  <p className="text-xs text-red-600">Остаток: {row.balance} {row.product.unit}</p>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
+                  <p className="text-xs text-red-600 dark:text-red-400">Остаток: {row.balance} {row.product.unit}</p>
                 </div>
                 <button
                   onClick={() => addFromLowStock(row.product)}
@@ -171,7 +171,7 @@ export default function ShoppingList({
               </BigButton>
               <button
                 onClick={() => { setShowImport(false); setImportText(''); setImportResult(null) }}
-                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500"
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500"
               >
                 <X size={18} />
               </button>
@@ -179,7 +179,7 @@ export default function ShoppingList({
           </>
         )}
         {importResult && (
-          <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+          <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
             {importResult}
           </p>
         )}
@@ -223,7 +223,7 @@ export default function ShoppingList({
           </button>
         </div>
         {error && (
-          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
+          <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-3">
             {error}
           </p>
         )}
@@ -234,9 +234,9 @@ export default function ShoppingList({
           {plannedPurchases.map((p) => {
             const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
             return (
-              <div key={p.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
+              <div key={p.id} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-700 truncate">{product?.name || '?'}</p>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{product?.name || '?'}</p>
                   <p className="text-xs text-slate-400">{product?.unit}</p>
                 </div>
                 <div className="w-20 shrink-0">

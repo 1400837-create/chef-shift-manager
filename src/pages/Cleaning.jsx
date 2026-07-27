@@ -54,12 +54,12 @@ export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleani
 
   return (
     <div className="pb-4">
-      <div className="flex items-center justify-between mb-2 bg-white rounded-2xl border border-slate-200 px-2 py-2 shadow-sm">
+      <div className="flex items-center justify-between mb-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
         <button onClick={() => setDayOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
           <ChevronLeft size={20} />
         </button>
         <div className="text-center">
-          <p className="font-semibold text-slate-800 text-sm">
+          <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
             {isToday ? 'Сегодня' : viewedDay.toLocaleDateString('ru-RU', { weekday: 'short', day: '2-digit', month: '2-digit' })}
           </p>
           {!isToday && <button onClick={() => setDayOffset(0)} className="text-[11px] text-orange-600 font-semibold">Вернуться к сегодня</button>}
@@ -89,12 +89,12 @@ export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleani
         ))}
       </Section>
 
-      <div className="flex items-center justify-between mb-2 bg-white rounded-2xl border border-slate-200 px-2 py-2 shadow-sm">
+      <div className="flex items-center justify-between mb-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
         <button onClick={() => setWeekOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
           <ChevronLeft size={20} />
         </button>
         <div className="text-center">
-          <p className="font-semibold text-slate-800 text-sm">
+          <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
             {isThisWeek ? 'Эта неделя' : `${formatRuShort(weekMonday)} – ${formatRuShort(weekSunday)}`}
           </p>
           {!isThisWeek && <button onClick={() => setWeekOffset(0)} className="text-[11px] text-orange-600 font-semibold">Вернуться к этой неделе</button>}
