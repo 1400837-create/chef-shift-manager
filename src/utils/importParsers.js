@@ -78,6 +78,39 @@ function matchZone(cell) {
   return found ? found.zone : 'dry'
 }
 
+// Expects columns: Блюдо, Ингредиент, Кол-во — one row per ingredient, like a
+// typical recipe-costing spreadsheet. Rows sharing the same "Блюдо" (case
+// insensitive) are grouped into a single recipe, in the order they appear —
+// they don't need to be adjacent in the sheet.
+export function parseRecipesImport(text) {
+  const rows = parseRows(text)
+  const order = []
+  const byName = new Map()
+  const skipped = []
+
+  rows.forEach((cells, idx) => {
+    const firstCell = (cells[0] || '').toLowerCase()
+    if (idx === 0 && (firstCell.includes('блюдо') || firstCell.includes('рецепт') || firstCell.includes('dish') || firstCell.includes('recipe'))) return
+
+    const dishName = (cells[0] || '').trim()
+    const ingredientName = (cells[1] || '').trim()
+    const qty = (cells[2] || '').trim()
+    if (!dishName || !ingredientName || !qty) {
+      skipped.push(cells.join(' | '))
+      return
+    }
+
+    const key = dishName.toLowerCase()
+    if (!byName.has(key)) {
+      byName.set(key, { name: dishName, ingredients: [] })
+      order.push(key)
+    }
+    byName.get(key).ingredients.push({ ingredientName, qty })
+  })
+
+  return { recipes: order.map((key) => byName.get(key)), skipped }
+}
+
 // Expects columns: Название, [Ед. изм.], [Зона: холодильник/морозильник/сухой склад]
 export function parseRecountCatalogImport(text) {
   const rows = parseRows(text)

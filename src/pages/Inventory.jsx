@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react'
 import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
-  BookOpen, ShoppingCart, Flame, Tags, Download,
+  BookOpen, ShoppingCart, Flame, Tags, Download, Pencil,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE } from '../utils/constants'
 import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey } from '../utils/dateUtils'
-import { parseRecountCatalogImport } from '../utils/importParsers'
+import { parseRecountCatalogImport, parseRecipesImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 
@@ -55,6 +55,11 @@ export default function Inventory({
 
   const [recipeForm, setRecipeForm] = useState({ name: '', ingredients: [{ productName: '', qty: '' }] })
   const [recipeError, setRecipeError] = useState(null)
+  const [editingRecipeId, setEditingRecipeId] = useState(null)
+  const [showRecipeImport, setShowRecipeImport] = useState(false)
+  const [recipeImportText, setRecipeImportText] = useState('')
+  const [recipeImportOverwrite, setRecipeImportOverwrite] = useState(false)
+  const [recipeImportResult, setRecipeImportResult] = useState(null)
   const [purchaseForm, setPurchaseForm] = useState({ productName: '', qty: '', date: todayKey() })
   const [purchaseError, setPurchaseError] = useState(null)
   const [productionForm, setProductionForm] = useState({ recipeId: '', qty: '1', date: todayKey() })
@@ -187,6 +192,11 @@ export default function Inventory({
     return recountCatalog.find((p) => p.name.trim().toLowerCase() === key) || null
   }
 
+  function productNameById(id) {
+    const product = recountCatalog.find((p) => p.id === Number(id) || p.id === id)
+    return product?.name || ''
+  }
+
   function addIngredientRow() {
     setRecipeForm((f) => ({ ...f, ingredients: [...f.ingredients, { productName: '', qty: '' }] }))
   }
@@ -222,12 +232,78 @@ export default function Inventory({
       return
     }
     setRecipeError(null)
-    setRecipes((prev) => [...prev, { id: Date.now(), name: recipeForm.name.trim(), ingredients }])
+    if (editingRecipeId) {
+      setRecipes((prev) => prev.map((r) => (r.id === editingRecipeId ? { ...r, name: recipeForm.name.trim(), ingredients } : r)))
+      setEditingRecipeId(null)
+    } else {
+      setRecipes((prev) => [...prev, { id: Date.now(), name: recipeForm.name.trim(), ingredients }])
+    }
     setRecipeForm({ name: '', ingredients: [{ productName: '', qty: '' }] })
+  }
+
+  function editRecipe(recipe) {
+    setRecipeForm({
+      name: recipe.name,
+      ingredients: recipe.ingredients.map((ing) => ({ productName: productNameById(ing.productId), qty: ing.qty })),
+    })
+    setEditingRecipeId(recipe.id)
+    setRecipeError(null)
+  }
+
+  function cancelEditRecipe() {
+    setEditingRecipeId(null)
+    setRecipeForm({ name: '', ingredients: [{ productName: '', qty: '' }] })
+    setRecipeError(null)
   }
 
   function removeRecipe(id) {
     setRecipes((prev) => prev.filter((r) => r.id !== id))
+    if (editingRecipeId === id) cancelEditRecipe()
+  }
+
+  function importRecipes() {
+    const { recipes: parsed, skipped } = parseRecipesImport(recipeImportText)
+    const existingByName = new Map(recipes.map((r) => [r.name.trim().toLowerCase(), r]))
+    let imported = 0
+    let skippedExisting = 0
+    let unresolvedIngredients = 0
+    const nextRecipes = [...recipes]
+
+    parsed.forEach((parsedRecipe) => {
+      const key = parsedRecipe.name.toLowerCase()
+      const existing = existingByName.get(key)
+      if (existing && !recipeImportOverwrite) {
+        skippedExisting += 1
+        return
+      }
+
+      const ingredients = []
+      parsedRecipe.ingredients.forEach(({ ingredientName, qty }) => {
+        const product = findProductByName(ingredientName)
+        if (!product) {
+          unresolvedIngredients += 1
+          return
+        }
+        ingredients.push({ productId: product.id, qty })
+      })
+      if (ingredients.length === 0) return
+
+      if (existing) {
+        const idx = nextRecipes.findIndex((r) => r.id === existing.id)
+        nextRecipes[idx] = { ...existing, ingredients }
+      } else {
+        nextRecipes.push({ id: Date.now() + Math.random(), name: parsedRecipe.name, ingredients })
+      }
+      imported += 1
+    })
+
+    setRecipes(nextRecipes)
+    const parts = [`Импортировано рецептов: ${imported}`]
+    if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
+    if (unresolvedIngredients) parts.push(`не найдено в каталоге ингредиентов: ${unresolvedIngredients}`)
+    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
+    setRecipeImportResult(parts.join(', '))
+    setRecipeImportText('')
   }
 
   function addPurchase() {
@@ -705,14 +781,63 @@ export default function Inventory({
             во вкладке «Переучёт») + все закупки после этой даты − расход по рецептам после этой даты.
           </p>
 
-          <Section title="Рецепты" icon={BookOpen}>
+          <Section
+            title="Рецепты"
+            icon={BookOpen}
+            right={
+              <button onClick={() => setShowRecipeImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+                {showRecipeImport ? 'Скрыть импорт' : 'Импорт из таблиц'}
+              </button>
+            }
+          >
+            {showRecipeImport && (
+              <div className="mb-3 pb-3 border-b border-slate-100">
+                <p className="text-xs text-slate-500 mb-2">
+                  Столбцы: <b>Блюдо, Ингредиент, Кол-во</b> — по одной строке на ингредиент.
+                  Несколько строк с одинаковым названием блюда объединятся в один рецепт.
+                  Выделите в Google Таблице → Ctrl+C → вставьте сюда.
+                </p>
+                <textarea
+                  className={inputClass + ' h-28 py-2'}
+                  placeholder={'Бульон\tКуриное крыло\t0.5\nБульон\tЛавровый лист\t1\nБорщ\tСвёкла\t1'}
+                  value={recipeImportText}
+                  onChange={(e) => setRecipeImportText(e.target.value)}
+                />
+                <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={recipeImportOverwrite}
+                    onChange={(e) => setRecipeImportOverwrite(e.target.checked)}
+                    className="w-5 h-5"
+                  />
+                  Перезаписывать уже существующие рецепты (по названию)
+                </label>
+                <BigButton onClick={importRecipes} icon={Upload} disabled={!recipeImportText.trim()}>
+                  Импортировать рецепты
+                </BigButton>
+                {recipeImportResult && (
+                  <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+                    {recipeImportResult}
+                  </p>
+                )}
+              </div>
+            )}
+
             {recipes.length === 0 && <p className="text-sm text-slate-400 text-center py-2">Рецептов пока нет</p>}
             <div className="flex flex-col gap-2 mb-3">
               {recipes.map((r) => (
-                <div key={r.id} className="rounded-xl border border-slate-200 px-3 py-2">
+                <div key={r.id} className={`rounded-xl border px-3 py-2 ${editingRecipeId === r.id ? 'border-orange-400 bg-orange-50' : 'border-slate-200'}`}>
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-slate-800">{r.name}</p>
-                    <ConfirmDeleteButton onConfirm={() => removeRecipe(r.id)} />
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => editRecipe(r)}
+                        className="w-9 h-9 flex items-center justify-center text-slate-400 active:text-orange-600"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <ConfirmDeleteButton onConfirm={() => removeRecipe(r.id)} />
+                    </div>
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
                     {r.ingredients.map((ing) => {
@@ -724,7 +849,16 @@ export default function Inventory({
               ))}
             </div>
 
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Новый рецепт</p>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {editingRecipeId ? 'Редактирование рецепта' : 'Новый рецепт'}
+              </p>
+              {editingRecipeId && (
+                <button onClick={cancelEditRecipe} className="text-xs font-semibold text-slate-500">
+                  Отменить
+                </button>
+              )}
+            </div>
             <Field label="Название блюда">
               <input
                 className={inputClass}
@@ -772,7 +906,9 @@ export default function Inventory({
                 {recipeError}
               </p>
             )}
-            <BigButton onClick={saveRecipe} icon={Plus}>Сохранить рецепт</BigButton>
+            <BigButton onClick={saveRecipe} icon={editingRecipeId ? undefined : Plus}>
+              {editingRecipeId ? 'Сохранить изменения' : 'Сохранить рецепт'}
+            </BigButton>
           </Section>
 
           <Section title="Приход (закупка)" icon={ShoppingCart}>
