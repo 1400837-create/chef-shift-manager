@@ -376,12 +376,14 @@ export default function Inventory({
 
           <Section title="Добавить товар вручную" icon={Plus}>
             <div className="flex gap-2">
-              <input
-                className={inputClass + ' flex-1'}
-                placeholder="Название"
-                value={newCatalogItem.name}
-                onChange={(e) => setNewCatalogItem((f) => ({ ...f, name: e.target.value }))}
-              />
+              <div className="flex-1 min-w-0">
+                <input
+                  className={inputClass}
+                  placeholder="Название"
+                  value={newCatalogItem.name}
+                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
               <div className="w-20 shrink-0">
                 <input
                   className={inputClass}
@@ -392,15 +394,17 @@ export default function Inventory({
               </div>
             </div>
             <div className="flex gap-2 mt-2">
-              <select
-                className={inputClass + ' flex-1'}
-                value={newCatalogItem.zone}
-                onChange={(e) => setNewCatalogItem((f) => ({ ...f, zone: e.target.value }))}
-              >
-                {INVENTORY_AUDIT_ZONES.map((z) => (
-                  <option key={z.key} value={z.key}>{z.label}</option>
-                ))}
-              </select>
+              <div className="flex-1 min-w-0">
+                <select
+                  className={inputClass}
+                  value={newCatalogItem.zone}
+                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, zone: e.target.value }))}
+                >
+                  {INVENTORY_AUDIT_ZONES.map((z) => (
+                    <option key={z.key} value={z.key}>{z.label}</option>
+                  ))}
+                </select>
+              </div>
               <button
                 onClick={addCatalogItem}
                 className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"

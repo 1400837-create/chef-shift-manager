@@ -260,14 +260,16 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
                 <div className="px-3 pb-3 pt-1 border-t border-slate-100">
                   {MENU_SLOTS.map((slot) => (
                     <div key={slot.key} className="flex items-center gap-2 mb-2">
-                      <input
-                        className={inputClass + ' flex-1'}
-                        placeholder={slot.label}
-                        list={`dishlist-${slot.key}`}
-                        value={dayData?.[slot.key] || ''}
-                        onChange={(e) => updateDay(day, { [slot.key]: e.target.value })}
-                        onBlur={(e) => commitDish(slot.key, e.target.value)}
-                      />
+                      <div className="flex-1 min-w-0">
+                        <input
+                          className={inputClass}
+                          placeholder={slot.label}
+                          list={`dishlist-${slot.key}`}
+                          value={dayData?.[slot.key] || ''}
+                          onChange={(e) => updateDay(day, { [slot.key]: e.target.value })}
+                          onBlur={(e) => commitDish(slot.key, e.target.value)}
+                        />
+                      </div>
                       <button
                         onClick={() => updateDay(day, { [`${slot.key}Kosher`]: !dayData?.[`${slot.key}Kosher`] })}
                         className={`shrink-0 w-12 h-12 rounded-xl border-2 flex items-center justify-center ${

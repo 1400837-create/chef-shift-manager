@@ -49,10 +49,16 @@ export default function Dashboard({
   }
 
   function toggleStockChecked(key) {
-    setStockTracker((prev) => ({
-      ...prev,
-      checks: { ...prev.checks, [key]: { lastChecked: today } },
-    }))
+    setStockTracker((prev) => {
+      const alreadyCheckedToday = prev.checks?.[key]?.lastChecked === today
+      const checks = { ...prev.checks }
+      if (alreadyCheckedToday) {
+        delete checks[key]
+      } else {
+        checks[key] = { lastChecked: today }
+      }
+      return { ...prev, checks }
+    })
   }
 
   function addProduce() {
@@ -151,15 +157,17 @@ export default function Dashboard({
             />
           </Field>
           <div className="flex gap-2">
-            <select
-              className={inputClass + ' flex-1'}
-              value={newTaskCategory}
-              onChange={(e) => setNewTaskCategory(e.target.value)}
-            >
-              {TASK_CATEGORIES.map((c) => (
-                <option key={c.key} value={c.key}>{c.label}</option>
-              ))}
-            </select>
+            <div className="flex-1 min-w-0">
+              <select
+                className={inputClass}
+                value={newTaskCategory}
+                onChange={(e) => setNewTaskCategory(e.target.value)}
+              >
+                {TASK_CATEGORIES.map((c) => (
+                  <option key={c.key} value={c.key}>{c.label}</option>
+                ))}
+              </select>
+            </div>
             <button
               onClick={addTask}
               className="shrink-0 min-h-[48px] px-4 rounded-xl bg-orange-500 active:bg-orange-600 text-white flex items-center gap-1 font-semibold"
@@ -227,12 +235,14 @@ export default function Dashboard({
 
         <Field label="Учёт свежих овощей / фруктов — текущие закупки">
           <div className="flex gap-2">
-            <input
-              className={inputClass + ' flex-1'}
-              placeholder="Продукт"
-              value={produceForm.name}
-              onChange={(e) => setProduceForm((p) => ({ ...p, name: e.target.value }))}
-            />
+            <div className="flex-1 min-w-0">
+              <input
+                className={inputClass}
+                placeholder="Продукт"
+                value={produceForm.name}
+                onChange={(e) => setProduceForm((p) => ({ ...p, name: e.target.value }))}
+              />
+            </div>
             <div className="w-24 shrink-0">
               <input
                 className={inputClass}
