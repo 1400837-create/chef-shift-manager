@@ -83,6 +83,14 @@ export const LEFTOVER_ACTIONS = [
   { key: 'disposal', label: 'Утилизация по согласованию' },
 ]
 
+export const WASTE_REASONS = [
+  { key: 'expired', label: 'Просрочка' },
+  { key: 'defect', label: 'Брак / порча' },
+  { key: 'spilled', label: 'Пролито / уронено' },
+  { key: 'guest_refused', label: 'Гости отказались' },
+  { key: 'other', label: 'Другое' },
+]
+
 // Legacy fixed slots — kept only to read menu days saved before courses
 // became a free-form, addable list (see MenuPlanner.jsx / coursesForDay).
 export const MENU_SLOTS_LEGACY = [

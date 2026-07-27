@@ -6,11 +6,12 @@ import {
   ArrowUpDown, ClipboardPlus,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
-import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES } from '../utils/constants'
+import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES, WASTE_REASONS } from '../utils/constants'
 import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey } from '../utils/dateUtils'
 import { parseRecountCatalogImport, parseRecipesImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
+import { sanitizeDecimal } from '../utils/number'
 
 function computeExpiry(item) {
   return addDays(parseLocalDate(item.packDate), Number(item.shelfLifeDays || 0))
@@ -28,12 +29,6 @@ const toneClasses = {
   green: 'border-slate-200 bg-white',
 }
 
-function previousMonthKey(currentMonth) {
-  const [y, m] = currentMonth.split('-').map(Number)
-  const prev = new Date(y, m - 2, 1)
-  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
-}
-
 export default function Inventory({
   items, setItems, audits, setAudits,
   recountCatalog, setRecountCatalog, recounts, setRecounts,
@@ -41,13 +36,13 @@ export default function Inventory({
   plannedPurchases, setPlannedPurchases,
 }) {
   const [form, setForm] = useState({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
+  const [disposalPromptId, setDisposalPromptId] = useState(null)
   const [tab, setTab] = useState('fifo')
   const [monthOffset, setMonthOffset] = useState(0)
   const now = new Date()
   const viewedMonth = addMonths(now, monthOffset)
   const isThisMonth = monthOffset === 0
   const currentMonth = monthKey(viewedMonth)
-  const prevMonth = previousMonthKey(currentMonth)
   const audit = audits[currentMonth] || { fridges: {}, freezers: {}, dry: {}, verifiedWithLead: false }
 
   const [showCatalogImport, setShowCatalogImport] = useState(false)
@@ -69,7 +64,19 @@ export default function Inventory({
   const [productionForm, setProductionForm] = useState({ recipeId: '', qty: '1', date: todayKey() })
 
   const recount = recounts[currentMonth] || { qty: {}, verifiedWithLead: false, countedAt: '' }
-  const prevRecount = recounts[prevMonth]
+
+  // Recounts excluding the in-progress month, so "expected" is forecast purely
+  // from history + purchases/consumption — not from the entry we're comparing it to.
+  const recountsExcludingCurrent = useMemo(() => {
+    const copy = { ...recounts }
+    delete copy[currentMonth]
+    return copy
+  }, [recounts, currentMonth])
+
+  const recountAsOfDate = useMemo(
+    () => parseLocalDate(recount.countedAt || currentMonth + '-01'),
+    [recount.countedAt, currentMonth]
+  )
 
   const sorted = useMemo(() => {
     return [...items]
@@ -91,13 +98,27 @@ export default function Inventory({
     setForm({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
   }
 
-  function setItemStatus(id, status) {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, status } : i)))
+  function setItemStatus(id, status, extra = {}) {
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, status, ...extra } : i)))
+  }
+
+  function confirmDisposal(id, reasonKey) {
+    setItemStatus(id, 'disposal', { wasteReason: reasonKey, wasteDate: todayKey() })
+    setDisposalPromptId(null)
   }
 
   function removeItem(id) {
     setItems((prev) => prev.filter((i) => i.id !== id))
   }
+
+  function wasteReasonLabel(key) {
+    return WASTE_REASONS.find((r) => r.key === key)?.label || 'Не указана'
+  }
+
+  const wasteLog = useMemo(
+    () => [...items].filter((i) => i.status === 'disposal').sort((a, b) => (b.wasteDate || '').localeCompare(a.wasteDate || '')),
+    [items]
+  )
 
   function toggleAuditItem(zoneKey, idx) {
     setAudits((prev) => {
@@ -208,6 +229,20 @@ export default function Inventory({
     const key = (name || '').trim().toLowerCase()
     if (!key) return null
     return recountCatalog.find((p) => p.name.trim().toLowerCase() === key) || null
+  }
+
+  function recipeCost(recipe) {
+    let total = 0
+    let hasAny = false
+    for (const ing of recipe.ingredients) {
+      const product = recountCatalog.find((p) => p.id === Number(ing.productId) || p.id === ing.productId)
+      const cost = Number(product?.costPerUnit)
+      if (product && cost > 0) {
+        total += cost * Number(ing.qty || 0)
+        hasAny = true
+      }
+    }
+    return hasAny ? total : null
   }
 
   function productNameById(id) {
@@ -529,8 +564,8 @@ export default function Inventory({
               </Field>
               <Field label="Срок годности, дней">
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   className={inputClass}
                   value={form.shelfLifeDays}
                   onChange={(e) => setForm((f) => ({ ...f, shelfLifeDays: e.target.value }))}
@@ -566,7 +601,9 @@ export default function Inventory({
                       {LEFTOVER_ACTIONS.map((a) => (
                         <button
                           key={a.key}
-                          onClick={() => setItemStatus(item.id, a.key)}
+                          onClick={() =>
+                            a.key === 'disposal' ? setDisposalPromptId(item.id) : setItemStatus(item.id, a.key)
+                          }
                           className={`flex-1 min-h-[40px] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 border ${
                             item.status === a.key
                               ? 'bg-slate-800 text-white border-slate-800'
@@ -580,11 +617,51 @@ export default function Inventory({
                         </button>
                       ))}
                     </div>
+                    {disposalPromptId === item.id && (
+                      <div className="mt-2 pt-2 border-t border-slate-200">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-xs font-semibold text-slate-500">Причина списания:</p>
+                          <button onClick={() => setDisposalPromptId(null)} className="text-slate-400">
+                            <X size={16} />
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {WASTE_REASONS.map((r) => (
+                            <button
+                              key={r.key}
+                              onClick={() => confirmDisposal(item.id, r.key)}
+                              className="min-h-[32px] px-2.5 rounded-lg text-xs font-semibold bg-red-50 border border-red-200 text-red-700 active:bg-red-100"
+                            >
+                              {r.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
             </div>
           </Section>
+
+          {wasteLog.length > 0 && (
+            <Section title={`Журнал списаний (${wasteLog.length})`} icon={Trash}>
+              <div className="flex flex-col gap-2">
+                {wasteLog.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700 truncate">{item.name}</p>
+                      <p className="text-xs text-slate-400">
+                        {wasteReasonLabel(item.wasteReason)}
+                        {item.wasteDate && ` · ${formatRu(parseLocalDate(item.wasteDate))}`}
+                      </p>
+                    </div>
+                    <ConfirmDeleteButton onConfirm={() => removeItem(item.id)} />
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
         </>
       )}
 
@@ -648,29 +725,35 @@ export default function Inventory({
               <Section key={zone.key} title={zone.label}>
                 <div className="flex flex-col gap-2">
                   {zoneItems.map((item) => {
-                    const prevQty = prevRecount?.qty?.[item.id]
                     const curQty = recount.qty[item.id]
-                    const delta = prevQty !== undefined && curQty !== undefined && curQty !== ''
-                      ? Number(curQty) - Number(prevQty)
-                      : null
+                    const actual = curQty !== undefined && curQty !== '' ? Number(curQty) : null
+                    const { balance: expected } = computeBalance(
+                      item.id,
+                      { recounts: recountsExcludingCurrent, purchases, productions, recipes },
+                      recountAsOfDate
+                    )
+                    const shrinkage = expected !== null && actual !== null ? actual - expected : null
                     return (
                       <div key={item.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-slate-700 truncate">{item.name}</p>
                           <p className="text-xs text-slate-400">
                             {item.unit}
-                            {prevQty !== undefined && prevQty !== '' && ` · было ${prevQty}`}
-                            {delta !== null && delta !== 0 && (
-                              <span className={delta > 0 ? 'text-green-600' : 'text-red-600'}> ({delta > 0 ? '+' : ''}{delta})</span>
+                            {expected !== null && ` · ожидалось ${expected}`}
+                            {shrinkage !== null && shrinkage !== 0 && (
+                              <span className={shrinkage > 0 ? 'text-green-600' : 'text-red-600'}>
+                                {' '}({shrinkage > 0 ? '+' : ''}{shrinkage}{shrinkage < 0 ? ' недостача' : ' излишек'})
+                              </span>
                             )}
                           </p>
                         </div>
                         <div className="w-20 shrink-0">
                           <input
-                            type="number"
+                            type="text"
+                            inputMode="decimal"
                             className={inputClass + ' text-center'}
                             value={curQty ?? ''}
-                            onChange={(e) => setQty(item.id, e.target.value)}
+                            onChange={(e) => setQty(item.id, sanitizeDecimal(e.target.value))}
                             placeholder="0"
                           />
                         </div>
@@ -706,7 +789,8 @@ export default function Inventory({
             <p className="text-xs text-slate-500 mb-3">
               Единый список продуктов, из которого подставляются варианты названий во всех
               полях (Склад, Переучёт, Остатки, закупки, рецепты). Редактируется вручную —
-              название, единица измерения и зона хранения каждой позиции.
+              название, единица измерения, зона хранения, рубрика, минимальный остаток для
+              подсветки и цена за единицу (для расчёта себестоимости рецептов).
             </p>
             <BigButton onClick={loadStandardNomenclature} icon={Download} color="outline">
               Загрузить базовую номенклатуру
@@ -884,15 +968,29 @@ export default function Inventory({
                       </select>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 mb-1.5">
                     <span className="text-xs text-slate-400 shrink-0">Мин. остаток для подсветки:</span>
                     <div className="w-16 shrink-0">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         className={inputClass + ' text-xs text-center px-1'}
                         value={item.minQty ?? ''}
                         placeholder="—"
-                        onChange={(e) => updateCatalogItem(item.id, { minQty: e.target.value })}
+                        onChange={(e) => updateCatalogItem(item.id, { minQty: sanitizeDecimal(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-slate-400 shrink-0">Цена за {item.unit || 'ед.'}:</span>
+                    <div className="w-16 shrink-0">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className={inputClass + ' text-xs text-center px-1'}
+                        value={item.costPerUnit ?? ''}
+                        placeholder="—"
+                        onChange={(e) => updateCatalogItem(item.id, { costPerUnit: sanitizeDecimal(e.target.value) })}
                       />
                     </div>
                   </div>
@@ -956,9 +1054,10 @@ export default function Inventory({
             <div className="flex flex-col gap-2 mb-3">
               {recipes.map((r) => (
                 <div key={r.id} className={`rounded-xl border px-3 py-2 ${editingRecipeId === r.id ? 'border-orange-400 bg-orange-50' : 'border-slate-200'}`}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-800">{r.name}</p>
-                    <div className="flex items-center gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800 min-w-0 truncate">{r.name}</p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {recipeCost(r) !== null && <Badge color="green">≈ {recipeCost(r).toFixed(2)}</Badge>}
                       <button
                         onClick={() => editRecipe(r)}
                         className="w-9 h-9 flex items-center justify-center text-slate-400 active:text-orange-600"
@@ -1009,11 +1108,12 @@ export default function Inventory({
                 </div>
                 <div className="w-20 shrink-0">
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     className={inputClass}
                     placeholder="Кол-во"
                     value={ing.qty}
-                    onChange={(e) => updateIngredientRow(idx, { qty: e.target.value })}
+                    onChange={(e) => updateIngredientRow(idx, { qty: sanitizeDecimal(e.target.value) })}
                   />
                 </div>
                 <button
@@ -1053,11 +1153,12 @@ export default function Inventory({
               </div>
               <div className="w-20 shrink-0">
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   className={inputClass}
                   placeholder="Кол-во"
                   value={purchaseForm.qty}
-                  onChange={(e) => setPurchaseForm((f) => ({ ...f, qty: e.target.value }))}
+                  onChange={(e) => setPurchaseForm((f) => ({ ...f, qty: sanitizeDecimal(e.target.value) }))}
                 />
               </div>
             </div>
@@ -1115,11 +1216,12 @@ export default function Inventory({
               </div>
               <div className="w-20 shrink-0">
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   className={inputClass}
                   placeholder="Раз"
                   value={productionForm.qty}
-                  onChange={(e) => setProductionForm((f) => ({ ...f, qty: e.target.value }))}
+                  onChange={(e) => setProductionForm((f) => ({ ...f, qty: sanitizeDecimal(e.target.value) }))}
                 />
               </div>
             </div>

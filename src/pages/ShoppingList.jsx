@@ -4,6 +4,7 @@ import { Section, inputClass, PrintButton, ConfirmDeleteButton } from '../compon
 import { formatRu, todayKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
+import { sanitizeDecimal } from '../utils/number'
 
 export default function ShoppingList({
   recountCatalog, recounts, purchases, productions, recipes,
@@ -133,11 +134,12 @@ export default function ShoppingList({
           </div>
           <div className="w-20 shrink-0">
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               className={inputClass}
               placeholder="Кол-во"
               value={form.qty}
-              onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, qty: sanitizeDecimal(e.target.value) }))}
             />
           </div>
           <button
@@ -166,10 +168,11 @@ export default function ShoppingList({
                 </div>
                 <div className="w-20 shrink-0">
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     className={inputClass + ' text-center'}
                     value={p.qty}
-                    onChange={(e) => updateQty(p.id, e.target.value)}
+                    onChange={(e) => updateQty(p.id, sanitizeDecimal(e.target.value))}
                   />
                 </div>
                 <button

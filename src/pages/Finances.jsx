@@ -5,6 +5,7 @@ import { RECEIPT_CATEGORIES } from '../utils/constants'
 import { biweekKey, formatRu, parseLocalDate } from '../utils/dateUtils'
 import { financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
 import { compressToDataUrl } from '../utils/imageCompress'
+import { sanitizeDecimal } from '../utils/number'
 
 export default function Finances({ advances, setAdvances, receipts, setReceipts }) {
   const now = new Date()
@@ -98,10 +99,11 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
       <Section title="Аванс на 2 недели" icon={Wallet}>
         <Field label="Сумма аванса на текущий период">
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             className={inputClass}
             value={advance.budget}
-            onChange={(e) => setBudget(e.target.value)}
+            onChange={(e) => setBudget(sanitizeDecimal(e.target.value))}
             placeholder="0"
           />
         </Field>
@@ -125,10 +127,11 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
         <div className="flex gap-2">
           <Field label="Сумма">
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               className={inputClass}
               value={receiptForm.amount}
-              onChange={(e) => setReceiptForm((f) => ({ ...f, amount: e.target.value }))}
+              onChange={(e) => setReceiptForm((f) => ({ ...f, amount: sanitizeDecimal(e.target.value) }))}
               placeholder="0.00"
             />
           </Field>
