@@ -379,7 +379,7 @@ function DeadlineRow({ label, date, daysLeft }) {
         <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</p>
         <p className="text-xs text-slate-400">до {date}</p>
       </div>
-      <Badge color={color}>{daysLeft <= 0 ? 'Сегодня!' : `${daysLeft} дн.`}</Badge>
+      <Badge color={color}>{daysLeft < 0 ? 'Просрочено' : daysLeft === 0 ? 'Сегодня!' : `${daysLeft} дн.`}</Badge>
     </div>
   )
 }

@@ -135,7 +135,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
         </div>
         <div className="flex items-center justify-between mt-3">
           <p className="text-sm text-slate-500">Отчёт до {dl.label}</p>
-          <Badge color={urgencyColor(dl.daysLeft)}>{dl.daysLeft <= 0 ? 'Сегодня!' : `${dl.daysLeft} дн.`}</Badge>
+          <Badge color={urgencyColor(dl.daysLeft)}>{dl.daysLeft < 0 ? 'Просрочено' : dl.daysLeft === 0 ? 'Сегодня!' : `${dl.daysLeft} дн.`}</Badge>
         </div>
       </Section>
 
