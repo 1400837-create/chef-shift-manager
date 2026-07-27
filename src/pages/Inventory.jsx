@@ -264,10 +264,10 @@ export default function Inventory({
 
   return (
     <div className="pb-4">
-      <div className="flex gap-1.5 mb-4">
+      <div className="flex gap-1.5 mb-4 overflow-x-auto -mx-3 px-3">
         <button
           onClick={() => setTab('fifo')}
-          className={`flex-1 min-h-[48px] rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm ${
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
             tab === 'fifo' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
           }`}
         >
@@ -275,7 +275,7 @@ export default function Inventory({
         </button>
         <button
           onClick={() => setTab('audit')}
-          className={`flex-1 min-h-[48px] rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm ${
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
             tab === 'audit' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
           }`}
         >
@@ -283,7 +283,7 @@ export default function Inventory({
         </button>
         <button
           onClick={() => setTab('recount')}
-          className={`flex-1 min-h-[48px] rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm ${
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
             tab === 'recount' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
           }`}
         >
@@ -291,7 +291,7 @@ export default function Inventory({
         </button>
         <button
           onClick={() => setTab('balance')}
-          className={`flex-1 min-h-[48px] rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm ${
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
             tab === 'balance' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
           }`}
         >
@@ -299,7 +299,7 @@ export default function Inventory({
         </button>
         <button
           onClick={() => setTab('catalog')}
-          className={`flex-1 min-h-[48px] rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm ${
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
             tab === 'catalog' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
           }`}
         >
