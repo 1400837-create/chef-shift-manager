@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Wallet, Receipt, Plus, Trash2, Camera, Send } from 'lucide-react'
-import { Section, Field, inputClass, Badge, BigButton } from '../components/UI'
+import { Wallet, Receipt, Plus, Camera, Send, Image as ImageIcon } from 'lucide-react'
+import { Section, Field, inputClass, Badge, BigButton, ConfirmDeleteButton } from '../components/UI'
 import { RECEIPT_CATEGORIES } from '../utils/constants'
 import { biweekKey, formatRu, parseLocalDate } from '../utils/dateUtils'
 import { financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
+import { savePhoto, getPhoto, deletePhoto } from '../utils/photoStore'
 
 export default function Finances({ advances, setAdvances, receipts, setReceipts }) {
   const now = new Date()
@@ -12,7 +13,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
   const advance = advances[periodKey] || { budget: '' }
 
   const [receiptForm, setReceiptForm] = useState({
-    amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '',
+    amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '', file: null,
   })
 
   const periodReceipts = useMemo(
@@ -26,22 +27,44 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
     setAdvances((prev) => ({ ...prev, [periodKey]: { ...advance, budget: value } }))
   }
 
-  function addReceipt() {
+  async function addReceipt() {
     if (!receiptForm.amount) return
+    const id = Date.now()
     const entry = {
-      id: Date.now(),
+      id,
       periodKey,
       date: receiptForm.date,
       amount: receiptForm.amount,
       category: receiptForm.category,
       fileName: receiptForm.fileName,
+      hasPhoto: !!receiptForm.file,
     }
     setReceipts((prev) => [entry, ...prev])
-    setReceiptForm({ amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '' })
+    if (receiptForm.file) {
+      try {
+        await savePhoto(id, receiptForm.file)
+      } catch {
+        // IndexedDB unavailable (private mode etc.) — receipt still saved, just without the photo
+      }
+    }
+    setReceiptForm({ amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '', file: null })
   }
 
-  function removeReceipt(id) {
+  function removeReceipt(id, hasPhoto) {
     setReceipts((prev) => prev.filter((r) => r.id !== id))
+    if (hasPhoto) deletePhoto(id).catch(() => {})
+  }
+
+  async function viewPhoto(id) {
+    try {
+      const file = await getPhoto(id)
+      if (!file) return
+      const url = URL.createObjectURL(file)
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch {
+      // ignore — nothing to show
+    }
   }
 
   function sendReport() {
@@ -129,7 +152,10 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
               accept="image/*"
               capture="environment"
               className="hidden"
-              onChange={(e) => setReceiptForm((f) => ({ ...f, fileName: e.target.files?.[0]?.name || '' }))}
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null
+                setReceiptForm((f) => ({ ...f, file, fileName: file?.name || '' }))
+              }}
             />
           </label>
         </Field>
@@ -149,9 +175,14 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
                   {formatRu(parseLocalDate(r.date))} {r.fileName && `· ${r.fileName}`}
                 </p>
               </div>
-              <button onClick={() => removeReceipt(r.id)} className="w-9 h-9 flex items-center justify-center text-slate-400">
-                <Trash2 size={16} />
-              </button>
+              <div className="flex items-center gap-1">
+                {r.hasPhoto && (
+                  <button onClick={() => viewPhoto(r.id)} className="w-9 h-9 flex items-center justify-center text-slate-400">
+                    <ImageIcon size={16} />
+                  </button>
+                )}
+                <ConfirmDeleteButton onConfirm={() => removeReceipt(r.id, r.hasPhoto)} />
+              </div>
             </li>
           ))}
         </ul>

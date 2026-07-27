@@ -21,6 +21,7 @@ export default function App() {
 
   const [menuData, setMenuData] = useLocalStorage('menuData', {})
   const [settings, setSettings] = useLocalStorage('settings', { kuchenleiterinEmail: '' })
+  const [dishLibrary, setDishLibrary] = useLocalStorage('dishLibrary', { soup: [], main: [], side: [], salad: [] })
 
   const [inventoryItems, setInventoryItems] = useLocalStorage('inventoryItems', [])
   const [audits, setAudits] = useLocalStorage('audits', {})
@@ -109,6 +110,8 @@ export default function App() {
             setMenuData={setMenuData}
             settings={settings}
             setSettings={setSettings}
+            dishLibrary={dishLibrary}
+            setDishLibrary={setDishLibrary}
             requestPrint={setPrintPayload}
           />
         )}

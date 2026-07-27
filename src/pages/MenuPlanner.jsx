@@ -5,7 +5,7 @@ import { MENU_SLOTS } from '../utils/constants'
 import { MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex } from '../utils/dateUtils'
 import { parseMenuImport } from '../utils/importParsers'
 
-export default function MenuPlanner({ menuData, setMenuData, settings, setSettings, requestPrint }) {
+export default function MenuPlanner({ menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary, requestPrint }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -35,6 +35,16 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
       ...prev,
       [monthKey]: { ...(prev[monthKey] || {}), [day]: { ...(prev[monthKey]?.[day] || {}), ...patch } },
     }))
+  }
+
+  function commitDish(slotKey, value) {
+    const dish = value.trim()
+    if (!dish) return
+    setDishLibrary((prev) => {
+      const list = prev[slotKey] || []
+      if (list.some((d) => d.toLowerCase() === dish.toLowerCase())) return prev
+      return { ...prev, [slotKey]: [dish, ...list].slice(0, 40) }
+    })
   }
 
   function dayLabel(day) {
@@ -109,6 +119,10 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
           soup, main, side, salad,
           soupKosher: kosher, mainKosher: kosher, sideKosher: kosher, saladKosher: kosher,
         }
+        commitDish('soup', soup)
+        commitDish('main', main)
+        commitDish('side', side)
+        commitDish('salad', salad)
       })
       return { ...prev, [monthKey]: cur }
     })
@@ -233,8 +247,10 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
                       <input
                         className={inputClass + ' flex-1'}
                         placeholder={slot.label}
+                        list={`dishlist-${slot.key}`}
                         value={dayData?.[slot.key] || ''}
                         onChange={(e) => updateDay(day, { [slot.key]: e.target.value })}
+                        onBlur={(e) => commitDish(slot.key, e.target.value)}
                       />
                       <button
                         onClick={() => updateDay(day, { [`${slot.key}Kosher`]: !dayData?.[`${slot.key}Kosher`] })}
@@ -260,6 +276,14 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
       <BigButton onClick={sendMenu} icon={Send} color="orange">
         Отправить меню Küchenleiterin
       </BigButton>
+
+      {MENU_SLOTS.map((slot) => (
+        <datalist key={slot.key} id={`dishlist-${slot.key}`}>
+          {(dishLibrary?.[slot.key] || []).map((dish) => (
+            <option key={dish} value={dish} />
+          ))}
+        </datalist>
+      ))}
     </div>
   )
 }

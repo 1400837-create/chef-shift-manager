@@ -1,4 +1,5 @@
-import { Check, Printer } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, Printer, Trash2 } from 'lucide-react'
 
 export function Section({ title, icon: Icon, children, right }) {
   return (
@@ -98,6 +99,48 @@ export function PrintButton({ onClick, label = 'Печать' }) {
       className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 text-xs font-semibold"
     >
       <Printer size={15} /> {label}
+    </button>
+  )
+}
+
+// Tap once to arm ("Точно?" for ~2.5s), tap again to actually delete. Avoids
+// a modal dialog while still protecting against stray taps with wet/gloved
+// hands — a real risk on this app's mobile-in-kitchen tap targets.
+export function ConfirmDeleteButton({ onConfirm, size = 'w-9 h-9', iconSize = 16 }) {
+  const [confirming, setConfirming] = useState(false)
+  const timerRef = useRef(null)
+
+  useEffect(() => () => clearTimeout(timerRef.current), [])
+
+  function handleClick(e) {
+    e.stopPropagation()
+    if (confirming) {
+      clearTimeout(timerRef.current)
+      setConfirming(false)
+      onConfirm()
+      return
+    }
+    setConfirming(true)
+    timerRef.current = setTimeout(() => setConfirming(false), 2500)
+  }
+
+  if (confirming) {
+    return (
+      <button
+        onClick={handleClick}
+        className={`${size} shrink-0 flex items-center justify-center rounded-lg bg-red-600 active:bg-red-700 text-white text-[10px] font-bold px-1 leading-none`}
+      >
+        Точно?
+      </button>
+    )
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className={`${size} shrink-0 flex items-center justify-center text-slate-400 active:text-red-600`}
+    >
+      <Trash2 size={iconSize} />
     </button>
   )
 }

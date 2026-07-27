@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { ClipboardList, AlertTriangle, PackageCheck, Plus, Trash2, CalendarClock, Sunrise, Sunset } from 'lucide-react'
-import { Section, CheckRow, Badge, Field, inputClass, PrintButton } from '../components/UI'
+import { ClipboardList, AlertTriangle, PackageCheck, Plus, CalendarClock, Sunrise, Sunset, History, Download, Upload } from 'lucide-react'
+import { Section, CheckRow, Badge, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { STRATEGIC_CATEGORIES, TASK_CATEGORIES } from '../utils/constants'
 import { todayKey, formatRu, daysBetween, parseLocalDate } from '../utils/dateUtils'
 import { menuDeadlineInfo, financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
+import { downloadBackup, parseBackupFile, applyBackup } from '../utils/backup'
 
 export default function Dashboard({
   shiftChecklist, setShiftChecklist,
@@ -67,6 +68,40 @@ export default function Dashboard({
 
   const menuDl = menuDeadlineInfo(now)
   const financeDl = financeDeadlineInfo(now)
+
+  const [showHistory, setShowHistory] = useState(false)
+  const historyDays = Object.keys(shiftChecklist)
+    .filter((k) => k !== today)
+    .sort((a, b) => (a < b ? 1 : -1))
+    .slice(0, 14)
+
+  const [importPreview, setImportPreview] = useState(null)
+  const [importMessage, setImportMessage] = useState(null)
+
+  function handleBackupFileSelected(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const parsed = parseBackupFile(reader.result)
+        setImportPreview(parsed)
+        setImportMessage(null)
+      } catch {
+        setImportPreview(null)
+        setImportMessage('Не удалось прочитать файл — это не резервная копия Kitchen OS.')
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  function confirmImport() {
+    const count = applyBackup(importPreview)
+    setImportPreview(null)
+    setImportMessage(`Восстановлено разделов: ${count}. Обновляю приложение…`)
+    setTimeout(() => window.location.reload(), 800)
+  }
 
   function printTasks() {
     requestPrint({
@@ -145,12 +180,7 @@ export default function Dashboard({
                   <div className="flex-1">
                     <CheckRow label={t.text} checked={t.done} onChange={() => toggleTask(t.id)} />
                   </div>
-                  <button
-                    onClick={() => removeTask(t.id)}
-                    className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 active:bg-slate-200 text-slate-500"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <ConfirmDeleteButton onConfirm={() => removeTask(t.id)} size="w-11 h-11" iconSize={18} />
                 </div>
               ))}
             </div>
@@ -227,9 +257,7 @@ export default function Dashboard({
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
-                  <button onClick={() => removeProduce(p.id)} className="w-8 h-8 flex items-center justify-center text-slate-400">
-                    <Trash2 size={16} />
-                  </button>
+                  <ConfirmDeleteButton onConfirm={() => removeProduce(p.id)} size="w-8 h-8" iconSize={14} />
                 </div>
               </li>
             ))}
@@ -255,6 +283,76 @@ export default function Dashboard({
           checked={day.cleaningDone}
           onChange={(v) => updateDay({ cleaningDone: v })}
         />
+      </Section>
+
+      <Section
+        title="История смен"
+        icon={History}
+        right={
+          <button onClick={() => setShowHistory((v) => !v)} className="text-xs font-semibold text-orange-600">
+            {showHistory ? 'Скрыть' : 'Показать'}
+          </button>
+        }
+      >
+        {showHistory && (
+          historyDays.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-3">Пока нет прошлых смен</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {historyDays.map((dateKey) => {
+                const d = shiftChecklist[dateKey]
+                const tasks = kuchenhilfeTasks[dateKey] || []
+                const tasksDone = tasks.filter((t) => t.done).length
+                const openingDone = d.kitchenClean && d.tasksAssigned
+                const closingDone = d.leftoversPacked && d.cleaningDone
+                return (
+                  <li key={dateKey} className="py-2.5 flex items-center justify-between">
+                    <span className="text-sm text-slate-700">{formatRu(parseLocalDate(dateKey))}</span>
+                    <div className="flex items-center gap-1.5">
+                      {tasks.length > 0 && <Badge color="slate">Задачи {tasksDone}/{tasks.length}</Badge>}
+                      <Badge color={openingDone ? 'green' : 'slate'}>Открытие</Badge>
+                      <Badge color={closingDone ? 'green' : 'slate'}>Закрытие</Badge>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )
+        )}
+      </Section>
+
+      <Section title="Резервная копия данных" icon={Download}>
+        <p className="text-xs text-slate-500 mb-3">
+          Все данные хранятся только в этом браузере. Сохраните файл на телефон, чтобы не
+          потерять их при смене устройства или очистке кеша.
+        </p>
+        <div className="flex gap-2 mb-2">
+          <BigButton onClick={downloadBackup} icon={Download} color="outline">Скачать копию (JSON)</BigButton>
+        </div>
+        <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 cursor-pointer active:bg-slate-50">
+          <Upload size={18} />
+          <span className="text-sm">Загрузить копию из файла</span>
+          <input type="file" accept="application/json" className="hidden" onChange={handleBackupFileSelected} />
+        </label>
+
+        {importPreview && (
+          <div className="mt-3 rounded-xl border-2 border-yellow-300 bg-yellow-50 p-3">
+            <p className="text-sm text-slate-700 mb-2">
+              Найден файл от {importPreview.exportedAt ? formatRu(new Date(importPreview.exportedAt)) : '—'},
+              разделов данных: {Object.keys(importPreview.data).length}. Импорт{' '}
+              <b>заменит текущие данные в приложении</b>. Продолжить?
+            </p>
+            <div className="flex gap-2">
+              <BigButton onClick={confirmImport} color="red">Да, заменить данные</BigButton>
+              <BigButton onClick={() => setImportPreview(null)} color="outline">Отмена</BigButton>
+            </div>
+          </div>
+        )}
+        {importMessage && (
+          <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+            {importMessage}
+          </p>
+        )}
       </Section>
     </div>
   )

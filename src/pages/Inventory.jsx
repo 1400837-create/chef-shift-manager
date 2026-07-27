@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import {
-  Plus, Trash2, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
-  ClipboardList, Upload, X,
+  Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
+  ClipboardList, Upload, X, ChevronLeft, ChevronRight,
 } from 'lucide-react'
-import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton } from '../components/UI'
+import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES } from '../utils/constants'
-import { addDays, daysBetween, formatRu, monthKey, parseLocalDate, startOfDay } from '../utils/dateUtils'
+import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay } from '../utils/dateUtils'
 import { parseRecountCatalogImport } from '../utils/importParsers'
 
 function computeExpiry(item) {
@@ -37,8 +37,11 @@ export default function Inventory({
 }) {
   const [form, setForm] = useState({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
   const [tab, setTab] = useState('fifo')
+  const [monthOffset, setMonthOffset] = useState(0)
   const now = new Date()
-  const currentMonth = monthKey(now)
+  const viewedMonth = addMonths(now, monthOffset)
+  const isThisMonth = monthOffset === 0
+  const currentMonth = monthKey(viewedMonth)
   const prevMonth = previousMonthKey(currentMonth)
   const audit = audits[currentMonth] || { fridges: {}, freezers: {}, dry: {}, verifiedWithLead: false }
 
@@ -155,10 +158,12 @@ export default function Inventory({
     }))
   }
 
+  const monthLabel = `${MONTHS_RU[viewedMonth.getMonth()]} ${viewedMonth.getFullYear()}`
+
   function printRecount(blank) {
     requestPrint({
       type: 'recount',
-      title: `Полный переучёт — ${formatRu(now)}${blank ? ' (бланк для подсчёта)' : ''}`,
+      title: `Полный переучёт — ${monthLabel}${blank ? ' (бланк для подсчёта)' : ''}`,
       blank,
       zones: zonesForPrint(),
     })
@@ -195,6 +200,25 @@ export default function Inventory({
           <ClipboardList size={16} /> Переучёт
         </button>
       </div>
+
+      {(tab === 'audit' || tab === 'recount') && (
+        <div className="flex items-center justify-between mb-4 bg-white rounded-2xl border border-slate-200 px-2 py-2 shadow-sm">
+          <button onClick={() => setMonthOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
+            <ChevronLeft size={20} />
+          </button>
+          <div className="text-center">
+            <p className="font-semibold text-slate-800 text-sm">{monthLabel}</p>
+            {!isThisMonth && <button onClick={() => setMonthOffset(0)} className="text-[11px] text-orange-600 font-semibold">Вернуться к этому месяцу</button>}
+          </div>
+          <button
+            onClick={() => setMonthOffset((o) => Math.min(o + 1, 0))}
+            disabled={isThisMonth}
+            className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 disabled:opacity-30"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      )}
 
       {tab === 'fifo' && (
         <>
@@ -248,9 +272,7 @@ export default function Inventory({
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <Badge color={status.tone}>{status.label}</Badge>
-                        <button onClick={() => removeItem(item.id)} className="w-9 h-9 flex items-center justify-center text-slate-400">
-                          <Trash2 size={16} />
-                        </button>
+                        <ConfirmDeleteButton onConfirm={() => removeItem(item.id)} />
                       </div>
                     </div>
                     <div className="flex gap-1.5 mt-2">
@@ -282,7 +304,7 @@ export default function Inventory({
       {tab === 'audit' && (
         <>
           <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-4 shadow-sm">
-            <p className="text-sm font-medium text-slate-600">Проверка зон за месяц</p>
+            <p className="text-sm font-medium text-slate-600">Проверка зон — {monthLabel}</p>
             <Badge color={auditDone === auditTotal ? 'green' : 'slate'}>{auditDone}/{auditTotal}</Badge>
           </div>
 
@@ -387,7 +409,7 @@ export default function Inventory({
           </Section>
 
           <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-2 shadow-sm">
-            <p className="text-sm font-medium text-slate-600">Переучёт за {formatRu(now)}</p>
+            <p className="text-sm font-medium text-slate-600">Переучёт — {monthLabel}</p>
             <Badge color={catalogFilled === catalogTotal && catalogTotal > 0 ? 'green' : 'slate'}>
               {catalogFilled}/{catalogTotal}
             </Badge>
@@ -429,9 +451,7 @@ export default function Inventory({
                           onChange={(e) => setQty(item.id, e.target.value)}
                           placeholder="0"
                         />
-                        <button onClick={() => removeCatalogItem(item.id)} className="w-9 h-9 shrink-0 flex items-center justify-center text-slate-400">
-                          <Trash2 size={16} />
-                        </button>
+                        <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
                       </div>
                     )
                   })}
