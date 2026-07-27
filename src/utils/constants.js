@@ -1,10 +1,3 @@
-export const STRATEGIC_CATEGORIES = [
-  { key: 'meat', label: 'Мясо' },
-  { key: 'wine', label: 'Вино' },
-  { key: 'beverages', label: 'Напитки' },
-  { key: 'base', label: 'Базовые продукты' },
-]
-
 export const TASK_CATEGORIES = [
   { key: 'prep', label: 'Подготовка продуктов' },
   { key: 'cooking', label: 'Приготовление' },

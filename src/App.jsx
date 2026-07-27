@@ -22,7 +22,6 @@ export default function App() {
 
   const [shiftChecklist, setShiftChecklist] = useLocalStorage('shiftChecklist', {})
   const [kuchenhilfeTasks, setKuchenhilfeTasks] = useLocalStorage('kuchenhilfeTasks', {})
-  const [stockTracker, setStockTracker] = useLocalStorage('stockTracker', { checks: {}, produce: [] })
 
   const [menuData, setMenuData] = useLocalStorage('menuData', {})
   const [settings, setSettings] = useLocalStorage('settings', { kuchenleiterinEmail: '' })
@@ -55,7 +54,6 @@ export default function App() {
   const dashboardHistory = useTabHistory({
     shiftChecklist: [shiftChecklist, setShiftChecklist],
     kuchenhilfeTasks: [kuchenhilfeTasks, setKuchenhilfeTasks],
-    stockTracker: [stockTracker, setStockTracker],
   })
   const menuHistory = useTabHistory({
     menuData: [menuData, setMenuData],
@@ -245,8 +243,14 @@ export default function App() {
               setShiftChecklist={setShiftChecklist}
               kuchenhilfeTasks={kuchenhilfeTasks}
               setKuchenhilfeTasks={setKuchenhilfeTasks}
-              stockTracker={stockTracker}
-              setStockTracker={setStockTracker}
+              recountCatalog={recountCatalog}
+              recounts={recounts}
+              purchases={purchases}
+              productions={productions}
+              recipes={recipes}
+              plannedPurchases={plannedPurchases}
+              menuData={menuData}
+              onNavigate={setTab}
             />
           </>
         )}

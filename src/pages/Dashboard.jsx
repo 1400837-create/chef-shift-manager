@@ -1,16 +1,19 @@
-import { useState } from 'react'
-import { ClipboardList, AlertTriangle, PackageCheck, Plus, CalendarClock, Sunrise, Sunset, History, Download, Upload } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ClipboardList, AlertTriangle, UtensilsCrossed, Plus, CalendarClock, Sunrise, Sunset, History, Download, Upload } from 'lucide-react'
 import { Section, CheckRow, Badge, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
-import { STRATEGIC_CATEGORIES, TASK_CATEGORIES } from '../utils/constants'
-import { todayKey, formatRu, daysBetween, parseLocalDate } from '../utils/dateUtils'
+import { TASK_CATEGORIES } from '../utils/constants'
+import { todayKey, formatRu, monthKey, parseLocalDate } from '../utils/dateUtils'
 import { menuDeadlineInfo, financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
 import { downloadBackup, parseBackupFile, applyBackup } from '../utils/backup'
 import { printReport } from '../utils/printReport'
+import { computeBalance } from '../utils/stockBalance'
+import { coursesForDay } from '../utils/menuCourses'
 
 export default function Dashboard({
   shiftChecklist, setShiftChecklist,
   kuchenhilfeTasks, setKuchenhilfeTasks,
-  stockTracker, setStockTracker,
+  recountCatalog, recounts, purchases, productions, recipes, plannedPurchases,
+  menuData, onNavigate,
 }) {
   const today = todayKey()
   const now = new Date()
@@ -21,7 +24,6 @@ export default function Dashboard({
 
   const [newTaskText, setNewTaskText] = useState('')
   const [newTaskCategory, setNewTaskCategory] = useState('prep')
-  const [produceForm, setProduceForm] = useState({ name: '', qty: '' })
 
   function updateDay(patch) {
     setShiftChecklist((prev) => ({ ...prev, [today]: { ...day, ...patch } }))
@@ -48,29 +50,23 @@ export default function Dashboard({
     }))
   }
 
-  function toggleStockChecked(key) {
-    setStockTracker((prev) => {
-      const alreadyCheckedToday = prev.checks?.[key]?.lastChecked === today
-      const checks = { ...prev.checks }
-      if (alreadyCheckedToday) {
-        delete checks[key]
-      } else {
-        checks[key] = { lastChecked: today }
-      }
-      return { ...prev, checks }
-    })
-  }
+  const lowStockItems = useMemo(() => {
+    return recountCatalog
+      .map((product) => ({ product, ...computeBalance(product.id, { recounts, purchases, productions, recipes }, now) }))
+      .filter((row) => {
+        const min = Number(row.product.minQty)
+        return min > 0 && row.balance !== null && row.balance <= min &&
+          !plannedPurchases.some((p) => String(p.productId) === String(row.product.id))
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recountCatalog, recounts, purchases, productions, recipes, plannedPurchases])
 
-  function addProduce() {
-    if (!produceForm.name.trim()) return
-    const entry = { id: Date.now(), name: produceForm.name.trim(), qty: produceForm.qty.trim(), date: today }
-    setStockTracker((prev) => ({ ...prev, produce: [entry, ...(prev.produce || [])].slice(0, 20) }))
-    setProduceForm({ name: '', qty: '' })
-  }
-
-  function removeProduce(id) {
-    setStockTracker((prev) => ({ ...prev, produce: (prev.produce || []).filter((p) => p.id !== id) }))
-  }
+  const todayCourses = useMemo(() => {
+    const dayData = menuData[monthKey(now)]?.[now.getDate()]
+    if (!dayData) return []
+    return coursesForDay(dayData).filter((c) => c.dish)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuData])
 
   const menuDl = menuDeadlineInfo(now)
   const financeDl = financeDeadlineInfo(now)
@@ -122,6 +118,49 @@ export default function Dashboard({
 
   return (
     <div className="pb-4">
+      <Section
+        title="Мало на складе"
+        icon={AlertTriangle}
+        right={lowStockItems.length > 0 && <Badge color="red">{lowStockItems.length}</Badge>}
+      >
+        {lowStockItems.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-2">Низких остатков нет</p>
+        ) : (
+          <div className="flex flex-col gap-2 mb-2">
+            {lowStockItems.slice(0, 6).map((row) => (
+              <div
+                key={row.product.id}
+                className="flex items-center justify-between gap-2 rounded-xl border-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30 px-3 py-2"
+              >
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
+                <span className="text-xs font-semibold text-red-700 dark:text-red-300 shrink-0">{row.balance} {row.product.unit}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {lowStockItems.length > 0 && (
+          <BigButton onClick={() => onNavigate('shopping')} color="red">Перейти в закупку</BigButton>
+        )}
+      </Section>
+
+      <Section title="Меню на сегодня" icon={UtensilsCrossed}>
+        {todayCourses.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-2">Меню на сегодня ещё не заполнено</p>
+        ) : (
+          <div className="flex flex-col gap-1.5 mb-3">
+            {todayCourses.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-slate-500 dark:text-slate-400 shrink-0">{c.label}</span>
+                <span className="font-medium text-slate-800 dark:text-slate-100 text-right truncate">
+                  {c.dish}{c.kosher ? ' ✡' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <BigButton onClick={() => onNavigate('menu')} color="outline">Открыть меню</BigButton>
+      </Section>
+
       <Section title="Открытие смены" icon={Sunrise}>
         <CheckRow
           label="Кухня проверена на чистоту"
@@ -196,85 +235,6 @@ export default function Dashboard({
         })}
         {tasksToday.length === 0 && (
           <p className="text-sm text-slate-400 text-center py-3">Задач на сегодня пока нет</p>
-        )}
-      </Section>
-
-      <Section title="Стратегические запасы" icon={PackageCheck}>
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          {STRATEGIC_CATEGORIES.map((cat) => {
-            const check = stockTracker.checks?.[cat.key]
-            const checkedToday = check?.lastChecked === today
-            const daysSince = check?.lastChecked
-              ? daysBetween(parseLocalDate(check.lastChecked), now)
-              : null
-            const stale = daysSince !== null && daysSince >= 3
-            return (
-              <button
-                key={cat.key}
-                onClick={() => toggleStockChecked(cat.key)}
-                className={`min-h-[64px] rounded-xl border-2 px-3 py-2 text-left transition-colors ${
-                  checkedToday
-                    ? 'bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-700'
-                    : stale
-                    ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700'
-                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{cat.label}</p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {checkedToday
-                    ? 'Проверено сегодня'
-                    : check?.lastChecked
-                    ? `Проверено ${daysSince} дн. назад`
-                    : 'Ещё не проверялось'}
-                </p>
-              </button>
-            )
-          })}
-        </div>
-
-        <Field label="Учёт свежих овощей / фруктов — текущие закупки">
-          <div className="flex gap-2">
-            <div className="flex-1 min-w-0">
-              <input
-                className={inputClass}
-                placeholder="Продукт"
-                list="product-nomenclature"
-                value={produceForm.name}
-                onChange={(e) => setProduceForm((p) => ({ ...p, name: e.target.value }))}
-              />
-            </div>
-            <div className="w-24 shrink-0">
-              <input
-                className={inputClass}
-                placeholder="Кол-во"
-                value={produceForm.qty}
-                onChange={(e) => setProduceForm((p) => ({ ...p, qty: e.target.value }))}
-              />
-            </div>
-            <button
-              onClick={addProduce}
-              className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"
-            >
-              <Plus size={20} />
-            </button>
-          </div>
-        </Field>
-
-        {(stockTracker.produce || []).length > 0 && (
-          <ul className="divide-y divide-slate-100">
-            {stockTracker.produce.map((p) => (
-              <li key={p.id} className="flex items-center justify-between py-2">
-                <span className="text-sm text-slate-700 dark:text-slate-200">
-                  {p.name} {p.qty && <span className="text-slate-400">· {p.qty}</span>}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
-                  <ConfirmDeleteButton onConfirm={() => removeProduce(p.id)} size="w-8 h-8" iconSize={14} />
-                </div>
-              </li>
-            ))}
-          </ul>
         )}
       </Section>
 
