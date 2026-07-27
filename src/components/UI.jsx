@@ -16,7 +16,7 @@ export function Section({ title, icon: Icon, children, right }) {
   )
 }
 
-export function CheckRow({ label, checked, onChange, tone = 'default' }) {
+export function CheckRow({ label, checked, onChange, tone = 'default', sublabel }) {
   const toneClasses = checked
     ? 'bg-green-50 border-green-300'
     : tone === 'urgent'
@@ -40,8 +40,11 @@ export function CheckRow({ label, checked, onChange, tone = 'default' }) {
       >
         {checked && <Check size={18} strokeWidth={3} className="text-white" />}
       </span>
-      <span className={`text-[15px] leading-snug ${checked ? 'text-green-800 line-through' : 'text-slate-700'}`}>
-        {label}
+      <span className="min-w-0">
+        <span className={`block text-[15px] leading-snug ${checked ? 'text-green-800 line-through' : 'text-slate-700'}`}>
+          {label}
+        </span>
+        {sublabel && <span className="block text-xs text-green-700 no-underline">{sublabel}</span>}
       </span>
     </label>
   )

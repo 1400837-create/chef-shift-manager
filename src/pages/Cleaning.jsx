@@ -4,7 +4,17 @@ import { Section, CheckRow, Badge } from '../components/UI'
 import { DAILY_CLEANING_ITEMS, WEEKLY_CLEANING_ITEMS } from '../utils/constants'
 import { addDays, isoWeekKey, mondayIndex, toKey, formatRuShort } from '../utils/dateUtils'
 
-export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleaning, setWeeklyCleaning }) {
+// Entries used to be plain booleans; now they can also be { done, by } so we
+// know who ticked an item. isDone/doneBy read both shapes transparently.
+function isDone(entry) {
+  return entry === true || !!entry?.done
+}
+
+function doneBy(entry) {
+  return typeof entry === 'object' && entry ? entry.by : null
+}
+
+export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleaning, setWeeklyCleaning, staffName }) {
   const [dayOffset, setDayOffset] = useState(0)
   const [weekOffset, setWeekOffset] = useState(0)
 
@@ -22,21 +32,25 @@ export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleani
   const weeklyState = weeklyCleaning[week] || {}
 
   function toggleDaily(idx) {
-    setDailyCleaning((prev) => ({
-      ...prev,
-      [dayKey]: { ...(prev[dayKey] || {}), [idx]: !dailyState[idx] },
-    }))
+    setDailyCleaning((prev) => {
+      const day = { ...(prev[dayKey] || {}) }
+      if (isDone(day[idx])) delete day[idx]
+      else day[idx] = { done: true, by: staffName || undefined }
+      return { ...prev, [dayKey]: day }
+    })
   }
 
   function toggleWeekly(idx) {
-    setWeeklyCleaning((prev) => ({
-      ...prev,
-      [week]: { ...(prev[week] || {}), [idx]: !weeklyState[idx] },
-    }))
+    setWeeklyCleaning((prev) => {
+      const w = { ...(prev[week] || {}) }
+      if (isDone(w[idx])) delete w[idx]
+      else w[idx] = { done: true, by: staffName || undefined }
+      return { ...prev, [week]: w }
+    })
   }
 
-  const dailyDone = DAILY_CLEANING_ITEMS.filter((_, i) => dailyState[i]).length
-  const weeklyDone = WEEKLY_CLEANING_ITEMS.filter((_, i) => weeklyState[i]).length
+  const dailyDone = DAILY_CLEANING_ITEMS.filter((_, i) => isDone(dailyState[i])).length
+  const weeklyDone = WEEKLY_CLEANING_ITEMS.filter((_, i) => isDone(weeklyState[i])).length
 
   return (
     <div className="pb-4">
@@ -65,7 +79,13 @@ export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleani
         right={<Badge color={dailyDone === DAILY_CLEANING_ITEMS.length ? 'green' : 'slate'}>{dailyDone}/{DAILY_CLEANING_ITEMS.length}</Badge>}
       >
         {DAILY_CLEANING_ITEMS.map((item, idx) => (
-          <CheckRow key={idx} label={item} checked={!!dailyState[idx]} onChange={() => toggleDaily(idx)} />
+          <CheckRow
+            key={idx}
+            label={item}
+            checked={isDone(dailyState[idx])}
+            onChange={() => toggleDaily(idx)}
+            sublabel={doneBy(dailyState[idx]) ? `✓ ${doneBy(dailyState[idx])}` : null}
+          />
         ))}
       </Section>
 
@@ -94,7 +114,13 @@ export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleani
         right={<Badge color={weeklyDone === WEEKLY_CLEANING_ITEMS.length ? 'green' : 'slate'}>{weeklyDone}/{WEEKLY_CLEANING_ITEMS.length}</Badge>}
       >
         {WEEKLY_CLEANING_ITEMS.map((item, idx) => (
-          <CheckRow key={idx} label={item} checked={!!weeklyState[idx]} onChange={() => toggleWeekly(idx)} />
+          <CheckRow
+            key={idx}
+            label={item}
+            checked={isDone(weeklyState[idx])}
+            onChange={() => toggleWeekly(idx)}
+            sublabel={doneBy(weeklyState[idx]) ? `✓ ${doneBy(weeklyState[idx])}` : null}
+          />
         ))}
       </Section>
     </div>

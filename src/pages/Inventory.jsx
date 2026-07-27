@@ -12,6 +12,8 @@ import { parseRecountCatalogImport, parseRecipesImport } from '../utils/importPa
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
+import { computeRecipeCost } from '../utils/recipeCost'
+import { downloadCsv } from '../utils/csv'
 
 function computeExpiry(item) {
   return addDays(parseLocalDate(item.packDate), Number(item.shelfLifeDays || 0))
@@ -33,7 +35,7 @@ export default function Inventory({
   items, setItems, audits, setAudits,
   recountCatalog, setRecountCatalog, recounts, setRecounts,
   recipes, setRecipes, purchases, setPurchases, productions, setProductions,
-  plannedPurchases, setPlannedPurchases,
+  plannedPurchases, setPlannedPurchases, staffName,
 }) {
   const [form, setForm] = useState({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
   const [disposalPromptId, setDisposalPromptId] = useState(null)
@@ -103,7 +105,7 @@ export default function Inventory({
   }
 
   function confirmDisposal(id, reasonKey) {
-    setItemStatus(id, 'disposal', { wasteReason: reasonKey, wasteDate: todayKey() })
+    setItemStatus(id, 'disposal', { wasteReason: reasonKey, wasteDate: todayKey(), wasteBy: staffName || undefined })
     setDisposalPromptId(null)
   }
 
@@ -225,6 +227,13 @@ export default function Inventory({
     }))
   }
 
+  function setRecountEnteredBy(name) {
+    setRecounts((prev) => ({
+      ...prev,
+      [currentMonth]: { ...(prev[currentMonth] || { qty: {}, verifiedWithLead: false }), enteredBy: name },
+    }))
+  }
+
   function findProductByName(name) {
     const key = (name || '').trim().toLowerCase()
     if (!key) return null
@@ -232,17 +241,7 @@ export default function Inventory({
   }
 
   function recipeCost(recipe) {
-    let total = 0
-    let hasAny = false
-    for (const ing of recipe.ingredients) {
-      const product = recountCatalog.find((p) => p.id === Number(ing.productId) || p.id === ing.productId)
-      const cost = Number(product?.costPerUnit)
-      if (product && cost > 0) {
-        total += cost * Number(ing.qty || 0)
-        hasAny = true
-      }
-    }
-    return hasAny ? total : null
+    return computeRecipeCost(recipe, recountCatalog)
   }
 
   function productNameById(id) {
@@ -412,6 +411,53 @@ export default function Inventory({
       blank,
       zones: zonesForPrint(),
     })
+  }
+
+  function exportMonthCsv() {
+    const rows = [['Переучёт', monthLabel]]
+    rows.push(['Продукт', 'Ед.', 'Учтено', 'Ожидалось', 'Расхождение'])
+    recountCatalog.forEach((item) => {
+      const curQty = recount.qty[item.id]
+      const actual = curQty !== undefined && curQty !== '' ? Number(curQty) : ''
+      const { balance: expected } = computeBalance(
+        item.id,
+        { recounts: recountsExcludingCurrent, purchases, productions, recipes },
+        recountAsOfDate
+      )
+      const shrinkage = expected !== null && actual !== '' ? actual - expected : ''
+      rows.push([item.name, item.unit, actual, expected ?? '', shrinkage])
+    })
+
+    rows.push([])
+    rows.push(['Приход за месяц'])
+    rows.push(['Дата', 'Продукт', 'Кол-во'])
+    purchases
+      .filter((p) => monthKey(parseLocalDate(p.date)) === currentMonth)
+      .forEach((p) => {
+        const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
+        rows.push([p.date, product?.name || '?', p.qty])
+      })
+
+    rows.push([])
+    rows.push(['Расход по рецептам за месяц'])
+    rows.push(['Дата', 'Рецепт', 'Раз'])
+    productions
+      .filter((p) => monthKey(parseLocalDate(p.date)) === currentMonth)
+      .forEach((p) => {
+        const recipe = recipes.find((r) => String(r.id) === String(p.recipeId))
+        rows.push([p.date, recipe?.name || '?', p.qty])
+      })
+
+    rows.push([])
+    rows.push(['Списания за месяц'])
+    rows.push(['Дата', 'Товар', 'Причина', 'Кто'])
+    items
+      .filter((i) => i.status === 'disposal' && i.wasteDate && monthKey(parseLocalDate(i.wasteDate)) === currentMonth)
+      .forEach((i) => {
+        rows.push([i.wasteDate, i.name, wasteReasonLabel(i.wasteReason), i.wasteBy || ''])
+      })
+
+    downloadCsv(`Отчёт_${currentMonth}.csv`, rows)
   }
 
   const catalogTotal = recountCatalog.length
@@ -654,6 +700,7 @@ export default function Inventory({
                       <p className="text-xs text-slate-400">
                         {wasteReasonLabel(item.wasteReason)}
                         {item.wasteDate && ` · ${formatRu(parseLocalDate(item.wasteDate))}`}
+                        {item.wasteBy && ` · ${item.wasteBy}`}
                       </p>
                     </div>
                     <ConfirmDeleteButton onConfirm={() => removeItem(item.id)} />
@@ -713,9 +760,24 @@ export default function Inventory({
             />
           </Field>
 
-          <div className="flex gap-2 mb-4">
+          <Field label="Кто вносил переучёт">
+            <input
+              className={inputClass}
+              placeholder="Имя"
+              value={recount.enteredBy ?? staffName}
+              onChange={(e) => setRecountEnteredBy(e.target.value)}
+            />
+          </Field>
+
+          <div className="flex flex-wrap gap-2 mb-4">
             <PrintButton onClick={() => printRecount(true)} label="Пустой бланк" />
             <PrintButton onClick={() => printRecount(false)} label="С текущими данными" />
+            <button
+              onClick={exportMonthCsv}
+              className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 text-xs font-semibold"
+            >
+              <Download size={15} /> Экспорт за месяц (CSV)
+            </button>
           </div>
 
           {INVENTORY_AUDIT_ZONES.map((zone) => {

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Plus, Check, ShoppingBasket, AlertTriangle } from 'lucide-react'
-import { Section, inputClass, PrintButton, ConfirmDeleteButton } from '../components/UI'
+import { Plus, Check, ShoppingBasket, AlertTriangle, Upload, X } from 'lucide-react'
+import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { formatRu, todayKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
+import { parsePlannedPurchaseImport } from '../utils/importParsers'
 
 export default function ShoppingList({
   recountCatalog, recounts, purchases, productions, recipes,
@@ -12,6 +13,9 @@ export default function ShoppingList({
 }) {
   const [form, setForm] = useState({ productName: '', qty: '' })
   const [error, setError] = useState(null)
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importResult, setImportResult] = useState(null)
   const now = new Date()
 
   function findProductByName(name) {
@@ -58,6 +62,34 @@ export default function ShoppingList({
       ...prev,
     ])
     remove(planned.id)
+  }
+
+  function importPlanned() {
+    const { items: parsed, skipped } = parsePlannedPurchaseImport(importText)
+    let added = 0
+    let notFound = 0
+    let alreadyPlanned = 0
+    const toAdd = []
+    parsed.forEach((row) => {
+      const product = findProductByName(row.name)
+      if (!product) {
+        notFound += 1
+        return
+      }
+      if (findPlannedByProduct(product.id) || toAdd.some((p) => p.productId === product.id)) {
+        alreadyPlanned += 1
+        return
+      }
+      toAdd.push({ id: Date.now() + Math.random(), productId: product.id, qty: row.qty })
+      added += 1
+    })
+    setPlannedPurchases((prev) => [...prev, ...toAdd])
+    const parts = [`Добавлено: ${added}`]
+    if (alreadyPlanned) parts.push(`уже в списке: ${alreadyPlanned}`)
+    if (notFound) parts.push(`не найдено в каталоге: ${notFound}`)
+    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
+    setImportResult(parts.join(', '))
+    setImportText('')
   }
 
   function addFromLowStock(product) {
@@ -111,6 +143,47 @@ export default function ShoppingList({
           </div>
         </Section>
       )}
+
+      <Section
+        title="Импорт из Google Таблиц"
+        icon={Upload}
+        right={
+          <button onClick={() => setShowImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+            {showImport ? 'Скрыть' : 'Показать'}
+          </button>
+        }
+      >
+        {showImport && (
+          <>
+            <p className="text-xs text-slate-500 mb-2">
+              Столбцы: <b>Продукт, Кол-во</b> — по одной позиции на строку. Выделите в Google
+              Таблице → Ctrl+C → вставьте сюда.
+            </p>
+            <textarea
+              className={inputClass + ' h-28 py-2'}
+              placeholder={'Куриное филе\t2\nМорковь\t3'}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+            />
+            <div className="flex gap-2 mt-2">
+              <BigButton onClick={importPlanned} icon={Upload} disabled={!importText.trim()}>
+                Импортировать в закупку
+              </BigButton>
+              <button
+                onClick={() => { setShowImport(false); setImportText(''); setImportResult(null) }}
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </>
+        )}
+        {importResult && (
+          <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+            {importResult}
+          </p>
+        )}
+      </Section>
 
       <Section
         title={`Запланированная закупка (${plannedPurchases.length})`}

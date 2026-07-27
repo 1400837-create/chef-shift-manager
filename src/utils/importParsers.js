@@ -149,3 +149,25 @@ export function parseRecountCatalogImport(text) {
 
   return { items: result, skipped }
 }
+
+// Expects columns: Продукт, Кол-во — one row per item on the shopping list.
+export function parsePlannedPurchaseImport(text) {
+  const rows = parseRows(text)
+  const result = []
+  const skipped = []
+
+  rows.forEach((cells, idx) => {
+    const firstCell = (cells[0] || '').toLowerCase()
+    if (idx === 0 && (firstCell.includes('продукт') || firstCell.includes('назван') || firstCell.includes('name'))) return
+
+    const name = (cells[0] || '').trim()
+    const qty = (cells[1] || '').trim()
+    if (!name || !qty) {
+      skipped.push(cells.join(' | '))
+      return
+    }
+    result.push({ name, qty })
+  })
+
+  return { items: result, skipped }
+}

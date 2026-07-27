@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { ChefHat } from 'lucide-react'
+import { ChefHat, User, Search } from 'lucide-react'
 import BottomNav from './components/BottomNav'
+import GlobalSearch from './components/GlobalSearch'
 import Dashboard from './pages/Dashboard'
 import MenuPlanner from './pages/MenuPlanner'
 import Inventory from './pages/Inventory'
@@ -15,6 +16,7 @@ import { computeBalance } from './utils/stockBalance'
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const [shiftChecklist, setShiftChecklist] = useLocalStorage('shiftChecklist', {})
   const [kuchenhilfeTasks, setKuchenhilfeTasks] = useLocalStorage('kuchenhilfeTasks', {})
@@ -43,6 +45,10 @@ export default function App() {
 
   const now = new Date()
   const today = todayKey()
+  const staffName = settings.currentStaffName || ''
+  function setStaffName(name) {
+    setSettings((s) => ({ ...s, currentStaffName: name }))
+  }
 
   const alerts = useMemo(() => {
     const expiringSoon = inventoryItems
@@ -82,14 +88,39 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="safe-top sticky top-0 z-30 bg-slate-900 text-white px-4 py-3 flex items-center gap-2 shadow-md">
-        <ChefHat size={22} className="text-orange-400" />
-        <div>
+        <ChefHat size={22} className="text-orange-400 shrink-0" />
+        <div className="min-w-0 flex-1">
           <p className="font-bold leading-tight">Kitchen OS</p>
           <p className="text-[11px] text-slate-400 leading-tight">
             {now.toLocaleDateString('ru-RU', { weekday: 'long', day: '2-digit', month: 'long' })}
           </p>
         </div>
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg active:bg-slate-800 text-slate-300"
+        >
+          <Search size={19} />
+        </button>
+        <div className="flex items-center gap-1 shrink-0 bg-slate-800 rounded-lg px-2 py-1">
+          <User size={13} className="text-slate-400 shrink-0" />
+          <input
+            className="bg-transparent text-[12px] text-white placeholder-slate-500 focus:outline-none w-16"
+            placeholder="Имя"
+            value={staffName}
+            onChange={(e) => setStaffName(e.target.value)}
+          />
+        </div>
       </header>
+
+      <GlobalSearch
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        recountCatalog={recountCatalog}
+        recipes={recipes}
+        recounts={recounts}
+        purchases={purchases}
+        productions={productions}
+      />
 
       <main className="max-w-lg mx-auto px-3 pt-3 pb-24">
         {tab === 'dashboard' && (
@@ -131,6 +162,7 @@ export default function App() {
             setProductions={setProductions}
             plannedPurchases={plannedPurchases}
             setPlannedPurchases={setPlannedPurchases}
+            staffName={staffName}
           />
         )}
         {tab === 'shopping' && (
@@ -151,6 +183,7 @@ export default function App() {
             setDailyCleaning={setDailyCleaning}
             weeklyCleaning={weeklyCleaning}
             setWeeklyCleaning={setWeeklyCleaning}
+            staffName={staffName}
           />
         )}
         {tab === 'finances' && (
@@ -159,6 +192,7 @@ export default function App() {
             setAdvances={setAdvances}
             receipts={receipts}
             setReceipts={setReceipts}
+            staffName={staffName}
           />
         )}
       </main>

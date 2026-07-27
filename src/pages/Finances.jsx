@@ -6,8 +6,9 @@ import { biweekKey, formatRu, parseLocalDate } from '../utils/dateUtils'
 import { financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
 import { compressToDataUrl } from '../utils/imageCompress'
 import { sanitizeDecimal } from '../utils/number'
+import { downloadCsv } from '../utils/csv'
 
-export default function Finances({ advances, setAdvances, receipts, setReceipts }) {
+export default function Finances({ advances, setAdvances, receipts, setReceipts, staffName }) {
   const now = new Date()
   const periodKey = biweekKey(now)
   const dl = financeDeadlineInfo(now)
@@ -46,6 +47,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
       category: receiptForm.category,
       fileName: receiptForm.fileName,
       photo: receiptForm.photoDataUrl || null,
+      by: staffName || undefined,
     }
     setReceipts((prev) => [entry, ...prev])
     setReceiptForm({ amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '', photoDataUrl: null })
@@ -81,6 +83,20 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
     const body = encodeURIComponent(buildReportText())
     const subject = encodeURIComponent(`Финансовый отчёт — ${dl.label}`)
     window.location.href = `mailto:?subject=${subject}&body=${body}`
+  }
+
+  function exportReceiptsCsv() {
+    const rows = [['Дата', 'Категория', 'Сумма', 'Кто', 'Файл']]
+    periodReceipts.forEach((r) => {
+      rows.push([
+        r.date,
+        RECEIPT_CATEGORIES.find((c) => c.key === r.category)?.label || r.category,
+        r.amount,
+        r.by || '',
+        r.fileName || '',
+      ])
+    })
+    downloadCsv(`Чеки_${periodKey}.csv`, rows)
   }
 
   async function copyReport() {
@@ -208,7 +224,11 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
         </p>
       </Section>
 
-      <Section title={`Чеки за текущий период (${periodReceipts.length})`} icon={Receipt}>
+      <Section
+        title={`Чеки за текущий период (${periodReceipts.length})`}
+        icon={Receipt}
+        right={periodReceipts.length > 0 && <PrintButton onClick={exportReceiptsCsv} label="CSV" />}
+      >
         {periodReceipts.length === 0 && <p className="text-sm text-slate-400 text-center py-3">Чеков пока нет</p>}
         <ul className="divide-y divide-slate-100">
           {periodReceipts.map((r) => (
@@ -218,7 +238,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
                   {RECEIPT_CATEGORIES.find((c) => c.key === r.category)?.label} · {r.amount}
                 </p>
                 <p className="text-xs text-slate-400">
-                  {formatRu(parseLocalDate(r.date))} {r.fileName && `· ${r.fileName}`}
+                  {formatRu(parseLocalDate(r.date))} {r.fileName && `· ${r.fileName}`} {r.by && `· ${r.by}`}
                 </p>
               </div>
               <div className="flex items-center gap-1">
