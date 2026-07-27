@@ -1,10 +1,13 @@
-// Phone camera photos are routinely 10-30MB (modern sensors, high-res JPEGs).
-// Holding that raw file in React state and round-tripping it through
-// IndexedDB was almost certainly what caused the "out of memory" crash on
-// mobile — downscale to a sane size immediately after the user picks/shoots
-// the photo, before it touches state or storage.
-export async function compressImage(file, maxDim = 1600, quality = 0.75) {
-  if (!file || !file.type || !file.type.startsWith('image/')) return file
+// Phone camera photos are routinely 10-30MB. Storing them (even via
+// IndexedDB) turned out to be unreliable on some mobile browsers/embedded
+// webviews — so receipts don't touch IndexedDB at all. Instead, every photo
+// is downscaled hard and turned into a small base64 data URL that rides
+// along with the receipt's own data (same localStorage mechanism as
+// everything else in the app, which is already proven reliable there).
+// Receipt photos are for "can I read the total/date on this", not archival
+// quality, so an aggressive size cap is the right trade-off.
+export async function compressToDataUrl(file, maxDim = 1100, quality = 0.6) {
+  if (!file || !file.type || !file.type.startsWith('image/')) return null
 
   try {
     const bitmap = await createImageBitmap(file)
@@ -19,11 +22,10 @@ export async function compressImage(file, maxDim = 1600, quality = 0.75) {
     ctx.drawImage(bitmap, 0, 0, width, height)
     bitmap.close?.()
 
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
-    return blob || file
+    return canvas.toDataURL('image/jpeg', quality)
   } catch {
-    // createImageBitmap/canvas unsupported or failed — fall back to the
-    // original file rather than blocking the user from adding the receipt.
-    return file
+    // createImageBitmap/canvas unsupported or the file wasn't decodable —
+    // skip the photo rather than risk storing/crashing on the original.
+    return null
   }
 }

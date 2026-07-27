@@ -4,8 +4,7 @@ import { Section, Field, inputClass, Badge, BigButton, ConfirmDeleteButton } fro
 import { RECEIPT_CATEGORIES } from '../utils/constants'
 import { biweekKey, formatRu, parseLocalDate } from '../utils/dateUtils'
 import { financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
-import { savePhoto, getPhoto, deletePhoto } from '../utils/photoStore'
-import { compressImage } from '../utils/imageCompress'
+import { compressToDataUrl } from '../utils/imageCompress'
 
 export default function Finances({ advances, setAdvances, receipts, setReceipts }) {
   const now = new Date()
@@ -14,11 +13,12 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
   const advance = advances[periodKey] || { budget: '' }
 
   const [receiptForm, setReceiptForm] = useState({
-    amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '', file: null,
+    amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '', photoDataUrl: null,
   })
   const [formError, setFormError] = useState(null)
   const [copyMessage, setCopyMessage] = useState(null)
   const [photoProcessing, setPhotoProcessing] = useState(false)
+  const [photoError, setPhotoError] = useState(null)
 
   const periodReceipts = useMemo(
     () => receipts.filter((r) => r.periodKey === periodKey),
@@ -31,48 +31,34 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
     setAdvances((prev) => ({ ...prev, [periodKey]: { ...advance, budget: value } }))
   }
 
-  async function addReceipt() {
+  function addReceipt() {
     if (!receiptForm.amount) {
       setFormError('Укажите сумму чека — без неё чек не сохранится.')
       return
     }
     setFormError(null)
-    const id = Date.now()
     const entry = {
-      id,
+      id: Date.now(),
       periodKey,
       date: receiptForm.date,
       amount: receiptForm.amount,
       category: receiptForm.category,
       fileName: receiptForm.fileName,
-      hasPhoto: !!receiptForm.file,
+      photo: receiptForm.photoDataUrl || null,
     }
     setReceipts((prev) => [entry, ...prev])
-    if (receiptForm.file) {
-      try {
-        await savePhoto(id, receiptForm.file)
-      } catch {
-        // IndexedDB unavailable (private mode etc.) — receipt still saved, just without the photo
-      }
-    }
-    setReceiptForm({ amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '', file: null })
+    setReceiptForm({ amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '', photoDataUrl: null })
   }
 
-  function removeReceipt(id, hasPhoto) {
+  function removeReceipt(id) {
     setReceipts((prev) => prev.filter((r) => r.id !== id))
-    if (hasPhoto) deletePhoto(id).catch(() => {})
   }
 
-  async function viewPhoto(id) {
-    try {
-      const file = await getPhoto(id)
-      if (!file) return
-      const url = URL.createObjectURL(file)
-      window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 60000)
-    } catch {
-      // ignore — nothing to show
-    }
+  function viewPhoto(dataUrl) {
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(`<!doctype html><title>Чек</title><body style="margin:0;background:#111;display:flex;justify-content:center;"><img src="${dataUrl}" style="max-width:100%;height:auto;"></body>`)
+    win.document.close()
   }
 
   function buildReportText() {
@@ -166,7 +152,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
             ))}
           </select>
         </Field>
-        <Field label="Фото чека">
+        <Field label="Фото чека (необязательно)">
           <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 cursor-pointer active:bg-slate-50">
             <Camera size={20} />
             <span className="text-sm">
@@ -181,10 +167,19 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
                 const rawFile = e.target.files?.[0] || null
                 e.target.value = ''
                 if (!rawFile) return
+                setPhotoError(null)
                 setPhotoProcessing(true)
                 try {
-                  const compressed = await compressImage(rawFile)
-                  setReceiptForm((f) => ({ ...f, file: compressed, fileName: rawFile.name }))
+                  const dataUrl = await compressToDataUrl(rawFile)
+                  if (dataUrl) {
+                    setReceiptForm((f) => ({ ...f, photoDataUrl: dataUrl, fileName: rawFile.name }))
+                  } else {
+                    setReceiptForm((f) => ({ ...f, photoDataUrl: null, fileName: '' }))
+                    setPhotoError('Не удалось обработать это фото — чек можно сохранить и без него.')
+                  }
+                } catch {
+                  setReceiptForm((f) => ({ ...f, photoDataUrl: null, fileName: '' }))
+                  setPhotoError('Не удалось обработать это фото — чек можно сохранить и без него.')
                 } finally {
                   setPhotoProcessing(false)
                 }
@@ -192,6 +187,11 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
             />
           </label>
         </Field>
+        {photoError && (
+          <p className="text-sm text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2 mb-2">
+            {photoError}
+          </p>
+        )}
         {formError && (
           <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-2">
             {formError}
@@ -201,7 +201,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
           {photoProcessing ? 'Обработка фото…' : 'Добавить чек'}
         </BigButton>
         <p className="text-xs text-slate-400 mt-2">
-          Сумма — обязательна. Фото можно приложить, но само по себе без суммы чек не сохранится.
+          Сумма — обязательна. Фото — необязательно; чек сохранится в любом случае.
         </p>
       </Section>
 
@@ -219,12 +219,12 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
                 </p>
               </div>
               <div className="flex items-center gap-1">
-                {r.hasPhoto && (
-                  <button onClick={() => viewPhoto(r.id)} className="w-9 h-9 flex items-center justify-center text-slate-400">
+                {r.photo && (
+                  <button onClick={() => viewPhoto(r.photo)} className="w-9 h-9 flex items-center justify-center text-slate-400">
                     <ImageIcon size={16} />
                   </button>
                 )}
-                <ConfirmDeleteButton onConfirm={() => removeReceipt(r.id, r.hasPhoto)} />
+                <ConfirmDeleteButton onConfirm={() => removeReceipt(r.id)} />
               </div>
             </li>
           ))}
