@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload
 import { Section, Field, inputClass, BigButton, Badge, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { DEFAULT_MENU_COURSES } from '../utils/constants'
 import { MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex } from '../utils/dateUtils'
-import { parseMenuImport, parsePlannedPurchaseImport } from '../utils/importParsers'
+import { parseMenuImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { coursesForDay } from '../utils/menuCourses'
 
@@ -66,19 +66,43 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     setDayCourses(day, courses)
   }
 
-  // For event/banquet-style days: one dish per line, no fixed course labels,
-  // each optionally followed by a quantity ("Брускетта с лососем\t40 шт").
-  // Reuses the shopping-list paste parser since the shape (name, qty[+unit])
-  // is identical — always appends, never overwrites existing rows.
+  // For event/banquet-style days: one dish per line, no fixed course labels.
+  // Hand-typed lists (not copied from a spreadsheet) almost always separate
+  // the quantity with " - " / " — " at the end ("Тунец-яйцо на плате с
+  // черным хлебом - 20 порций") rather than a real tab character, and the
+  // dish name itself may contain its own hyphen ("Тунец-яйцо") with no
+  // spaces around it — so a plain tab/space column split misreads those.
+  // Try the spaced dash first (matches hand-typed lists), then fall back to
+  // tab or a run of 2+ spaces (spreadsheet-style paste), then just the dish
+  // name with no quantity.
+  function parseDayPasteLine(line) {
+    const dashMatch = line.match(/^(.+?)\s+[-–—]\s+(.+)$/)
+    if (dashMatch) return { dish: dashMatch[1].trim(), qty: dashMatch[2].trim() }
+    if (line.includes('\t')) {
+      const [dish, ...rest] = line.split('\t')
+      return { dish: (dish || '').trim(), qty: rest.join(' ').trim() }
+    }
+    if (/\s{2,}/.test(line)) {
+      const [dish, ...rest] = line.split(/\s{2,}/)
+      return { dish: (dish || '').trim(), qty: rest.join(' ').trim() }
+    }
+    return { dish: line.trim(), qty: '' }
+  }
+
   function pasteDayList(day, text) {
-    const { items } = parsePlannedPurchaseImport(text)
-    if (items.length === 0) return
+    const parsed = text
+      .split(/\r\n|\n|\r/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map(parseDayPasteLine)
+      .filter((r) => r.dish)
+    if (parsed.length === 0) return
     const existing = coursesForDay(monthData[day])
-    const added = items.map((item, i) => ({
+    const added = parsed.map((item, i) => ({
       id: `c-${Date.now()}-${i}`,
       label: '',
-      dish: item.name,
-      qty: item.unit ? `${item.qty} ${item.unit}` : item.qty,
+      dish: item.dish,
+      qty: item.qty,
       kosher: false,
     }))
     setDayCourses(day, [...existing, ...added])
@@ -381,13 +405,13 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
                   {showDayPaste && (
                     <div className="mt-2">
                       <p className="text-xs text-slate-500 mb-2">
-                        По одной позиции на строку: <b>Блюдо, Кол-во</b> (можно с единицей — «40 шт»,
-                        «20 порций»). Список добавится к уже существующим блюдам этого дня, не заменит их.
-                        Выделите в Google Таблице или в тексте → Ctrl+C → вставьте сюда.
+                        По одной позиции на строку: <b>Блюдо - Кол-во</b> (например «Брускетта с
+                        лососем - 40 шт»). Подходит и вставка из Google Таблиц (столбцами через
+                        Tab). Список добавится к уже существующим блюдам этого дня, не заменит их.
                       </p>
                       <textarea
                         className={inputClass + ' h-24 py-2'}
-                        placeholder={'Брускетта классическая с лососем\t40 шт\nКапрезе на шпажках\t20 шт'}
+                        placeholder={'Брускетта классическая с лососем - 40 шт\nКапрезе на шпажках - 20 шт'}
                         value={dayPasteText}
                         onChange={(e) => setDayPasteText(e.target.value)}
                       />
