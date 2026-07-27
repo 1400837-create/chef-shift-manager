@@ -137,6 +137,12 @@ export default function App() {
       </main>
 
       <BottomNav active={tab} onChange={setTab} alerts={alerts} />
+
+      <datalist id="product-nomenclature">
+        {recountCatalog.map((item) => (
+          <option key={item.id} value={item.name} />
+        ))}
+      </datalist>
     </div>
   )
 }

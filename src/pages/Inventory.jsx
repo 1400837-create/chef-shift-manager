@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react'
 import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
-  BookOpen, ShoppingCart, Flame,
+  BookOpen, ShoppingCart, Flame, Tags, Download,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
-import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES } from '../utils/constants'
+import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE } from '../utils/constants'
 import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey } from '../utils/dateUtils'
 import { parseRecountCatalogImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
@@ -121,6 +121,22 @@ export default function Inventory({
 
   function removeCatalogItem(id) {
     setRecountCatalog((prev) => prev.filter((i) => i.id !== id))
+  }
+
+  function updateCatalogItem(id, patch) {
+    setRecountCatalog((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
+  }
+
+  function loadStandardNomenclature() {
+    const existingNames = new Set(recountCatalog.map((i) => i.name.trim().toLowerCase()))
+    const toAdd = DEFAULT_NOMENCLATURE.filter((n) => !existingNames.has(n.name.toLowerCase()))
+      .map((n) => ({ id: Date.now() + Math.random(), ...n }))
+    setRecountCatalog((prev) => [...prev, ...toAdd])
+    setCatalogImportResult(
+      toAdd.length
+        ? `Добавлено из базовой номенклатуры: ${toAdd.length}`
+        : 'Все позиции базовой номенклатуры уже есть в каталоге'
+    )
   }
 
   function importCatalog() {
@@ -281,6 +297,14 @@ export default function Inventory({
         >
           <Scale size={16} /> Остатки
         </button>
+        <button
+          onClick={() => setTab('catalog')}
+          className={`flex-1 min-h-[48px] rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm ${
+            tab === 'catalog' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
+          }`}
+        >
+          <Tags size={16} /> Каталог
+        </button>
       </div>
 
       {(tab === 'audit' || tab === 'recount') && (
@@ -308,6 +332,7 @@ export default function Inventory({
             <Field label="Название">
               <input
                 className={inputClass}
+                list="product-nomenclature"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Например: Куриное филе"
@@ -415,87 +440,6 @@ export default function Inventory({
 
       {tab === 'recount' && (
         <>
-          <Section
-            title="Импорт каталога из Google Таблиц"
-            icon={Upload}
-            right={
-              <button onClick={() => setShowCatalogImport((v) => !v)} className="text-xs font-semibold text-orange-600">
-                {showCatalogImport ? 'Скрыть' : 'Показать'}
-              </button>
-            }
-          >
-            {showCatalogImport && (
-              <>
-                <p className="text-xs text-slate-500 mb-2">
-                  Столбцы: <b>Название, Ед. изм., Зона</b> (холодильник / морозильник / сухой склад).
-                  Выделите в Google Таблице → Ctrl+C → вставьте сюда.
-                </p>
-                <textarea
-                  className={inputClass + ' h-28 py-2'}
-                  placeholder={'Куриное филе\tкг\tхолодильник\nМука\tкг\tсухой склад'}
-                  value={catalogImportText}
-                  onChange={(e) => setCatalogImportText(e.target.value)}
-                />
-                <div className="flex gap-2 mt-2">
-                  <BigButton onClick={importCatalog} icon={Upload} disabled={!catalogImportText.trim()}>
-                    Импортировать в каталог
-                  </BigButton>
-                  <button
-                    onClick={() => { setShowCatalogImport(false); setCatalogImportText(''); setCatalogImportResult(null) }}
-                    className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-                {catalogImportResult && (
-                  <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
-                    {catalogImportResult}
-                  </p>
-                )}
-              </>
-            )}
-          </Section>
-
-          <Section title="Добавить товар вручную" icon={Plus}>
-            <div className="flex gap-2">
-              <div className="flex-1 min-w-0">
-                <input
-                  className={inputClass}
-                  placeholder="Название"
-                  value={newCatalogItem.name}
-                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, name: e.target.value }))}
-                />
-              </div>
-              <div className="w-20 shrink-0">
-                <input
-                  className={inputClass}
-                  placeholder="Ед."
-                  value={newCatalogItem.unit}
-                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, unit: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-2">
-              <div className="flex-1 min-w-0">
-                <select
-                  className={inputClass}
-                  value={newCatalogItem.zone}
-                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, zone: e.target.value }))}
-                >
-                  {INVENTORY_AUDIT_ZONES.map((z) => (
-                    <option key={z.key} value={z.key}>{z.label}</option>
-                  ))}
-                </select>
-              </div>
-              <button
-                onClick={addCatalogItem}
-                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"
-              >
-                <Plus size={20} />
-              </button>
-            </div>
-          </Section>
-
           <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-2 shadow-sm">
             <p className="text-sm font-medium text-slate-600">Переучёт — {monthLabel}</p>
             <Badge color={catalogFilled === catalogTotal && catalogTotal > 0 ? 'green' : 'slate'}>
@@ -561,7 +505,8 @@ export default function Inventory({
 
           {recountCatalog.length === 0 && (
             <p className="text-sm text-slate-400 text-center py-3">
-              Каталог пуст — импортируйте из Google Таблиц или добавьте товары вручную
+              Каталог пуст — наполните его во вкладке «Каталог» (базовая номенклатура, импорт
+              или добавление вручную)
             </p>
           )}
 
@@ -571,6 +516,150 @@ export default function Inventory({
               checked={!!recount.verifiedWithLead}
               onChange={setRecountVerified}
             />
+          </Section>
+        </>
+      )}
+
+      {tab === 'catalog' && (
+        <>
+          <Section title="Номенклатура продуктов" icon={Tags}>
+            <p className="text-xs text-slate-500 mb-3">
+              Единый список продуктов, из которого подставляются варианты названий во всех
+              полях (Склад, Переучёт, Остатки, закупки, рецепты). Редактируется вручную —
+              название, единица измерения и зона хранения каждой позиции.
+            </p>
+            <BigButton onClick={loadStandardNomenclature} icon={Download} color="outline">
+              Загрузить базовую номенклатуру
+            </BigButton>
+            <p className="text-xs text-slate-400 mt-2">
+              Добавит мясо/курицу/индейку (и их части), овощи, фрукты, бакалею и специи —
+              пропустит то, что уже есть в каталоге по названию.
+            </p>
+          </Section>
+
+          <Section
+            title="Импорт из Google Таблиц"
+            icon={Upload}
+            right={
+              <button onClick={() => setShowCatalogImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+                {showCatalogImport ? 'Скрыть' : 'Показать'}
+              </button>
+            }
+          >
+            {showCatalogImport && (
+              <>
+                <p className="text-xs text-slate-500 mb-2">
+                  Столбцы: <b>Название, Ед. изм., Зона</b> (холодильник / морозильник / сухой склад).
+                  Выделите в Google Таблице → Ctrl+C → вставьте сюда.
+                </p>
+                <textarea
+                  className={inputClass + ' h-28 py-2'}
+                  placeholder={'Куриное филе\tкг\tхолодильник\nМука\tкг\tсухой склад'}
+                  value={catalogImportText}
+                  onChange={(e) => setCatalogImportText(e.target.value)}
+                />
+                <div className="flex gap-2 mt-2">
+                  <BigButton onClick={importCatalog} icon={Upload} disabled={!catalogImportText.trim()}>
+                    Импортировать в каталог
+                  </BigButton>
+                  <button
+                    onClick={() => { setShowCatalogImport(false); setCatalogImportText(''); setCatalogImportResult(null) }}
+                    className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </>
+            )}
+            {catalogImportResult && (
+              <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+                {catalogImportResult}
+              </p>
+            )}
+          </Section>
+
+          <Section title="Добавить товар вручную" icon={Plus}>
+            <div className="flex gap-2">
+              <div className="flex-1 min-w-0">
+                <input
+                  className={inputClass}
+                  placeholder="Название"
+                  list="nomenclature-reference"
+                  value={newCatalogItem.name}
+                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div className="w-20 shrink-0">
+                <input
+                  className={inputClass}
+                  placeholder="Ед."
+                  value={newCatalogItem.unit}
+                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, unit: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <div className="flex-1 min-w-0">
+                <select
+                  className={inputClass}
+                  value={newCatalogItem.zone}
+                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, zone: e.target.value }))}
+                >
+                  {INVENTORY_AUDIT_ZONES.map((z) => (
+                    <option key={z.key} value={z.key}>{z.label}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={addCatalogItem}
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+            <datalist id="nomenclature-reference">
+              {DEFAULT_NOMENCLATURE.map((n) => (
+                <option key={n.name} value={n.name} />
+              ))}
+            </datalist>
+          </Section>
+
+          <Section title={`Каталог (${recountCatalog.length})`} icon={PackageSearch}>
+            {recountCatalog.length === 0 && (
+              <p className="text-sm text-slate-400 text-center py-3">Каталог пуст</p>
+            )}
+            <div className="flex flex-col gap-2">
+              {recountCatalog.map((item) => (
+                <div key={item.id} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-2 py-2">
+                  <div className="flex-1 min-w-0">
+                    <input
+                      className={inputClass + ' text-sm'}
+                      value={item.name}
+                      onChange={(e) => updateCatalogItem(item.id, { name: e.target.value })}
+                    />
+                  </div>
+                  <div className="w-16 shrink-0">
+                    <input
+                      className={inputClass + ' text-sm text-center'}
+                      value={item.unit}
+                      onChange={(e) => updateCatalogItem(item.id, { unit: e.target.value })}
+                    />
+                  </div>
+                  <div className="w-[104px] shrink-0">
+                    <select
+                      className={inputClass + ' text-xs px-1'}
+                      value={item.zone}
+                      onChange={(e) => updateCatalogItem(item.id, { zone: e.target.value })}
+                    >
+                      {INVENTORY_AUDIT_ZONES.map((z) => (
+                        <option key={z.key} value={z.key}>{z.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
+                </div>
+              ))}
+            </div>
           </Section>
         </>
       )}
@@ -770,7 +859,7 @@ export default function Inventory({
 
           <Section title="Текущие остатки" icon={Scale}>
             {balances.length === 0 && (
-              <p className="text-sm text-slate-400 text-center py-3">Каталог пуст — добавьте товары во вкладке «Переучёт»</p>
+              <p className="text-sm text-slate-400 text-center py-3">Каталог пуст — добавьте товары во вкладке «Каталог»</p>
             )}
             <div className="flex flex-col gap-2">
               {balances.map(({ product, balance, baselineDate }) => (

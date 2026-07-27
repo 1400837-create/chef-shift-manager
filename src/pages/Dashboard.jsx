@@ -239,6 +239,7 @@ export default function Dashboard({
               <input
                 className={inputClass}
                 placeholder="Продукт"
+                list="product-nomenclature"
                 value={produceForm.name}
                 onChange={(e) => setProduceForm((p) => ({ ...p, name: e.target.value }))}
               />
