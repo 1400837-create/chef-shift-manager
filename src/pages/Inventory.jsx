@@ -53,8 +53,10 @@ export default function Inventory({
   const [catalogImportResult, setCatalogImportResult] = useState(null)
   const [newCatalogItem, setNewCatalogItem] = useState({ name: '', unit: 'шт', zone: 'fridges' })
 
-  const [recipeForm, setRecipeForm] = useState({ name: '', ingredients: [{ productId: '', qty: '' }] })
-  const [purchaseForm, setPurchaseForm] = useState({ productId: '', qty: '', date: todayKey() })
+  const [recipeForm, setRecipeForm] = useState({ name: '', ingredients: [{ productName: '', qty: '' }] })
+  const [recipeError, setRecipeError] = useState(null)
+  const [purchaseForm, setPurchaseForm] = useState({ productName: '', qty: '', date: todayKey() })
+  const [purchaseError, setPurchaseError] = useState(null)
   const [productionForm, setProductionForm] = useState({ recipeId: '', qty: '1', date: todayKey() })
 
   const recount = recounts[currentMonth] || { qty: {}, verifiedWithLead: false, countedAt: '' }
@@ -179,8 +181,14 @@ export default function Inventory({
     }))
   }
 
+  function findProductByName(name) {
+    const key = (name || '').trim().toLowerCase()
+    if (!key) return null
+    return recountCatalog.find((p) => p.name.trim().toLowerCase() === key) || null
+  }
+
   function addIngredientRow() {
-    setRecipeForm((f) => ({ ...f, ingredients: [...f.ingredients, { productId: '', qty: '' }] }))
+    setRecipeForm((f) => ({ ...f, ingredients: [...f.ingredients, { productName: '', qty: '' }] }))
   }
 
   function updateIngredientRow(idx, patch) {
@@ -195,10 +203,27 @@ export default function Inventory({
   }
 
   function saveRecipe() {
-    const ingredients = recipeForm.ingredients.filter((i) => i.productId && i.qty)
-    if (!recipeForm.name.trim() || ingredients.length === 0) return
+    if (!recipeForm.name.trim()) {
+      setRecipeError('Укажите название блюда.')
+      return
+    }
+    const filledRows = recipeForm.ingredients.filter((i) => i.productName.trim() || i.qty)
+    const ingredients = []
+    for (const row of filledRows) {
+      const product = findProductByName(row.productName)
+      if (!product || !row.qty) {
+        setRecipeError(`Продукт «${row.productName}» не найден в каталоге — выберите вариант из подсказок.`)
+        return
+      }
+      ingredients.push({ productId: product.id, qty: row.qty })
+    }
+    if (ingredients.length === 0) {
+      setRecipeError('Добавьте хотя бы один ингредиент из каталога.')
+      return
+    }
+    setRecipeError(null)
     setRecipes((prev) => [...prev, { id: Date.now(), name: recipeForm.name.trim(), ingredients }])
-    setRecipeForm({ name: '', ingredients: [{ productId: '', qty: '' }] })
+    setRecipeForm({ name: '', ingredients: [{ productName: '', qty: '' }] })
   }
 
   function removeRecipe(id) {
@@ -206,12 +231,21 @@ export default function Inventory({
   }
 
   function addPurchase() {
-    if (!purchaseForm.productId || !purchaseForm.qty) return
+    const product = findProductByName(purchaseForm.productName)
+    if (!product) {
+      setPurchaseError('Товар не найден в каталоге — выберите вариант из подсказок.')
+      return
+    }
+    if (!purchaseForm.qty) {
+      setPurchaseError('Укажите количество.')
+      return
+    }
+    setPurchaseError(null)
     setPurchases((prev) => [
-      { id: Date.now(), productId: purchaseForm.productId, qty: purchaseForm.qty, date: purchaseForm.date },
+      { id: Date.now(), productId: product.id, qty: purchaseForm.qty, date: purchaseForm.date },
       ...prev,
     ])
-    setPurchaseForm({ productId: '', qty: '', date: todayKey() })
+    setPurchaseForm({ productName: '', qty: '', date: todayKey() })
   }
 
   function removePurchase(id) {
@@ -702,16 +736,13 @@ export default function Inventory({
             {recipeForm.ingredients.map((ing, idx) => (
               <div key={idx} className="flex gap-2 mb-2">
                 <div className="flex-1 min-w-0">
-                  <select
+                  <input
                     className={inputClass}
-                    value={ing.productId}
-                    onChange={(e) => updateIngredientRow(idx, { productId: e.target.value })}
-                  >
-                    <option value="">Продукт…</option>
-                    {recountCatalog.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                    placeholder="Продукт…"
+                    list="product-nomenclature"
+                    value={ing.productName}
+                    onChange={(e) => updateIngredientRow(idx, { productName: e.target.value })}
+                  />
                 </div>
                 <div className="w-20 shrink-0">
                   <input
@@ -736,22 +767,24 @@ export default function Inventory({
             >
               <Plus size={14} /> Ингредиент
             </button>
+            {recipeError && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-2">
+                {recipeError}
+              </p>
+            )}
             <BigButton onClick={saveRecipe} icon={Plus}>Сохранить рецепт</BigButton>
           </Section>
 
           <Section title="Приход (закупка)" icon={ShoppingCart}>
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
-                <select
+                <input
                   className={inputClass}
-                  value={purchaseForm.productId}
-                  onChange={(e) => setPurchaseForm((f) => ({ ...f, productId: e.target.value }))}
-                >
-                  <option value="">Продукт…</option>
-                  {recountCatalog.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                  placeholder="Продукт…"
+                  list="product-nomenclature"
+                  value={purchaseForm.productName}
+                  onChange={(e) => setPurchaseForm((f) => ({ ...f, productName: e.target.value }))}
+                />
               </div>
               <div className="w-20 shrink-0">
                 <input
@@ -779,6 +812,11 @@ export default function Inventory({
                 <Plus size={20} />
               </button>
             </div>
+            {purchaseError && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-2">
+                {purchaseError}
+              </p>
+            )}
 
             {purchases.slice(0, 8).map((p) => {
               const product = recountCatalog.find((pr) => pr.id === Number(p.productId) || pr.id === p.productId)
