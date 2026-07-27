@@ -78,6 +78,21 @@ function matchZone(cell) {
   return found ? found.zone : 'dry'
 }
 
+const CATEGORY_ALIASES = [
+  { category: 'meat', words: ['мясо', 'говядин', 'свинин', 'баранин', 'телятин', 'meat'] },
+  { category: 'poultry', words: ['птиц', 'куриц', 'куриц', 'индейк', 'курин', 'poultry', 'chicken'] },
+  { category: 'vegetables', words: ['овощ', 'veget'] },
+  { category: 'fruits', words: ['фрукт', 'fruit'] },
+  { category: 'spices', words: ['специ', 'spice'] },
+  { category: 'dry', words: ['бакале', 'круп', 'dry'] },
+]
+
+function matchCategory(cell) {
+  const lower = (cell || '').toLowerCase()
+  const found = CATEGORY_ALIASES.find((c) => c.words.some((w) => lower.includes(w)))
+  return found ? found.category : 'other'
+}
+
 // Expects columns: Блюдо, Ингредиент, Кол-во — one row per ingredient, like a
 // typical recipe-costing spreadsheet. Rows sharing the same "Блюдо" (case
 // insensitive) are grouped into a single recipe, in the order they appear —
@@ -111,7 +126,7 @@ export function parseRecipesImport(text) {
   return { recipes: order.map((key) => byName.get(key)), skipped }
 }
 
-// Expects columns: Название, [Ед. изм.], [Зона: холодильник/морозильник/сухой склад]
+// Expects columns: Название, [Ед. изм.], [Зона: холодильник/морозильник/сухой склад], [Рубрика: мясо/птица/овощи/фрукты/бакалея/специи]
 export function parseRecountCatalogImport(text) {
   const rows = parseRows(text)
   const result = []
@@ -128,7 +143,8 @@ export function parseRecountCatalogImport(text) {
     }
     const unit = (cells[1] || 'шт').trim()
     const zone = matchZone(cells[2])
-    result.push({ name, unit, zone })
+    const category = matchCategory(cells[3])
+    result.push({ name, unit, zone, category })
   })
 
   return { items: result, skipped }

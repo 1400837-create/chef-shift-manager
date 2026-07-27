@@ -3,9 +3,10 @@ import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
   BookOpen, ShoppingCart, Flame, Tags, Download, Pencil,
+  ArrowUpDown, ClipboardPlus, Check,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
-import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE } from '../utils/constants'
+import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES } from '../utils/constants'
 import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey } from '../utils/dateUtils'
 import { parseRecountCatalogImport, parseRecipesImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
@@ -37,6 +38,7 @@ export default function Inventory({
   items, setItems, audits, setAudits,
   recountCatalog, setRecountCatalog, recounts, setRecounts,
   recipes, setRecipes, purchases, setPurchases, productions, setProductions,
+  plannedPurchases, setPlannedPurchases,
 }) {
   const [form, setForm] = useState({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
   const [tab, setTab] = useState('fifo')
@@ -51,7 +53,12 @@ export default function Inventory({
   const [showCatalogImport, setShowCatalogImport] = useState(false)
   const [catalogImportText, setCatalogImportText] = useState('')
   const [catalogImportResult, setCatalogImportResult] = useState(null)
-  const [newCatalogItem, setNewCatalogItem] = useState({ name: '', unit: 'шт', zone: 'fridges' })
+  const [newCatalogItem, setNewCatalogItem] = useState({ name: '', unit: 'шт', zone: 'fridges', category: 'other' })
+  const [catalogSort, setCatalogSort] = useState('alpha')
+  const [balanceSort, setBalanceSort] = useState('alpha')
+
+  const [plannedForm, setPlannedForm] = useState({ productName: '', qty: '' })
+  const [plannedError, setPlannedError] = useState(null)
 
   const [recipeForm, setRecipeForm] = useState({ name: '', ingredients: [{ productName: '', qty: '' }] })
   const [recipeError, setRecipeError] = useState(null)
@@ -121,9 +128,23 @@ export default function Inventory({
     if (!newCatalogItem.name.trim()) return
     setRecountCatalog((prev) => [
       ...prev,
-      { id: Date.now(), name: newCatalogItem.name.trim(), unit: newCatalogItem.unit.trim() || 'шт', zone: newCatalogItem.zone },
+      {
+        id: Date.now(),
+        name: newCatalogItem.name.trim(),
+        unit: newCatalogItem.unit.trim() || 'шт',
+        zone: newCatalogItem.zone,
+        category: newCatalogItem.category,
+      },
     ])
-    setNewCatalogItem({ name: '', unit: 'шт', zone: 'fridges' })
+    setNewCatalogItem({ name: '', unit: 'шт', zone: 'fridges', category: 'other' })
+  }
+
+  function zoneLabel(key) {
+    return INVENTORY_AUDIT_ZONES.find((z) => z.key === key)?.label || 'Без зоны'
+  }
+
+  function categoryLabel(key) {
+    return PRODUCT_CATEGORIES.find((c) => c.key === key)?.label || 'Другое'
   }
 
   function removeCatalogItem(id) {
@@ -371,6 +392,105 @@ export default function Inventory({
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recountCatalog, recounts, purchases, productions, recipes])
+
+  function sortByKey(list, sortKey, getName) {
+    const copy = [...list]
+    if (sortKey === 'alpha') {
+      copy.sort((a, b) => getName(a).localeCompare(getName(b), 'ru'))
+    } else if (sortKey === 'zone') {
+      copy.sort((a, b) => zoneLabel(a.zone).localeCompare(zoneLabel(b.zone), 'ru') || getName(a).localeCompare(getName(b), 'ru'))
+    } else if (sortKey === 'category') {
+      copy.sort((a, b) => categoryLabel(a.category).localeCompare(categoryLabel(b.category), 'ru') || getName(a).localeCompare(getName(b), 'ru'))
+    }
+    return copy
+  }
+
+  const sortedCatalog = useMemo(
+    () => sortByKey(recountCatalog, catalogSort, (i) => i.name),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recountCatalog, catalogSort]
+  )
+
+  const sortedBalances = useMemo(() => {
+    if (balanceSort === 'qty') {
+      return [...balances].sort((a, b) => {
+        const av = a.balance ?? Infinity
+        const bv = b.balance ?? Infinity
+        return av - bv
+      })
+    }
+    const list = balances.map((b) => ({ ...b.product, __row: b }))
+    const sortedList = sortByKey(list, balanceSort, (i) => i.name)
+    return sortedList.map((i) => i.__row)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balances, balanceSort])
+
+  function isLowStock(row) {
+    const min = Number(row.product.minQty)
+    return min > 0 && row.balance !== null && row.balance <= min
+  }
+
+  const SORT_OPTIONS = [
+    { key: 'alpha', label: 'А-Я' },
+    { key: 'zone', label: 'Зона' },
+    { key: 'category', label: 'Рубрика' },
+  ]
+
+  function findPlannedByProduct(productId) {
+    return plannedPurchases.find((p) => String(p.productId) === String(productId))
+  }
+
+  function addPlannedManual() {
+    const product = findProductByName(plannedForm.productName)
+    if (!product) {
+      setPlannedError('Товар не найден в каталоге — выберите вариант из подсказок.')
+      return
+    }
+    if (!plannedForm.qty) {
+      setPlannedError('Укажите количество.')
+      return
+    }
+    setPlannedError(null)
+    if (findPlannedByProduct(product.id)) {
+      setPlannedError('Этот товар уже в списке закупки — отредактируйте количество там.')
+      return
+    }
+    setPlannedPurchases((prev) => [...prev, { id: Date.now(), productId: product.id, qty: plannedForm.qty }])
+    setPlannedForm({ productName: '', qty: '' })
+  }
+
+  function addLowStockToPlan(product, suggestedQty) {
+    if (findPlannedByProduct(product.id)) return
+    setPlannedPurchases((prev) => [...prev, { id: Date.now(), productId: product.id, qty: suggestedQty || '' }])
+  }
+
+  function updatePlannedQty(id, qty) {
+    setPlannedPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, qty } : p)))
+  }
+
+  function removePlanned(id) {
+    setPlannedPurchases((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  function markPurchased(planned) {
+    if (!planned.qty) return
+    setPurchases((prev) => [
+      { id: Date.now(), productId: planned.productId, qty: planned.qty, date: todayKey() },
+      ...prev,
+    ])
+    removePlanned(planned.id)
+  }
+
+  function printPlannedList() {
+    printReport({
+      type: 'shopping-list',
+      title: `Запланированная закупка — ${formatRu(now)}`,
+      items: plannedPurchases.map((p) => {
+        const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
+        return { name: product?.name || '?', unit: product?.unit || '', qty: p.qty }
+      }),
+    })
+  }
 
   return (
     <div className="pb-4">
@@ -720,6 +840,17 @@ export default function Inventory({
                   ))}
                 </select>
               </div>
+              <div className="flex-1 min-w-0">
+                <select
+                  className={inputClass}
+                  value={newCatalogItem.category}
+                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, category: e.target.value }))}
+                >
+                  {PRODUCT_CATEGORIES.map((c) => (
+                    <option key={c.key} value={c.key}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
               <button
                 onClick={addCatalogItem}
                 className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"
@@ -734,39 +865,87 @@ export default function Inventory({
             </datalist>
           </Section>
 
-          <Section title={`Каталог (${recountCatalog.length})`} icon={PackageSearch}>
+          <Section
+            title={`Каталог (${recountCatalog.length})`}
+            icon={PackageSearch}
+            right={
+              <div className="flex items-center gap-1 text-slate-400">
+                <ArrowUpDown size={14} />
+              </div>
+            }
+          >
+            <div className="flex gap-1.5 mb-3">
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setCatalogSort(opt.key)}
+                  className={`flex-1 min-h-[36px] rounded-lg text-xs font-semibold ${
+                    catalogSort === opt.key ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             {recountCatalog.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-3">Каталог пуст</p>
             )}
             <div className="flex flex-col gap-2">
-              {recountCatalog.map((item) => (
-                <div key={item.id} className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-2 py-2">
-                  <div className="flex-1 min-w-0">
-                    <input
-                      className={inputClass + ' text-sm'}
-                      value={item.name}
-                      onChange={(e) => updateCatalogItem(item.id, { name: e.target.value })}
-                    />
+              {sortedCatalog.map((item) => (
+                <div key={item.id} className="rounded-xl border border-slate-200 px-2 py-2">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="flex-1 min-w-0">
+                      <input
+                        className={inputClass + ' text-sm'}
+                        value={item.name}
+                        onChange={(e) => updateCatalogItem(item.id, { name: e.target.value })}
+                      />
+                    </div>
+                    <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
                   </div>
-                  <div className="w-16 shrink-0">
-                    <input
-                      className={inputClass + ' text-sm text-center'}
-                      value={item.unit}
-                      onChange={(e) => updateCatalogItem(item.id, { unit: e.target.value })}
-                    />
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="w-14 shrink-0">
+                      <input
+                        className={inputClass + ' text-xs text-center px-1'}
+                        value={item.unit}
+                        onChange={(e) => updateCatalogItem(item.id, { unit: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <select
+                        className={inputClass + ' text-xs px-1'}
+                        value={item.zone}
+                        onChange={(e) => updateCatalogItem(item.id, { zone: e.target.value })}
+                      >
+                        {INVENTORY_AUDIT_ZONES.map((z) => (
+                          <option key={z.key} value={z.key}>{z.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <select
+                        className={inputClass + ' text-xs px-1'}
+                        value={item.category || 'other'}
+                        onChange={(e) => updateCatalogItem(item.id, { category: e.target.value })}
+                      >
+                        {PRODUCT_CATEGORIES.map((c) => (
+                          <option key={c.key} value={c.key}>{c.label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <div className="w-[104px] shrink-0">
-                    <select
-                      className={inputClass + ' text-xs px-1'}
-                      value={item.zone}
-                      onChange={(e) => updateCatalogItem(item.id, { zone: e.target.value })}
-                    >
-                      {INVENTORY_AUDIT_ZONES.map((z) => (
-                        <option key={z.key} value={z.key}>{z.label}</option>
-                      ))}
-                    </select>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-slate-400 shrink-0">Мин. остаток для подсветки:</span>
+                    <div className="w-16 shrink-0">
+                      <input
+                        type="number"
+                        className={inputClass + ' text-xs text-center px-1'}
+                        value={item.minQty ?? ''}
+                        placeholder="—"
+                        onChange={(e) => updateCatalogItem(item.id, { minQty: e.target.value })}
+                      />
+                    </div>
                   </div>
-                  <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
                 </div>
               ))}
             </div>
@@ -1032,25 +1211,134 @@ export default function Inventory({
           </Section>
 
           <Section title="Текущие остатки" icon={Scale}>
+            <div className="flex gap-1.5 mb-3">
+              {[...SORT_OPTIONS, { key: 'qty', label: 'Кол-во' }].map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setBalanceSort(opt.key)}
+                  className={`flex-1 min-h-[36px] rounded-lg text-xs font-semibold ${
+                    balanceSort === opt.key ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             {balances.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-3">Каталог пуст — добавьте товары во вкладке «Каталог»</p>
             )}
             <div className="flex flex-col gap-2">
-              {balances.map(({ product, balance, baselineDate }) => (
-                <div key={product.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-700 truncate">{product.name}</p>
-                    <p className="text-xs text-slate-400">
-                      {baselineDate ? `с переучёта ${formatRu(baselineDate)}` : 'нет данных переучёта'}
-                    </p>
+              {sortedBalances.map((row) => {
+                const { product, balance, baselineDate } = row
+                const low = isLowStock(row)
+                const alreadyPlanned = !!findPlannedByProduct(product.id)
+                return (
+                  <div
+                    key={product.id}
+                    className={`rounded-xl border-2 px-3 py-2 ${low ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-700 truncate">{product.name}</p>
+                        <p className="text-xs text-slate-400">
+                          {baselineDate ? `с переучёта ${formatRu(baselineDate)}` : 'нет данных переучёта'}
+                          {low && ' · мало на складе'}
+                        </p>
+                      </div>
+                      {balance === null ? (
+                        <Badge color="slate">—</Badge>
+                      ) : (
+                        <Badge color={low ? 'red' : balance <= 0 ? 'red' : 'green'}>{balance} {product.unit}</Badge>
+                      )}
+                    </div>
+                    {low && (
+                      <button
+                        onClick={() => addLowStockToPlan(product, product.minQty)}
+                        disabled={alreadyPlanned}
+                        className="w-full min-h-[36px] mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-red-600 active:bg-red-700 disabled:bg-slate-300 text-white text-xs font-semibold"
+                      >
+                        <ClipboardPlus size={14} /> {alreadyPlanned ? 'Уже в списке закупки' : 'Добавить в закупку'}
+                      </button>
+                    )}
                   </div>
-                  {balance === null ? (
-                    <Badge color="slate">—</Badge>
-                  ) : (
-                    <Badge color={balance <= 0 ? 'red' : 'green'}>{balance} {product.unit}</Badge>
-                  )}
-                </div>
-              ))}
+                )
+              })}
+            </div>
+          </Section>
+
+          <Section
+            title={`Запланированная закупка (${plannedPurchases.length})`}
+            icon={ClipboardPlus}
+            right={<PrintButton onClick={printPlannedList} label="Печать" />}
+          >
+            <p className="text-xs text-slate-500 mb-3">
+              Список того, что нужно купить — не путать с «Приход» выше (это уже совершённые
+              закупки). Отметьте «Куплено», когда товар реально куплен — он попадёт в «Приход»
+              и автоматически обновит остаток.
+            </p>
+            <div className="flex gap-2 mb-3">
+              <div className="flex-1 min-w-0">
+                <input
+                  className={inputClass}
+                  placeholder="Продукт…"
+                  list="product-nomenclature"
+                  value={plannedForm.productName}
+                  onChange={(e) => setPlannedForm((f) => ({ ...f, productName: e.target.value }))}
+                />
+              </div>
+              <div className="w-20 shrink-0">
+                <input
+                  type="number"
+                  className={inputClass}
+                  placeholder="Кол-во"
+                  value={plannedForm.qty}
+                  onChange={(e) => setPlannedForm((f) => ({ ...f, qty: e.target.value }))}
+                />
+              </div>
+              <button
+                onClick={addPlannedManual}
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+            {plannedError && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
+                {plannedError}
+              </p>
+            )}
+
+            {plannedPurchases.length === 0 && (
+              <p className="text-sm text-slate-400 text-center py-3">Список закупки пуст</p>
+            )}
+            <div className="flex flex-col gap-2">
+              {plannedPurchases.map((p) => {
+                const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
+                return (
+                  <div key={p.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-700 truncate">{product?.name || '?'}</p>
+                      <p className="text-xs text-slate-400">{product?.unit}</p>
+                    </div>
+                    <div className="w-20 shrink-0">
+                      <input
+                        type="number"
+                        className={inputClass + ' text-center'}
+                        value={p.qty}
+                        onChange={(e) => updatePlannedQty(p.id, e.target.value)}
+                      />
+                    </div>
+                    <button
+                      onClick={() => markPurchased(p)}
+                      className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-green-600 active:bg-green-700 text-white"
+                      title="Отметить купленным"
+                    >
+                      <Check size={18} />
+                    </button>
+                    <ConfirmDeleteButton onConfirm={() => removePlanned(p.id)} />
+                  </div>
+                )
+              })}
             </div>
           </Section>
         </>

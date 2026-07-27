@@ -37,6 +37,7 @@ export default function App() {
   const [recipes, setRecipes] = useLocalStorage('recipes', [])
   const [purchases, setPurchases] = useLocalStorage('purchases', [])
   const [productions, setProductions] = useLocalStorage('productions', [])
+  const [plannedPurchases, setPlannedPurchases] = useLocalStorage('plannedPurchases', [])
 
   const now = new Date()
   const today = todayKey()
@@ -117,6 +118,8 @@ export default function App() {
             setPurchases={setPurchases}
             productions={productions}
             setProductions={setProductions}
+            plannedPurchases={plannedPurchases}
+            setPlannedPurchases={setPlannedPurchases}
           />
         )}
         {tab === 'cleaning' && (
