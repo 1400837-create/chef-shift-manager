@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Wallet, Receipt, Plus, Camera, Send, Copy, Image as ImageIcon } from 'lucide-react'
-import { Section, Field, inputClass, Badge, BigButton, ConfirmDeleteButton } from '../components/UI'
+import { Section, Field, inputClass, Badge, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { RECEIPT_CATEGORIES } from '../utils/constants'
 import { biweekKey, formatRu, parseLocalDate } from '../utils/dateUtils'
 import { financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
