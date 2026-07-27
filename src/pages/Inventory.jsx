@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
 import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
-  ClipboardList, Upload, X, ChevronLeft, ChevronRight,
+  ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
+  BookOpen, ShoppingCart, Flame,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES } from '../utils/constants'
-import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay } from '../utils/dateUtils'
+import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey } from '../utils/dateUtils'
 import { parseRecountCatalogImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
+import { computeBalance } from '../utils/stockBalance'
 
 function computeExpiry(item) {
   return addDays(parseLocalDate(item.packDate), Number(item.shelfLifeDays || 0))
@@ -34,6 +36,7 @@ function previousMonthKey(currentMonth) {
 export default function Inventory({
   items, setItems, audits, setAudits,
   recountCatalog, setRecountCatalog, recounts, setRecounts,
+  recipes, setRecipes, purchases, setPurchases, productions, setProductions,
 }) {
   const [form, setForm] = useState({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
   const [tab, setTab] = useState('fifo')
@@ -50,7 +53,11 @@ export default function Inventory({
   const [catalogImportResult, setCatalogImportResult] = useState(null)
   const [newCatalogItem, setNewCatalogItem] = useState({ name: '', unit: 'шт', zone: 'fridges' })
 
-  const recount = recounts[currentMonth] || { qty: {}, verifiedWithLead: false }
+  const [recipeForm, setRecipeForm] = useState({ name: '', ingredients: [{ productId: '', qty: '' }] })
+  const [purchaseForm, setPurchaseForm] = useState({ productId: '', qty: '', date: todayKey() })
+  const [productionForm, setProductionForm] = useState({ recipeId: '', qty: '1', date: todayKey() })
+
+  const recount = recounts[currentMonth] || { qty: {}, verifiedWithLead: false, countedAt: '' }
   const prevRecount = recounts[prevMonth]
 
   const sorted = useMemo(() => {
@@ -149,6 +156,65 @@ export default function Inventory({
     }))
   }
 
+  function setRecountDate(dateStr) {
+    setRecounts((prev) => ({
+      ...prev,
+      [currentMonth]: { ...(prev[currentMonth] || { qty: {}, verifiedWithLead: false }), countedAt: dateStr },
+    }))
+  }
+
+  function addIngredientRow() {
+    setRecipeForm((f) => ({ ...f, ingredients: [...f.ingredients, { productId: '', qty: '' }] }))
+  }
+
+  function updateIngredientRow(idx, patch) {
+    setRecipeForm((f) => ({
+      ...f,
+      ingredients: f.ingredients.map((ing, i) => (i === idx ? { ...ing, ...patch } : ing)),
+    }))
+  }
+
+  function removeIngredientRow(idx) {
+    setRecipeForm((f) => ({ ...f, ingredients: f.ingredients.filter((_, i) => i !== idx) }))
+  }
+
+  function saveRecipe() {
+    const ingredients = recipeForm.ingredients.filter((i) => i.productId && i.qty)
+    if (!recipeForm.name.trim() || ingredients.length === 0) return
+    setRecipes((prev) => [...prev, { id: Date.now(), name: recipeForm.name.trim(), ingredients }])
+    setRecipeForm({ name: '', ingredients: [{ productId: '', qty: '' }] })
+  }
+
+  function removeRecipe(id) {
+    setRecipes((prev) => prev.filter((r) => r.id !== id))
+  }
+
+  function addPurchase() {
+    if (!purchaseForm.productId || !purchaseForm.qty) return
+    setPurchases((prev) => [
+      { id: Date.now(), productId: purchaseForm.productId, qty: purchaseForm.qty, date: purchaseForm.date },
+      ...prev,
+    ])
+    setPurchaseForm({ productId: '', qty: '', date: todayKey() })
+  }
+
+  function removePurchase(id) {
+    setPurchases((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  function addProduction() {
+    if (!productionForm.recipeId || !productionForm.qty) return
+    setProductions((prev) => [
+      { id: Date.now(), recipeId: productionForm.recipeId, qty: productionForm.qty, date: productionForm.date },
+      ...prev,
+    ])
+    setProductionForm({ recipeId: '', qty: '1', date: todayKey() })
+  }
+
+  function removeProduction(id) {
+    setProductions((prev) => prev.filter((p) => p.id !== id))
+  }
+
   function zonesForPrint() {
     return INVENTORY_AUDIT_ZONES.map((z) => ({
       label: z.label,
@@ -171,6 +237,14 @@ export default function Inventory({
 
   const catalogTotal = recountCatalog.length
   const catalogFilled = recountCatalog.filter((i) => recount.qty[i.id] !== undefined && recount.qty[i.id] !== '').length
+
+  const balances = useMemo(() => {
+    return recountCatalog.map((product) => ({
+      product,
+      ...computeBalance(product.id, { recounts, purchases, productions, recipes }, now),
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recountCatalog, recounts, purchases, productions, recipes])
 
   return (
     <div className="pb-4">
@@ -198,6 +272,14 @@ export default function Inventory({
           }`}
         >
           <ClipboardList size={16} /> Переучёт
+        </button>
+        <button
+          onClick={() => setTab('balance')}
+          className={`flex-1 min-h-[48px] rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm ${
+            tab === 'balance' ? 'bg-slate-800 text-white' : 'bg-white border border-slate-200 text-slate-600'
+          }`}
+        >
+          <Scale size={16} /> Остатки
         </button>
       </div>
 
@@ -421,6 +503,15 @@ export default function Inventory({
             </Badge>
           </div>
 
+          <Field label="Дата фактического подсчёта (для расчёта остатков)">
+            <input
+              type="date"
+              className={inputClass}
+              value={recount.countedAt || currentMonth + '-01'}
+              onChange={(e) => setRecountDate(e.target.value)}
+            />
+          </Field>
+
           <div className="flex gap-2 mb-4">
             <PrintButton onClick={() => printRecount(true)} label="Пустой бланк" />
             <PrintButton onClick={() => printRecount(false)} label="С текущими данными" />
@@ -480,6 +571,224 @@ export default function Inventory({
               checked={!!recount.verifiedWithLead}
               onChange={setRecountVerified}
             />
+          </Section>
+        </>
+      )}
+
+      {tab === 'balance' && (
+        <>
+          <p className="text-xs text-slate-500 mb-3 px-1">
+            Остаток = последний переучёт с заполненным количеством по товару (дата подсчёта задаётся
+            во вкладке «Переучёт») + все закупки после этой даты − расход по рецептам после этой даты.
+          </p>
+
+          <Section title="Рецепты" icon={BookOpen}>
+            {recipes.length === 0 && <p className="text-sm text-slate-400 text-center py-2">Рецептов пока нет</p>}
+            <div className="flex flex-col gap-2 mb-3">
+              {recipes.map((r) => (
+                <div key={r.id} className="rounded-xl border border-slate-200 px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-800">{r.name}</p>
+                    <ConfirmDeleteButton onConfirm={() => removeRecipe(r.id)} />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {r.ingredients.map((ing) => {
+                      const product = recountCatalog.find((p) => p.id === Number(ing.productId) || p.id === ing.productId)
+                      return `${product?.name || '?'} × ${ing.qty}${product?.unit ? ' ' + product.unit : ''}`
+                    }).join(', ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Новый рецепт</p>
+            <Field label="Название блюда">
+              <input
+                className={inputClass}
+                placeholder="Например: Бульон"
+                value={recipeForm.name}
+                onChange={(e) => setRecipeForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </Field>
+            {recipeForm.ingredients.map((ing, idx) => (
+              <div key={idx} className="flex gap-2 mb-2">
+                <div className="flex-1 min-w-0">
+                  <select
+                    className={inputClass}
+                    value={ing.productId}
+                    onChange={(e) => updateIngredientRow(idx, { productId: e.target.value })}
+                  >
+                    <option value="">Продукт…</option>
+                    {recountCatalog.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-20 shrink-0">
+                  <input
+                    type="number"
+                    className={inputClass}
+                    placeholder="Кол-во"
+                    value={ing.qty}
+                    onChange={(e) => updateIngredientRow(idx, { qty: e.target.value })}
+                  />
+                </div>
+                <button
+                  onClick={() => removeIngredientRow(idx)}
+                  className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 text-slate-500"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={addIngredientRow}
+              className="w-full min-h-[40px] flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 text-sm font-semibold active:bg-slate-50 mb-2"
+            >
+              <Plus size={14} /> Ингредиент
+            </button>
+            <BigButton onClick={saveRecipe} icon={Plus}>Сохранить рецепт</BigButton>
+          </Section>
+
+          <Section title="Приход (закупка)" icon={ShoppingCart}>
+            <div className="flex gap-2">
+              <div className="flex-1 min-w-0">
+                <select
+                  className={inputClass}
+                  value={purchaseForm.productId}
+                  onChange={(e) => setPurchaseForm((f) => ({ ...f, productId: e.target.value }))}
+                >
+                  <option value="">Продукт…</option>
+                  {recountCatalog.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-20 shrink-0">
+                <input
+                  type="number"
+                  className={inputClass}
+                  placeholder="Кол-во"
+                  value={purchaseForm.qty}
+                  onChange={(e) => setPurchaseForm((f) => ({ ...f, qty: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <div className="flex-1 min-w-0">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={purchaseForm.date}
+                  onChange={(e) => setPurchaseForm((f) => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+              <button
+                onClick={addPurchase}
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+
+            {purchases.slice(0, 8).map((p) => {
+              const product = recountCatalog.find((pr) => pr.id === Number(p.productId) || pr.id === p.productId)
+              return (
+                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                  <span className="text-sm text-slate-700">
+                    {product?.name || '?'} <span className="text-slate-400">+{p.qty} {product?.unit}</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
+                    <ConfirmDeleteButton onConfirm={() => removePurchase(p.id)} size="w-8 h-8" iconSize={14} />
+                  </div>
+                </div>
+              )
+            })}
+          </Section>
+
+          <Section title="Расход (готовка по рецепту)" icon={Flame}>
+            <div className="flex gap-2">
+              <div className="flex-1 min-w-0">
+                <select
+                  className={inputClass}
+                  value={productionForm.recipeId}
+                  onChange={(e) => setProductionForm((f) => ({ ...f, recipeId: e.target.value }))}
+                >
+                  <option value="">Рецепт…</option>
+                  {recipes.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-20 shrink-0">
+                <input
+                  type="number"
+                  className={inputClass}
+                  placeholder="Раз"
+                  value={productionForm.qty}
+                  onChange={(e) => setProductionForm((f) => ({ ...f, qty: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <div className="flex-1 min-w-0">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={productionForm.date}
+                  onChange={(e) => setProductionForm((f) => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+              <button
+                onClick={addProduction}
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white disabled:opacity-40"
+                disabled={recipes.length === 0}
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+            {recipes.length === 0 && (
+              <p className="text-xs text-slate-400 mt-2">Сначала добавьте хотя бы один рецепт выше</p>
+            )}
+
+            {productions.slice(0, 8).map((p) => {
+              const recipe = recipes.find((r) => r.id === Number(p.recipeId) || r.id === p.recipeId)
+              return (
+                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                  <span className="text-sm text-slate-700">
+                    {recipe?.name || '?'} <span className="text-slate-400">× {p.qty}</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
+                    <ConfirmDeleteButton onConfirm={() => removeProduction(p.id)} size="w-8 h-8" iconSize={14} />
+                  </div>
+                </div>
+              )
+            })}
+          </Section>
+
+          <Section title="Текущие остатки" icon={Scale}>
+            {balances.length === 0 && (
+              <p className="text-sm text-slate-400 text-center py-3">Каталог пуст — добавьте товары во вкладке «Переучёт»</p>
+            )}
+            <div className="flex flex-col gap-2">
+              {balances.map(({ product, balance, baselineDate }) => (
+                <div key={product.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700 truncate">{product.name}</p>
+                    <p className="text-xs text-slate-400">
+                      {baselineDate ? `с переучёта ${formatRu(baselineDate)}` : 'нет данных переучёта'}
+                    </p>
+                  </div>
+                  {balance === null ? (
+                    <Badge color="slate">—</Badge>
+                  ) : (
+                    <Badge color={balance <= 0 ? 'red' : 'green'}>{balance} {product.unit}</Badge>
+                  )}
+                </div>
+              ))}
+            </div>
           </Section>
         </>
       )}

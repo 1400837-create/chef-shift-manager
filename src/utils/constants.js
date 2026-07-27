@@ -83,11 +83,17 @@ export const LEFTOVER_ACTIONS = [
   { key: 'disposal', label: 'Утилизация по согласованию' },
 ]
 
-export const MENU_SLOTS = [
+// Legacy fixed slots — kept only to read menu days saved before courses
+// became a free-form, addable list (see MenuPlanner.jsx / coursesForDay).
+export const MENU_SLOTS_LEGACY = [
   { key: 'soup', label: 'Суп' },
   { key: 'main', label: 'Горячее' },
   { key: 'side', label: 'Гарнир' },
   { key: 'salad', label: 'Салат' },
 ]
+
+// Default courses seeded for a freshly-opened day. Editable and extendable —
+// tap "Добавить блюдо" for more when 5 isn't enough that day.
+export const DEFAULT_MENU_COURSES = ['Суп', 'Горячее', 'Гарнир', 'Салат', 'Напиток']
 
 export const KUCHENLEITERIN_EMAIL_KEY = 'kuchenleiterinEmail'

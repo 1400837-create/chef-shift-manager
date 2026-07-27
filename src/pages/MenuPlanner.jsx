@@ -1,10 +1,35 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy } from 'lucide-react'
-import { Section, Field, inputClass, BigButton, Badge, PrintButton } from '../components/UI'
-import { MENU_SLOTS } from '../utils/constants'
+import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus } from 'lucide-react'
+import { Section, Field, inputClass, BigButton, Badge, PrintButton, ConfirmDeleteButton } from '../components/UI'
+import { DEFAULT_MENU_COURSES, MENU_SLOTS_LEGACY } from '../utils/constants'
 import { MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex } from '../utils/dateUtils'
 import { parseMenuImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
+
+function slugify(label) {
+  return (label || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-zа-яё0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '') || 'blyudo'
+}
+
+// A day's courses used to be 4 fixed fields (soup/main/side/salad). They're
+// now a free-form, addable list — this reads both the new `courses` array
+// and, for days saved before the change, migrates the old fixed fields on
+// the fly (nothing is lost, it's just not persisted in the old shape again).
+function coursesForDay(dayData) {
+  if (dayData?.courses) return dayData.courses
+  if (dayData && MENU_SLOTS_LEGACY.some((s) => dayData[s.key])) {
+    return MENU_SLOTS_LEGACY.map((slot) => ({
+      id: `legacy-${slot.key}`,
+      label: slot.label,
+      dish: dayData[slot.key] || '',
+      kosher: !!dayData[`${slot.key}Kosher`],
+    }))
+  }
+  return DEFAULT_MENU_COURSES.map((label, i) => ({ id: `default-${i}`, label, dish: '', kosher: false }))
+}
 
 export default function MenuPlanner({ menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary }) {
   const [cursor, setCursor] = useState(() => {
@@ -32,20 +57,36 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     setImportResult(null)
   }
 
-  function updateDay(day, patch) {
+  function setDayCourses(day, courses) {
     setMenuData((prev) => ({
       ...prev,
-      [monthKey]: { ...(prev[monthKey] || {}), [day]: { ...(prev[monthKey]?.[day] || {}), ...patch } },
+      [monthKey]: { ...(prev[monthKey] || {}), [day]: { courses } },
     }))
   }
 
-  function commitDish(slotKey, value) {
+  function updateCourse(day, courseId, patch) {
+    const courses = coursesForDay(monthData[day]).map((c) => (c.id === courseId ? { ...c, ...patch } : c))
+    setDayCourses(day, courses)
+  }
+
+  function addCourse(day) {
+    const courses = coursesForDay(monthData[day])
+    const newCourse = { id: `c-${Date.now()}`, label: `Блюдо ${courses.length + 1}`, dish: '', kosher: false }
+    setDayCourses(day, [...courses, newCourse])
+  }
+
+  function removeCourse(day, courseId) {
+    const courses = coursesForDay(monthData[day]).filter((c) => c.id !== courseId)
+    setDayCourses(day, courses)
+  }
+
+  function commitDish(label, value) {
     const dish = value.trim()
     if (!dish) return
     setDishLibrary((prev) => {
-      const list = prev[slotKey] || []
+      const list = prev[label] || []
       if (list.some((d) => d.toLowerCase() === dish.toLowerCase())) return prev
-      return { ...prev, [slotKey]: [dish, ...list].slice(0, 40) }
+      return { ...prev, [label]: [dish, ...list].slice(0, 40) }
     })
   }
 
@@ -54,22 +95,22 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     return WEEKDAYS_RU[mondayIndex(date)]
   }
 
-  function summaryText(dayData) {
+  function summaryText(day) {
+    const dayData = monthData[day]
     if (!dayData) return ''
-    return MENU_SLOTS.map((s) => dayData[s.key]).filter(Boolean).join(' · ')
+    return coursesForDay(dayData).map((c) => c.dish).filter(Boolean).join(' · ')
   }
 
   function buildMenuText() {
     const lines = [`Меню на ${MONTHS_RU[cursor.month]} ${cursor.year}`, '']
     days.forEach((day) => {
       const dayData = monthData[day]
-      if (!dayData || !MENU_SLOTS.some((s) => dayData[s.key])) return
+      const courses = dayData ? coursesForDay(dayData) : []
+      if (!courses.some((c) => c.dish)) return
       lines.push(`${String(day).padStart(2, '0')}.${String(cursor.month + 1).padStart(2, '0')} (${dayLabel(day)}):`)
-      MENU_SLOTS.forEach((slot) => {
-        const dish = dayData[slot.key]
-        if (!dish) return
-        const kosher = dayData[`${slot.key}Kosher`] ? ' [кошер]' : ''
-        lines.push(`  ${slot.label}: ${dish}${kosher}`)
+      courses.forEach((c) => {
+        if (!c.dish) return
+        lines.push(`  ${c.label}: ${c.dish}${c.kosher ? ' [кошер]' : ''}`)
       })
       lines.push('')
     })
@@ -97,21 +138,11 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     printReport({
       type: 'menu',
       title: `Меню на ${MONTHS_RU[cursor.month]} ${cursor.year}`,
-      rows: days.map((day) => {
-        const dayData = monthData[day] || {}
-        return {
-          day: String(day).padStart(2, '0'),
-          weekday: dayLabel(day),
-          soup: dayData.soup || '',
-          soupKosher: !!dayData.soupKosher,
-          main: dayData.main || '',
-          mainKosher: !!dayData.mainKosher,
-          side: dayData.side || '',
-          sideKosher: !!dayData.sideKosher,
-          salad: dayData.salad || '',
-          saladKosher: !!dayData.saladKosher,
-        }
-      }),
+      days: days.map((day) => ({
+        day: String(day).padStart(2, '0'),
+        weekday: dayLabel(day),
+        courses: monthData[day] ? coursesForDay(monthData[day]) : [],
+      })),
     })
   }
 
@@ -122,23 +153,22 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
 
     setMenuData((prev) => {
       const cur = { ...(prev[monthKey] || {}) }
-      rows.forEach(({ day, soup, main, side, salad, kosher }) => {
+      rows.forEach(({ day, dishes, kosher }) => {
         if (day > totalDays) return
         const existing = cur[day]
-        const hasExisting = existing && MENU_SLOTS.some((s) => existing[s.key])
+        const hasExisting = existing && coursesForDay(existing).some((c) => c.dish)
         if (hasExisting && !overwriteExisting) {
           skippedExisting += 1
           return
         }
         imported += 1
         cur[day] = {
-          soup, main, side, salad,
-          soupKosher: kosher, mainKosher: kosher, sideKosher: kosher, saladKosher: kosher,
+          courses: dishes.map((dish, i) => {
+            const label = DEFAULT_MENU_COURSES[i] || `Блюдо ${i + 1}`
+            commitDish(label, dish)
+            return { id: `c-${Date.now()}-${i}`, label, dish, kosher: dish ? kosher : false }
+          }),
         }
-        commitDish('soup', soup)
-        commitDish('main', main)
-        commitDish('side', side)
-        commitDish('salad', salad)
       })
       return { ...prev, [monthKey]: cur }
     })
@@ -149,6 +179,8 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     setImportResult(parts.join(', '))
     setImportText('')
   }
+
+  const allLabels = useMemo(() => Object.keys(dishLibrary || {}), [dishLibrary])
 
   return (
     <div className="pb-4">
@@ -178,12 +210,13 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         {showImport && (
           <>
             <p className="text-xs text-slate-500 mb-2">
-              В Google Таблице выделите столбцы <b>День, Суп, Горячее, Гарнир, Салат</b> (и, при желании,
-              шестой столбец «Кошер»: да/нет) → Ctrl+C → вставьте сюда → «Импортировать».
+              В Google Таблице выделите столбцы <b>День</b> и сколько угодно столбцов с блюдами
+              (первые 5 подставятся как «{DEFAULT_MENU_COURSES.join(', ')}», дальше — «Блюдо 6», «Блюдо 7»…),
+              последний столбец можно оставить под «Кошер» (да/нет) → Ctrl+C → вставьте сюда → «Импортировать».
             </p>
             <textarea
               className={inputClass + ' h-28 py-2'}
-              placeholder={'1\tБорщ\tКурица\tРис\tОвощи\tда\n2\tСуп овощной\tРыба\tКартофель\tСалат'}
+              placeholder={'1\tБорщ\tКурица\tРис\tОвощи\tКомпот\tда\n2\tСуп овощной\tРыба\tКартофель\tСалат\tМорс'}
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
             />
@@ -234,7 +267,8 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         {days.map((day) => {
           const dayData = monthData[day]
           const isOpen = openDay === day
-          const anyKosher = MENU_SLOTS.some((s) => dayData?.[`${s.key}Kosher`])
+          const courses = isOpen || dayData ? coursesForDay(dayData) : []
+          const anyKosher = courses.some((c) => c.kosher)
           return (
             <div key={day} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <button
@@ -247,7 +281,7 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
                     <span className="text-[10px] text-slate-500">{dayLabel(day)}</span>
                   </div>
                   <p className="text-sm text-slate-600 text-left line-clamp-1 max-w-[45vw]">
-                    {summaryText(dayData) || <span className="text-slate-300">Не заполнено</span>}
+                    {summaryText(day) || <span className="text-slate-300">Не заполнено</span>}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -258,32 +292,46 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
 
               {isOpen && (
                 <div className="px-3 pb-3 pt-1 border-t border-slate-100">
-                  {MENU_SLOTS.map((slot) => (
-                    <div key={slot.key} className="flex items-center gap-2 mb-2">
+                  {courses.map((course) => (
+                    <div key={course.id} className="flex items-center gap-1.5 mb-2">
+                      <div className="w-20 shrink-0">
+                        <input
+                          className={inputClass + ' text-xs px-2'}
+                          value={course.label}
+                          onChange={(e) => updateCourse(day, course.id, { label: e.target.value })}
+                        />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <input
                           className={inputClass}
-                          placeholder={slot.label}
-                          list={`dishlist-${slot.key}`}
-                          value={dayData?.[slot.key] || ''}
-                          onChange={(e) => updateDay(day, { [slot.key]: e.target.value })}
-                          onBlur={(e) => commitDish(slot.key, e.target.value)}
+                          placeholder="Блюдо"
+                          list={`dishlist-${slugify(course.label)}`}
+                          value={course.dish}
+                          onChange={(e) => updateCourse(day, course.id, { dish: e.target.value })}
+                          onBlur={(e) => commitDish(course.label, e.target.value)}
                         />
                       </div>
                       <button
-                        onClick={() => updateDay(day, { [`${slot.key}Kosher`]: !dayData?.[`${slot.key}Kosher`] })}
-                        className={`shrink-0 w-12 h-12 rounded-xl border-2 flex items-center justify-center ${
-                          dayData?.[`${slot.key}Kosher`]
+                        onClick={() => updateCourse(day, course.id, { kosher: !course.kosher })}
+                        className={`shrink-0 w-11 h-11 rounded-xl border-2 flex items-center justify-center ${
+                          course.kosher
                             ? 'bg-green-50 border-green-400 text-green-600'
                             : 'bg-white border-slate-200 text-slate-300'
                         }`}
                         title="Кашрут"
                       >
-                        <ShieldCheck size={20} />
+                        <ShieldCheck size={18} />
                       </button>
+                      <ConfirmDeleteButton onConfirm={() => removeCourse(day, course.id)} size="w-9 h-9" iconSize={14} />
                     </div>
                   ))}
-                  <p className="text-xs text-slate-400 mt-1">Значок щита отмечает блюдо как кошерное (кашрут)</p>
+                  <button
+                    onClick={() => addCourse(day)}
+                    className="w-full min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 text-sm font-semibold active:bg-slate-50 mt-1"
+                  >
+                    <Plus size={16} /> Добавить блюдо
+                  </button>
+                  <p className="text-xs text-slate-400 mt-2">Значок щита отмечает блюдо как кошерное (кашрут)</p>
                 </div>
               )}
             </div>
@@ -304,9 +352,9 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         Если кнопка «Отправить» не открывает почту, используйте «Копировать» и вставьте текст вручную.
       </p>
 
-      {MENU_SLOTS.map((slot) => (
-        <datalist key={slot.key} id={`dishlist-${slot.key}`}>
-          {(dishLibrary?.[slot.key] || []).map((dish) => (
+      {allLabels.map((label) => (
+        <datalist key={label} id={`dishlist-${slugify(label)}`}>
+          {(dishLibrary[label] || []).map((dish) => (
             <option key={dish} value={dish} />
           ))}
         </datalist>

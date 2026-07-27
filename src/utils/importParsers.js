@@ -33,7 +33,11 @@ function extractDayNumber(cell) {
 
 const HEADER_WORDS = ['день', 'дата', 'суп', 'горячее', 'date', 'day']
 
-// Expects columns: День/Дата, Суп, Горячее, Гарнир, Салат, [Кошер]
+// Expects columns: День/Дата, Блюдо 1, Блюдо 2, ... (as many as pasted), [Кошер].
+// Dish columns are positional and variable in count — whatever the sheet has.
+// If the last column is just a да/yes/kosher-style flag (not a dish name),
+// it's read as "kosher" for every dish that day, matching the old fixed
+// 4-column format's behaviour.
 export function parseMenuImport(text) {
   const rows = parseRows(text)
   const result = []
@@ -48,16 +52,15 @@ export function parseMenuImport(text) {
       skipped.push(cells.join(' | '))
       return
     }
-    const [, soup = '', main = '', side = '', salad = '', kosherCell = ''] = cells
-    const kosher = isTrueFlag(kosherCell)
-    result.push({
-      day,
-      soup: soup.trim(),
-      main: main.trim(),
-      side: side.trim(),
-      salad: salad.trim(),
-      kosher,
-    })
+
+    let dishes = cells.slice(1).map((c) => c.trim())
+    let kosher = false
+    if (dishes.length > 0 && isTrueFlag(dishes[dishes.length - 1])) {
+      kosher = true
+      dishes = dishes.slice(0, -1)
+    }
+
+    result.push({ day, dishes, kosher })
   })
 
   return { rows: result, skipped }

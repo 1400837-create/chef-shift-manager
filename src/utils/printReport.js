@@ -34,23 +34,23 @@ function buildTasksHtml(payload) {
 }
 
 function buildMenuHtml(payload) {
-  const rows = payload.rows.map((r) => `
-    <tr>
-      <td class="nowrap">${escapeHtml(r.day)}. ${escapeHtml(r.weekday)}</td>
-      <td>${escapeHtml(r.soup)}${r.soupKosher ? ' ✡' : ''}</td>
-      <td>${escapeHtml(r.main)}${r.mainKosher ? ' ✡' : ''}</td>
-      <td>${escapeHtml(r.side)}${r.sideKosher ? ' ✡' : ''}</td>
-      <td>${escapeHtml(r.salad)}${r.saladKosher ? ' ✡' : ''}</td>
-    </tr>`).join('')
+  // Each day can have a different number of courses now (default 5, +Add),
+  // so a fixed-column table no longer fits — list each day's courses instead.
+  const days = payload.days.map((d) => {
+    const filled = d.courses.filter((c) => c.dish)
+    const rows = filled.length
+      ? filled.map((c) => `<div>${escapeHtml(c.label)}: ${escapeHtml(c.dish)}${c.kosher ? ' ✡' : ''}</div>`).join('')
+      : '<div class="muted">—</div>'
+    return `
+      <div class="print-no-break" style="margin-bottom:10px;">
+        <b>${escapeHtml(d.day)}. ${escapeHtml(d.weekday)}</b>
+        ${rows}
+      </div>`
+  }).join('')
 
   return `
     <h1>${escapeHtml(payload.title)}</h1>
-    <table>
-      <thead>
-        <tr><th>Дата</th><th>Суп</th><th>Горячее</th><th>Гарнир</th><th>Салат</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+    ${days}
     <p class="muted" style="margin-top:8px;">✡ — кошерное блюдо (кашрут)</p>
   `
 }

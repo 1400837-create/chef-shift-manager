@@ -20,7 +20,7 @@ export default function App() {
 
   const [menuData, setMenuData] = useLocalStorage('menuData', {})
   const [settings, setSettings] = useLocalStorage('settings', { kuchenleiterinEmail: '' })
-  const [dishLibrary, setDishLibrary] = useLocalStorage('dishLibrary', { soup: [], main: [], side: [], salad: [] })
+  const [dishLibrary, setDishLibrary] = useLocalStorage('dishLibrary', {})
 
   const [inventoryItems, setInventoryItems] = useLocalStorage('inventoryItems', [])
   const [audits, setAudits] = useLocalStorage('audits', {})
@@ -33,6 +33,10 @@ export default function App() {
 
   const [recountCatalog, setRecountCatalog] = useLocalStorage('recountCatalog', [])
   const [recounts, setRecounts] = useLocalStorage('recounts', {})
+
+  const [recipes, setRecipes] = useLocalStorage('recipes', [])
+  const [purchases, setPurchases] = useLocalStorage('purchases', [])
+  const [productions, setProductions] = useLocalStorage('productions', [])
 
   const now = new Date()
   const today = todayKey()
@@ -106,6 +110,12 @@ export default function App() {
             setRecountCatalog={setRecountCatalog}
             recounts={recounts}
             setRecounts={setRecounts}
+            recipes={recipes}
+            setRecipes={setRecipes}
+            purchases={purchases}
+            setPurchases={setPurchases}
+            productions={productions}
+            setProductions={setProductions}
           />
         )}
         {tab === 'cleaning' && (
