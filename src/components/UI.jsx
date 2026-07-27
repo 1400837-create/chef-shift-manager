@@ -148,5 +148,41 @@ export function ConfirmDeleteButton({ onConfirm, size = 'w-9 h-9', iconSize = 16
   )
 }
 
+// Same tap-to-arm/tap-to-confirm pattern as ConfirmDeleteButton, but for a
+// non-destructive action that still deserves a guard against accidental taps
+// — marking something bought immediately moves it into the actual purchase
+// log, so a stray tap shouldn't do that. The color swap (green → orange) on
+// the first tap is the visible "are you sure" signal.
+export function ConfirmMarkButton({ onConfirm, icon: Icon = Check, size = 'w-11 h-11', iconSize = 18 }) {
+  const [confirming, setConfirming] = useState(false)
+  const timerRef = useRef(null)
+
+  useEffect(() => () => clearTimeout(timerRef.current), [])
+
+  function handleClick(e) {
+    e.stopPropagation()
+    if (confirming) {
+      clearTimeout(timerRef.current)
+      setConfirming(false)
+      onConfirm()
+      return
+    }
+    setConfirming(true)
+    timerRef.current = setTimeout(() => setConfirming(false), 2500)
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      title={confirming ? 'Нажмите ещё раз для подтверждения' : 'Отметить купленным'}
+      className={`${size} shrink-0 flex items-center justify-center rounded-xl text-white transition-colors ${
+        confirming ? 'bg-orange-500 active:bg-orange-600' : 'bg-green-600 active:bg-green-700'
+      }`}
+    >
+      <Icon size={iconSize} />
+    </button>
+  )
+}
+
 export const inputClass =
   'w-full min-h-[48px] px-3 rounded-xl border border-slate-300 bg-white text-[15px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 dark:bg-slate-900 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-500'

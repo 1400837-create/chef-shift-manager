@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Plus, Check, ShoppingBasket, AlertTriangle, Upload, X } from 'lucide-react'
-import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
+import { Plus, ShoppingBasket, AlertTriangle, Upload, X } from 'lucide-react'
+import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
 import { formatRu, todayKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
@@ -205,8 +205,9 @@ export default function ShoppingList({
       >
         <p className="text-xs text-slate-500 mb-3">
           Список того, что нужно купить — не по факту, а то, что запланировано. Когда товар
-          реально куплен, нажмите ✓ — он попадёт в «Приход» (вкладка Склад → Остатки) и
-          автоматически обновит остаток.
+          реально куплен, нажмите ✓ дважды (кнопка станет оранжевой — второе нажатие
+          подтверждает) — он попадёт в «Приход» (вкладка Склад → Остатки) и автоматически
+          обновит остаток.
         </p>
         <div className="flex gap-2 mb-3">
           <div className="flex-1 min-w-0">
@@ -261,13 +262,7 @@ export default function ShoppingList({
                     onChange={(e) => updateQty(p.id, sanitizeDecimal(e.target.value))}
                   />
                 </div>
-                <button
-                  onClick={() => markPurchased(p)}
-                  className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-green-600 active:bg-green-700 text-white"
-                  title="Отметить купленным"
-                >
-                  <Check size={18} />
-                </button>
+                <ConfirmMarkButton onConfirm={() => markPurchased(p)} />
                 <ConfirmDeleteButton onConfirm={() => remove(p.id)} />
               </div>
             )
