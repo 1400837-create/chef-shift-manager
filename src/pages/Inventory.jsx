@@ -3,7 +3,7 @@ import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
   BookOpen, ShoppingCart, Flame, Tags, Download, Pencil,
-  ArrowUpDown, ClipboardPlus, Check,
+  ArrowUpDown, ClipboardPlus,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES } from '../utils/constants'
@@ -56,9 +56,6 @@ export default function Inventory({
   const [newCatalogItem, setNewCatalogItem] = useState({ name: '', unit: 'шт', zone: 'fridges', category: 'other' })
   const [catalogSort, setCatalogSort] = useState('alpha')
   const [balanceSort, setBalanceSort] = useState('alpha')
-
-  const [plannedForm, setPlannedForm] = useState({ productName: '', qty: '' })
-  const [plannedError, setPlannedError] = useState(null)
 
   const [recipeForm, setRecipeForm] = useState({ name: '', ingredients: [{ productName: '', qty: '' }] })
   const [recipeError, setRecipeError] = useState(null)
@@ -440,56 +437,9 @@ export default function Inventory({
     return plannedPurchases.find((p) => String(p.productId) === String(productId))
   }
 
-  function addPlannedManual() {
-    const product = findProductByName(plannedForm.productName)
-    if (!product) {
-      setPlannedError('Товар не найден в каталоге — выберите вариант из подсказок.')
-      return
-    }
-    if (!plannedForm.qty) {
-      setPlannedError('Укажите количество.')
-      return
-    }
-    setPlannedError(null)
-    if (findPlannedByProduct(product.id)) {
-      setPlannedError('Этот товар уже в списке закупки — отредактируйте количество там.')
-      return
-    }
-    setPlannedPurchases((prev) => [...prev, { id: Date.now(), productId: product.id, qty: plannedForm.qty }])
-    setPlannedForm({ productName: '', qty: '' })
-  }
-
   function addLowStockToPlan(product, suggestedQty) {
     if (findPlannedByProduct(product.id)) return
     setPlannedPurchases((prev) => [...prev, { id: Date.now(), productId: product.id, qty: suggestedQty || '' }])
-  }
-
-  function updatePlannedQty(id, qty) {
-    setPlannedPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, qty } : p)))
-  }
-
-  function removePlanned(id) {
-    setPlannedPurchases((prev) => prev.filter((p) => p.id !== id))
-  }
-
-  function markPurchased(planned) {
-    if (!planned.qty) return
-    setPurchases((prev) => [
-      { id: Date.now(), productId: planned.productId, qty: planned.qty, date: todayKey() },
-      ...prev,
-    ])
-    removePlanned(planned.id)
-  }
-
-  function printPlannedList() {
-    printReport({
-      type: 'shopping-list',
-      title: `Запланированная закупка — ${formatRu(now)}`,
-      items: plannedPurchases.map((p) => {
-        const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
-        return { name: product?.name || '?', unit: product?.unit || '', qty: p.qty }
-      }),
-    })
   }
 
   return (
@@ -1266,81 +1216,9 @@ export default function Inventory({
             </div>
           </Section>
 
-          <Section
-            title={`Запланированная закупка (${plannedPurchases.length})`}
-            icon={ClipboardPlus}
-            right={<PrintButton onClick={printPlannedList} label="Печать" />}
-          >
-            <p className="text-xs text-slate-500 mb-3">
-              Список того, что нужно купить — не путать с «Приход» выше (это уже совершённые
-              закупки). Отметьте «Куплено», когда товар реально куплен — он попадёт в «Приход»
-              и автоматически обновит остаток.
-            </p>
-            <div className="flex gap-2 mb-3">
-              <div className="flex-1 min-w-0">
-                <input
-                  className={inputClass}
-                  placeholder="Продукт…"
-                  list="product-nomenclature"
-                  value={plannedForm.productName}
-                  onChange={(e) => setPlannedForm((f) => ({ ...f, productName: e.target.value }))}
-                />
-              </div>
-              <div className="w-20 shrink-0">
-                <input
-                  type="number"
-                  className={inputClass}
-                  placeholder="Кол-во"
-                  value={plannedForm.qty}
-                  onChange={(e) => setPlannedForm((f) => ({ ...f, qty: e.target.value }))}
-                />
-              </div>
-              <button
-                onClick={addPlannedManual}
-                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"
-              >
-                <Plus size={20} />
-              </button>
-            </div>
-            {plannedError && (
-              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">
-                {plannedError}
-              </p>
-            )}
-
-            {plannedPurchases.length === 0 && (
-              <p className="text-sm text-slate-400 text-center py-3">Список закупки пуст</p>
-            )}
-            <div className="flex flex-col gap-2">
-              {plannedPurchases.map((p) => {
-                const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
-                return (
-                  <div key={p.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-700 truncate">{product?.name || '?'}</p>
-                      <p className="text-xs text-slate-400">{product?.unit}</p>
-                    </div>
-                    <div className="w-20 shrink-0">
-                      <input
-                        type="number"
-                        className={inputClass + ' text-center'}
-                        value={p.qty}
-                        onChange={(e) => updatePlannedQty(p.id, e.target.value)}
-                      />
-                    </div>
-                    <button
-                      onClick={() => markPurchased(p)}
-                      className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-green-600 active:bg-green-700 text-white"
-                      title="Отметить купленным"
-                    >
-                      <Check size={18} />
-                    </button>
-                    <ConfirmDeleteButton onConfirm={() => removePlanned(p.id)} />
-                  </div>
-                )
-              })}
-            </div>
-          </Section>
+          <p className="text-xs text-slate-400 text-center px-4 py-2">
+            Управление списком закупки — на вкладке «Закупка» в нижнем меню.
+          </p>
         </>
       )}
     </div>

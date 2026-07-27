@@ -4,12 +4,14 @@ import BottomNav from './components/BottomNav'
 import Dashboard from './pages/Dashboard'
 import MenuPlanner from './pages/MenuPlanner'
 import Inventory from './pages/Inventory'
+import ShoppingList from './pages/ShoppingList'
 import Cleaning from './pages/Cleaning'
 import Finances from './pages/Finances'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { todayKey, addDays, daysBetween, startOfDay, parseLocalDate } from './utils/dateUtils'
 import { menuDeadlineInfo, financeDeadlineInfo } from './utils/deadlines'
 import { DAILY_CLEANING_ITEMS } from './utils/constants'
+import { computeBalance } from './utils/stockBalance'
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
@@ -58,15 +60,24 @@ export default function App() {
 
     const openingIncomplete = !shiftChecklist[today]?.kitchenClean || !shiftChecklist[today]?.tasksAssigned
 
+    const shoppingNeeded = recountCatalog.some((product) => {
+      const min = Number(product.minQty)
+      if (!(min > 0)) return false
+      const { balance } = computeBalance(product.id, { recounts, purchases, productions, recipes }, now)
+      if (balance === null || balance > min) return false
+      return !plannedPurchases.some((p) => String(p.productId) === String(product.id))
+    })
+
     return {
       dashboard: openingIncomplete,
       inventory: expiringSoon,
       menu: menuUrgent,
       cleaning: dailyIncomplete,
       finances: financeUrgent,
+      shopping: shoppingNeeded,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inventoryItems, dailyCleaning, shiftChecklist, today])
+  }, [inventoryItems, dailyCleaning, shiftChecklist, today, recountCatalog, recounts, purchases, productions, recipes, plannedPurchases])
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -120,6 +131,18 @@ export default function App() {
             setProductions={setProductions}
             plannedPurchases={plannedPurchases}
             setPlannedPurchases={setPlannedPurchases}
+          />
+        )}
+        {tab === 'shopping' && (
+          <ShoppingList
+            recountCatalog={recountCatalog}
+            recounts={recounts}
+            purchases={purchases}
+            productions={productions}
+            recipes={recipes}
+            plannedPurchases={plannedPurchases}
+            setPlannedPurchases={setPlannedPurchases}
+            setPurchases={setPurchases}
           />
         )}
         {tab === 'cleaning' && (
