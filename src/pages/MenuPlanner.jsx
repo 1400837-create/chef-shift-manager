@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, PrintButton } from '../components/UI'
 import { MENU_SLOTS } from '../utils/constants'
 import { MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex } from '../utils/dateUtils'
 import { parseMenuImport } from '../utils/importParsers'
+import { printReport } from '../utils/printReport'
 
-export default function MenuPlanner({ menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary, requestPrint }) {
+export default function MenuPlanner({ menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -16,6 +17,7 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
   const [importText, setImportText] = useState('')
   const [overwriteExisting, setOverwriteExisting] = useState(false)
   const [importResult, setImportResult] = useState(null)
+  const [sendMessage, setSendMessage] = useState(null)
 
   const monthKey = `${cursor.year}-${String(cursor.month + 1).padStart(2, '0')}`
   const monthData = menuData[monthKey] || {}
@@ -57,7 +59,7 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     return MENU_SLOTS.map((s) => dayData[s.key]).filter(Boolean).join(' · ')
   }
 
-  function sendMenu() {
+  function buildMenuText() {
     const lines = [`Меню на ${MONTHS_RU[cursor.month]} ${cursor.year}`, '']
     days.forEach((day) => {
       const dayData = monthData[day]
@@ -71,14 +73,28 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
       })
       lines.push('')
     })
-    const body = encodeURIComponent(lines.join('\n'))
+    return lines.join('\n')
+  }
+
+  function sendMenu() {
+    const body = encodeURIComponent(buildMenuText())
     const subject = encodeURIComponent(`Меню на ${MONTHS_RU[cursor.month]} ${cursor.year}`)
     const to = encodeURIComponent(settings.kuchenleiterinEmail || '')
     window.location.href = `mailto:${to}?subject=${subject}&body=${body}`
   }
 
+  async function copyMenu() {
+    try {
+      await navigator.clipboard.writeText(buildMenuText())
+      setSendMessage('Текст меню скопирован — вставьте его в письмо или мессенджер.')
+    } catch {
+      setSendMessage('Не удалось скопировать автоматически.')
+    }
+    setTimeout(() => setSendMessage(null), 5000)
+  }
+
   function printMenu() {
-    requestPrint({
+    printReport({
       type: 'menu',
       title: `Меню на ${MONTHS_RU[cursor.month]} ${cursor.year}`,
       rows: days.map((day) => {
@@ -273,9 +289,18 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         })}
       </div>
 
-      <BigButton onClick={sendMenu} icon={Send} color="orange">
-        Отправить меню Küchenleiterin
-      </BigButton>
+      <div className="flex gap-2">
+        <BigButton onClick={sendMenu} icon={Send} color="orange">Отправить меню Küchenleiterin</BigButton>
+        <BigButton onClick={copyMenu} icon={Copy} color="outline" full={false}>Копировать</BigButton>
+      </div>
+      {sendMessage && (
+        <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+          {sendMessage}
+        </p>
+      )}
+      <p className="text-xs text-slate-400 mt-2">
+        Если кнопка «Отправить» не открывает почту, используйте «Копировать» и вставьте текст вручную.
+      </p>
 
       {MENU_SLOTS.map((slot) => (
         <datalist key={slot.key} id={`dishlist-${slot.key}`}>

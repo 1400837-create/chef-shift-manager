@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Wallet, Receipt, Plus, Camera, Send, Image as ImageIcon } from 'lucide-react'
+import { Wallet, Receipt, Plus, Camera, Send, Copy, Image as ImageIcon } from 'lucide-react'
 import { Section, Field, inputClass, Badge, BigButton, ConfirmDeleteButton } from '../components/UI'
 import { RECEIPT_CATEGORIES } from '../utils/constants'
 import { biweekKey, formatRu, parseLocalDate } from '../utils/dateUtils'
@@ -15,6 +15,8 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
   const [receiptForm, setReceiptForm] = useState({
     amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '', file: null,
   })
+  const [formError, setFormError] = useState(null)
+  const [copyMessage, setCopyMessage] = useState(null)
 
   const periodReceipts = useMemo(
     () => receipts.filter((r) => r.periodKey === periodKey),
@@ -28,7 +30,11 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
   }
 
   async function addReceipt() {
-    if (!receiptForm.amount) return
+    if (!receiptForm.amount) {
+      setFormError('Укажите сумму чека — без неё чек не сохранится.')
+      return
+    }
+    setFormError(null)
     const id = Date.now()
     const entry = {
       id,
@@ -67,7 +73,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
     }
   }
 
-  function sendReport() {
+  function buildReportText() {
     const lines = [
       `Финансовый отчёт за период до ${dl.label}`,
       `Аванс: ${advance.budget || 0}`,
@@ -79,9 +85,24 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
         (r) => `- ${formatRu(parseLocalDate(r.date))} · ${RECEIPT_CATEGORIES.find((c) => c.key === r.category)?.label} · ${r.amount}`
       ),
     ]
-    const body = encodeURIComponent(lines.join('\n'))
+    return lines.join('\n')
+  }
+
+  function sendReport() {
+    const body = encodeURIComponent(buildReportText())
     const subject = encodeURIComponent(`Финансовый отчёт — ${dl.label}`)
     window.location.href = `mailto:?subject=${subject}&body=${body}`
+  }
+
+  async function copyReport() {
+    const text = buildReportText()
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyMessage('Текст отчёта скопирован — вставьте его в письмо, WhatsApp или куда нужно.')
+    } catch {
+      setCopyMessage('Не удалось скопировать автоматически. Откройте консоль или попробуйте кнопку «Отправить» ещё раз.')
+    }
+    setTimeout(() => setCopyMessage(null), 5000)
   }
 
   return (
@@ -98,7 +119,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
         </Field>
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-center">
-            <p className="text-xs text-slate-500">Потрачено</p>
+            <p className="text-xs text-slate-500">Потрачено (авто, по чекам)</p>
             <p className="font-bold text-slate-800 text-lg">{spent}</p>
           </div>
           <div className={`rounded-xl border p-3 text-center ${remaining < 0 ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
@@ -159,7 +180,15 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
             />
           </label>
         </Field>
+        {formError && (
+          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-2">
+            {formError}
+          </p>
+        )}
         <BigButton onClick={addReceipt} icon={Plus}>Добавить чек</BigButton>
+        <p className="text-xs text-slate-400 mt-2">
+          Сумма — обязательна. Фото можно приложить, но само по себе без суммы чек не сохранится.
+        </p>
       </Section>
 
       <Section title={`Чеки за текущий период (${periodReceipts.length})`} icon={Receipt}>
@@ -188,9 +217,19 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts 
         </ul>
       </Section>
 
-      <BigButton onClick={sendReport} icon={Send} color="slate">
-        Отправить отчёт
-      </BigButton>
+      <div className="flex gap-2">
+        <BigButton onClick={sendReport} icon={Send} color="slate">Отправить отчёт</BigButton>
+        <BigButton onClick={copyReport} icon={Copy} color="outline" full={false}>Копировать</BigButton>
+      </div>
+      {copyMessage && (
+        <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+          {copyMessage}
+        </p>
+      )}
+      <p className="text-xs text-slate-400 mt-2">
+        Если кнопка «Отправить» не открывает почту (бывает в некоторых мобильных браузерах),
+        используйте «Копировать» и вставьте текст вручную в письмо или мессенджер.
+      </p>
     </div>
   )
 }

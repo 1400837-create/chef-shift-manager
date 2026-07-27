@@ -7,6 +7,7 @@ import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, Co
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES } from '../utils/constants'
 import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay } from '../utils/dateUtils'
 import { parseRecountCatalogImport } from '../utils/importParsers'
+import { printReport } from '../utils/printReport'
 
 function computeExpiry(item) {
   return addDays(parseLocalDate(item.packDate), Number(item.shelfLifeDays || 0))
@@ -33,7 +34,6 @@ function previousMonthKey(currentMonth) {
 export default function Inventory({
   items, setItems, audits, setAudits,
   recountCatalog, setRecountCatalog, recounts, setRecounts,
-  requestPrint,
 }) {
   const [form, setForm] = useState({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
   const [tab, setTab] = useState('fifo')
@@ -161,7 +161,7 @@ export default function Inventory({
   const monthLabel = `${MONTHS_RU[viewedMonth.getMonth()]} ${viewedMonth.getFullYear()}`
 
   function printRecount(blank) {
-    requestPrint({
+    printReport({
       type: 'recount',
       title: `Полный переучёт — ${monthLabel}${blank ? ' (бланк для подсчёта)' : ''}`,
       blank,
@@ -382,12 +382,14 @@ export default function Inventory({
                 value={newCatalogItem.name}
                 onChange={(e) => setNewCatalogItem((f) => ({ ...f, name: e.target.value }))}
               />
-              <input
-                className={inputClass + ' w-20'}
-                placeholder="Ед."
-                value={newCatalogItem.unit}
-                onChange={(e) => setNewCatalogItem((f) => ({ ...f, unit: e.target.value }))}
-              />
+              <div className="w-20 shrink-0">
+                <input
+                  className={inputClass}
+                  placeholder="Ед."
+                  value={newCatalogItem.unit}
+                  onChange={(e) => setNewCatalogItem((f) => ({ ...f, unit: e.target.value }))}
+                />
+              </div>
             </div>
             <div className="flex gap-2 mt-2">
               <select
@@ -444,13 +446,15 @@ export default function Inventory({
                             )}
                           </p>
                         </div>
-                        <input
-                          type="number"
-                          className={inputClass + ' w-20 text-center'}
-                          value={curQty ?? ''}
-                          onChange={(e) => setQty(item.id, e.target.value)}
-                          placeholder="0"
-                        />
+                        <div className="w-20 shrink-0">
+                          <input
+                            type="number"
+                            className={inputClass + ' text-center'}
+                            value={curQty ?? ''}
+                            onChange={(e) => setQty(item.id, e.target.value)}
+                            placeholder="0"
+                          />
+                        </div>
                         <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
                       </div>
                     )

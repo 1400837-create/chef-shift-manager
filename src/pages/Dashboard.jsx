@@ -5,12 +5,12 @@ import { STRATEGIC_CATEGORIES, TASK_CATEGORIES } from '../utils/constants'
 import { todayKey, formatRu, daysBetween, parseLocalDate } from '../utils/dateUtils'
 import { menuDeadlineInfo, financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
 import { downloadBackup, parseBackupFile, applyBackup } from '../utils/backup'
+import { printReport } from '../utils/printReport'
 
 export default function Dashboard({
   shiftChecklist, setShiftChecklist,
   kuchenhilfeTasks, setKuchenhilfeTasks,
   stockTracker, setStockTracker,
-  requestPrint,
 }) {
   const today = todayKey()
   const now = new Date()
@@ -104,7 +104,7 @@ export default function Dashboard({
   }
 
   function printTasks() {
-    requestPrint({
+    printReport({
       type: 'tasks',
       date: formatRu(now),
       tasksByCategory: TASK_CATEGORIES.map((cat) => ({
@@ -233,12 +233,14 @@ export default function Dashboard({
               value={produceForm.name}
               onChange={(e) => setProduceForm((p) => ({ ...p, name: e.target.value }))}
             />
-            <input
-              className={inputClass + ' w-24'}
-              placeholder="Кол-во"
-              value={produceForm.qty}
-              onChange={(e) => setProduceForm((p) => ({ ...p, qty: e.target.value }))}
-            />
+            <div className="w-24 shrink-0">
+              <input
+                className={inputClass}
+                placeholder="Кол-во"
+                value={produceForm.qty}
+                onChange={(e) => setProduceForm((p) => ({ ...p, qty: e.target.value }))}
+              />
+            </div>
             <button
               onClick={addProduce}
               className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"
