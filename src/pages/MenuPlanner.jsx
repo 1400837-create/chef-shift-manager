@@ -9,7 +9,7 @@ import {
   MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex, formatRu,
   todayKey, toKey, parseLocalDate, addDays, monthKey as monthKeyOf,
 } from '../utils/dateUtils'
-import { parseMenuImport, parseRecipesImport } from '../utils/importParsers'
+import { parseMenuImport, parseRecipesImport, parseRationalChefExport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { coursesForDay } from '../utils/menuCourses'
 import { computeRecipeCost } from '../utils/recipeCost'
@@ -46,6 +46,10 @@ export default function MenuPlanner({
   const [recipeImportText, setRecipeImportText] = useState('')
   const [recipeImportOverwrite, setRecipeImportOverwrite] = useState(false)
   const [recipeImportResult, setRecipeImportResult] = useState(null)
+  const [showRationalImport, setShowRationalImport] = useState(false)
+  const [rationalImportText, setRationalImportText] = useState('')
+  const [rationalImportOverwrite, setRationalImportOverwrite] = useState(false)
+  const [rationalImportResult, setRationalImportResult] = useState(null)
   const [recipeForm, setRecipeForm] = useLocalStorage('recipeFormDraft', () => ({ name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null }))
   const [recipeError, setRecipeError] = useState(null)
   const [missingProductPrompt, setMissingProductPrompt] = useState(null)
@@ -359,6 +363,66 @@ export default function MenuPlanner({
     if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
     setRecipeImportResult(parts.join(', '))
     setRecipeImportText('')
+  }
+
+  // Rational Chef OS's export already flattens its oven-mode/kashrut fields
+  // into a "comment" string (see parseRationalChefExport) — this only needs
+  // to resolve ingredient names against the nomenclature, creating any that
+  // don't exist yet (with the unit the export already provides) rather than
+  // stopping at the first one, since a full import can easily touch 50+
+  // distinct ingredients in one paste.
+  function importFromRationalChef() {
+    const { recipes: parsed, error } = parseRationalChefExport(rationalImportText)
+    if (error) {
+      setRationalImportResult(error)
+      return
+    }
+    const existingByName = new Map(recipes.map((r) => [r.name.trim().toLowerCase(), r]))
+    const nextRecipes = [...recipes]
+    const workingCatalog = [...recountCatalog]
+    const newProducts = []
+    let imported = 0
+    let skippedExisting = 0
+
+    function resolveProduct(name, unit) {
+      const key = name.trim().toLowerCase()
+      let product = workingCatalog.find((p) => p.name.trim().toLowerCase() === key)
+      if (!product) {
+        product = { id: Date.now() + Math.random(), name: name.trim(), unit: unit || 'шт', zone: 'fridges', category: 'other' }
+        workingCatalog.push(product)
+        newProducts.push(product)
+      }
+      return product
+    }
+
+    parsed.forEach((parsedRecipe) => {
+      const key = parsedRecipe.name.toLowerCase()
+      const existing = existingByName.get(key)
+      if (existing && !rationalImportOverwrite) {
+        skippedExisting += 1
+        return
+      }
+      const ingredients = parsedRecipe.ingredients.map(({ ingredientName, qty, unit }) => {
+        const product = resolveProduct(ingredientName, unit)
+        return { productId: product.id, qty: String(qty ?? '') }
+      })
+      const payload = { name: parsedRecipe.name, ingredients, comment: parsedRecipe.comment || '', photo: null }
+      if (existing) {
+        const idx = nextRecipes.findIndex((r) => r.id === existing.id)
+        nextRecipes[idx] = { ...existing, ...payload }
+      } else {
+        nextRecipes.push({ id: Date.now() + Math.random(), ...payload })
+      }
+      imported += 1
+    })
+
+    if (newProducts.length) setRecountCatalog((prev) => [...prev, ...newProducts])
+    setRecipes(nextRecipes)
+    const parts = [`Импортировано рецептов: ${imported}`]
+    if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
+    if (newProducts.length) parts.push(`создано новых позиций в номенклатуре: ${newProducts.length}`)
+    setRationalImportResult(parts.join(', '))
+    setRationalImportText('')
   }
 
   function toggleSelectForPrint(id) {
@@ -932,6 +996,50 @@ export default function MenuPlanner({
                 {recipeImportResult && (
                   <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
                     {recipeImportResult}
+                  </p>
+                )}
+              </>
+            )}
+          </Section>
+
+          <Section
+            title="Импорт из Rational Chef OS"
+            icon={ExternalLink}
+            right={
+              <button onClick={() => setShowRationalImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+                {showRationalImport ? 'Скрыть' : 'Показать'}
+              </button>
+            }
+          >
+            {showRationalImport && (
+              <>
+                <p className="text-xs text-slate-500 mb-2">
+                  В Rational Chef OS: «⋮» → «Экспорт для Kitchen OS» — данные скопируются в буфер обмена.
+                  Вставьте их сюда. Ингредиенты, которых ещё нет в номенклатуре, будут созданы автоматически
+                  (с единицей измерения из экспорта); режим печи, влажность и кашрут попадут в
+                  «Технологию приготовления» текстом.
+                </p>
+                <textarea
+                  className={inputClass + ' h-28 py-2'}
+                  placeholder='[{"name":"Бульон","ingredients":[...],"description":"..."}]'
+                  value={rationalImportText}
+                  onChange={(e) => setRationalImportText(e.target.value)}
+                />
+                <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={rationalImportOverwrite}
+                    onChange={(e) => setRationalImportOverwrite(e.target.checked)}
+                    className="w-5 h-5"
+                  />
+                  Перезаписывать уже существующие рецепты (по названию)
+                </label>
+                <BigButton onClick={importFromRationalChef} icon={Upload} disabled={!rationalImportText.trim()}>
+                  Импортировать рецепты
+                </BigButton>
+                {rationalImportResult && (
+                  <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+                    {rationalImportResult}
                   </p>
                 )}
               </>

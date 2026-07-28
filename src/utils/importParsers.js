@@ -97,6 +97,34 @@ function matchCategory(cell) {
   return found ? found.category : 'other'
 }
 
+// Rational Chef OS's own recipe fields (oven mode/temp/humidity, kashrut)
+// have no equivalent in Kitchen OS's recipe shape, so its export already
+// folds those into a single "description" string meant for the comment
+// field — this just needs to parse the JSON and pull out name/ingredients/comment.
+export function parseRationalChefExport(text) {
+  let data
+  try {
+    data = JSON.parse(text)
+  } catch {
+    return { recipes: [], error: 'Не удалось разобрать данные — проверьте, что скопирован весь текст целиком.' }
+  }
+  if (!Array.isArray(data)) {
+    return { recipes: [], error: 'Ожидался список рецептов.' }
+  }
+  const recipes = data
+    .filter((r) => r && typeof r.name === 'string' && r.name.trim())
+    .map((r) => ({
+      name: r.name.trim(),
+      comment: typeof r.description === 'string' ? r.description : '',
+      ingredients: Array.isArray(r.ingredients)
+        ? r.ingredients
+            .filter((i) => i && i.name)
+            .map((i) => ({ ingredientName: String(i.name).trim(), qty: i.qty, unit: (i.unit || '').toString().trim() }))
+        : [],
+    }))
+  return { recipes, error: null }
+}
+
 // Expects columns: Блюдо, Ингредиент, Кол-во — one row per ingredient, like a
 // typical recipe-costing spreadsheet. Rows sharing the same "Блюдо" (case
 // insensitive) are grouped into a single recipe, in the order they appear —
