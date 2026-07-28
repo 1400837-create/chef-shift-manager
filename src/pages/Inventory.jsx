@@ -63,6 +63,7 @@ export default function Inventory({
   const [balanceSort, setBalanceSort] = useState('alpha')
   const [catalogSearch, setCatalogSearch] = useState('')
   const [recountSearch, setRecountSearch] = useState('')
+  const [balanceSearch, setBalanceSearch] = useState('')
 
   const [purchaseForm, setPurchaseForm] = useState({ productName: '', qty: '', date: todayKey() })
   const [purchaseError, setPurchaseError] = useState(null)
@@ -1311,6 +1312,16 @@ export default function Inventory({
           </p>
 
           <Section title="Текущие остатки" icon={Scale}>
+            <div className="relative mb-3 scroll-mt-20">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                className={inputClass + ' pl-9'}
+                placeholder="Поиск по названию…"
+                value={balanceSearch}
+                onChange={(e) => setBalanceSearch(e.target.value)}
+                onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)}
+              />
+            </div>
             <div className="flex gap-1.5 mb-3">
               {[...SORT_OPTIONS, { key: 'qty', label: 'Кол-во' }].map((opt) => (
                 <button
@@ -1327,8 +1338,11 @@ export default function Inventory({
             {balances.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-3">Каталог пуст — добавьте товары во вкладке «Каталог»</p>
             )}
+            {balances.length > 0 && balanceSearch.trim() && !balances.some((row) => matchesSearch(row.product.name, balanceSearch)) && (
+              <p className="text-sm text-slate-400 text-center py-3">Ничего не найдено</p>
+            )}
             <div className="flex flex-col gap-2">
-              {sortedBalances.map((row) => {
+              {sortedBalances.filter((row) => matchesSearch(row.product.name, balanceSearch)).map((row) => {
                 const { product, balance, baselineDate } = row
                 const low = isLowStock(row)
                 const alreadyPlanned = !!findPlannedByProduct(product.id)
