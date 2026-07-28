@@ -779,13 +779,14 @@ export default function Inventory({
             </button>
           </div>
 
-          <div className="relative mb-4">
+          <div className="relative mb-4 scroll-mt-20">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
               className={inputClass + ' pl-9'}
               placeholder="Поиск по названию…"
               value={recountSearch}
               onChange={(e) => setRecountSearch(e.target.value)}
+              onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)}
             />
           </div>
 
@@ -1007,13 +1008,14 @@ export default function Inventory({
               </div>
             }
           >
-            <div className="relative mb-3">
+            <div className="relative mb-3 scroll-mt-20">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
                 className={inputClass + ' pl-9'}
                 placeholder="Поиск по названию…"
                 value={catalogSearch}
                 onChange={(e) => setCatalogSearch(e.target.value)}
+                onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)}
               />
             </div>
             <div className="flex gap-1.5 mb-3">
