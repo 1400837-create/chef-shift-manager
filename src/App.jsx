@@ -234,7 +234,7 @@ export default function App() {
         productions={productions}
       />
 
-      <main className="max-w-lg mx-auto px-3 pt-3 pb-24">
+      <main className="max-w-lg md:max-w-none mx-auto px-3 md:px-6 lg:px-10 pt-3 pb-24">
         {tab === 'dashboard' && (
           <>
             <UndoRedoBar {...dashboardHistory} />
