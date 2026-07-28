@@ -780,10 +780,10 @@ export default function Inventory({
             </button>
           </div>
 
-          <div className="relative mb-4 scroll-mt-20">
+          <div className="relative mb-4">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input
-              className={inputClass + ' pl-9'}
+              className={inputClass + ' pl-9 scroll-mt-24'}
               placeholder="Поиск по названию…"
               value={recountSearch}
               onChange={(e) => setRecountSearch(e.target.value)}
@@ -1009,10 +1009,10 @@ export default function Inventory({
               </div>
             }
           >
-            <div className="relative mb-3 scroll-mt-20">
+            <div className="relative mb-3">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
-                className={inputClass + ' pl-9'}
+                className={inputClass + ' pl-9 scroll-mt-24'}
                 placeholder="Поиск по названию…"
                 value={catalogSearch}
                 onChange={(e) => setCatalogSearch(e.target.value)}
@@ -1312,10 +1312,10 @@ export default function Inventory({
           </p>
 
           <Section title="Текущие остатки" icon={Scale}>
-            <div className="relative mb-3 scroll-mt-20">
+            <div className="relative mb-3">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               <input
-                className={inputClass + ' pl-9'}
+                className={inputClass + ' pl-9 scroll-mt-24'}
                 placeholder="Поиск по названию…"
                 value={balanceSearch}
                 onChange={(e) => setBalanceSearch(e.target.value)}
