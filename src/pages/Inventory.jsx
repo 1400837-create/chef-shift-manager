@@ -3,7 +3,7 @@ import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
   ShoppingCart, Flame, Tags, Download,
-  ArrowUpDown, ClipboardPlus, MessageSquare,
+  ArrowUpDown, ArrowRightLeft, ClipboardPlus, MessageSquare,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES, WASTE_REASONS } from '../utils/constants'
@@ -458,6 +458,14 @@ export default function Inventory({
           }`}
         >
           <ClipboardList size={16} /> Переучёт
+        </button>
+        <button
+          onClick={() => setTab('movements')}
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
+            tab === 'movements' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+          }`}
+        >
+          <ArrowRightLeft size={16} /> Приход/Расход
         </button>
         <button
           onClick={() => setTab('balance')}
@@ -997,13 +1005,8 @@ export default function Inventory({
         </>
       )}
 
-      {tab === 'balance' && (
+      {tab === 'movements' && (
         <>
-          <p className="text-xs text-slate-500 mb-3 px-1">
-            Остаток = последний переучёт с заполненным количеством по товару (дата подсчёта задаётся
-            во вкладке «Переучёт») + все закупки после этой даты − расход по рецептам после этой даты.
-          </p>
-
           <Section
             title="Приход (закупка)"
             icon={ShoppingCart}
@@ -1154,6 +1157,15 @@ export default function Inventory({
               )
             })}
           </Section>
+        </>
+      )}
+
+      {tab === 'balance' && (
+        <>
+          <p className="text-xs text-slate-500 mb-3 px-1">
+            Остаток = последний переучёт с заполненным количеством по товару (дата подсчёта задаётся
+            во вкладке «Переучёт») + все закупки после этой даты − расход по рецептам после этой даты.
+          </p>
 
           <Section title="Текущие остатки" icon={Scale}>
             <div className="flex gap-1.5 mb-3">
