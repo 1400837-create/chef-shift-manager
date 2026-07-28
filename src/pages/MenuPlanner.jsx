@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus } from 'lucide-react'
-import { Section, Field, inputClass, BigButton, Badge, PrintButton, ConfirmDeleteButton } from '../components/UI'
+import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus, Printer } from 'lucide-react'
+import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow } from '../components/UI'
 import { DEFAULT_MENU_COURSES } from '../utils/constants'
-import { MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex } from '../utils/dateUtils'
+import {
+  MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex, formatRu,
+  todayKey, toKey, parseLocalDate, addDays, monthKey as monthKeyOf,
+} from '../utils/dateUtils'
 import { parseMenuImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { coursesForDay } from '../utils/menuCourses'
@@ -29,6 +32,11 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
   const [sendMessage, setSendMessage] = useState(null)
   const [dayPasteText, setDayPasteText] = useState('')
   const [showDayPaste, setShowDayPaste] = useState(false)
+
+  const [showPrintPanel, setShowPrintPanel] = useState(false)
+  const [printFrom, setPrintFrom] = useState(() => todayKey())
+  const [printTo, setPrintTo] = useState(() => todayKey())
+  const [printExcluded, setPrintExcluded] = useState(() => new Set())
 
   const monthKey = `${cursor.year}-${String(cursor.month + 1).padStart(2, '0')}`
   const monthData = menuData[monthKey] || {}
@@ -167,14 +175,77 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
     setTimeout(() => setSendMessage(null), 5000)
   }
 
-  function printMenu() {
+  // Печать: works across month boundaries by reading straight from menuData
+  // (keyed by real dates), independent of which month is currently open on
+  // screen — so a range like "28 июля – 3 августа" pulls both months.
+  function setPrintRange(from, to) {
+    setPrintFrom(from)
+    setPrintTo(to)
+    setPrintExcluded(new Set())
+  }
+
+  function selectPrintToday() {
+    const t = todayKey()
+    setPrintRange(t, t)
+  }
+
+  function selectPrintWeek() {
+    const now = new Date()
+    const monday = addDays(now, -mondayIndex(now))
+    const sunday = addDays(monday, 6)
+    setPrintRange(toKey(monday), toKey(sunday))
+  }
+
+  function selectPrintMonth() {
+    const first = new Date(cursor.year, cursor.month, 1)
+    const last = new Date(cursor.year, cursor.month + 1, 0)
+    setPrintRange(toKey(first), toKey(last))
+  }
+
+  const printDays = useMemo(() => {
+    if (!printFrom || !printTo) return []
+    const from = parseLocalDate(printFrom)
+    const to = parseLocalDate(printTo)
+    if (to < from) return []
+    const list = []
+    let d = from
+    let guard = 0
+    while (d <= to && guard < 90) {
+      const mk = monthKeyOf(d)
+      const dayNum = d.getDate()
+      const dayData = menuData[mk]?.[dayNum]
+      const courses = dayData ? coursesForDay(dayData).filter((c) => c.dish) : []
+      list.push({ key: toKey(d), date: new Date(d), courses })
+      d = addDays(d, 1)
+      guard += 1
+    }
+    return list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printFrom, printTo, menuData])
+
+  const printSelectedDays = printDays.filter((d) => !printExcluded.has(d.key))
+
+  function togglePrintDay(key, checked) {
+    setPrintExcluded((prev) => {
+      const next = new Set(prev)
+      if (checked) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function printSelectedRange() {
+    if (printSelectedDays.length === 0) return
+    const title = printFrom === printTo
+      ? `Меню на ${formatRu(parseLocalDate(printFrom))}`
+      : `Меню ${formatRu(parseLocalDate(printFrom))} — ${formatRu(parseLocalDate(printTo))}`
     printReport({
       type: 'menu',
-      title: `Меню на ${MONTHS_RU[cursor.month]} ${cursor.year}`,
-      days: days.map((day) => ({
-        day: String(day).padStart(2, '0'),
-        weekday: dayLabel(day),
-        courses: monthData[day] ? coursesForDay(monthData[day]) : [],
+      title,
+      days: printSelectedDays.map((d) => ({
+        day: String(d.date.getDate()).padStart(2, '0'),
+        weekday: WEEKDAYS_RU[mondayIndex(d.date)],
+        courses: d.courses,
       })),
     })
   }
@@ -309,9 +380,85 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         </button>
       </div>
 
-      <div className="flex justify-end mb-2">
-        <PrintButton onClick={printMenu} label="Печать меню на месяц" />
-      </div>
+      <Section
+        title="Печать"
+        icon={Printer}
+        right={
+          <button onClick={() => setShowPrintPanel((v) => !v)} className="text-xs font-semibold text-orange-600">
+            {showPrintPanel ? 'Скрыть' : 'Показать'}
+          </button>
+        }
+      >
+        {!showPrintPanel ? (
+          <p className="text-xs text-slate-500">
+            Выберите день, неделю, месяц или свой период — и какие дни из него печатать.
+          </p>
+        ) : (
+          <>
+            <div className="flex gap-1.5 mb-3">
+              <button
+                onClick={selectPrintToday}
+                className="flex-1 min-h-[36px] rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                Сегодня
+              </button>
+              <button
+                onClick={selectPrintWeek}
+                className="flex-1 min-h-[36px] rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                Эта неделя
+              </button>
+              <button
+                onClick={selectPrintMonth}
+                className="flex-1 min-h-[36px] rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                Весь месяц
+              </button>
+            </div>
+            <div className="flex gap-2 mb-1">
+              <div className="flex-1 min-w-0">
+                <Field label="С">
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={printFrom}
+                    onChange={(e) => setPrintRange(e.target.value, printTo)}
+                  />
+                </Field>
+              </div>
+              <div className="flex-1 min-w-0">
+                <Field label="По">
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={printTo}
+                    onChange={(e) => setPrintRange(printFrom, e.target.value)}
+                  />
+                </Field>
+              </div>
+            </div>
+
+            {printDays.length === 0 ? (
+              <p className="text-sm text-red-600 dark:text-red-400 mb-2">Некорректный период — «По» раньше «С».</p>
+            ) : (
+              <div className="max-h-64 overflow-y-auto mb-2 -mx-1 px-1">
+                {printDays.map((d) => (
+                  <CheckRow
+                    key={d.key}
+                    label={`${formatRu(d.date)} (${WEEKDAYS_RU[mondayIndex(d.date)]})${d.courses.length ? ' — ' + d.courses.length + ' блюд' : ' — пусто'}`}
+                    checked={!printExcluded.has(d.key)}
+                    onChange={(v) => togglePrintDay(d.key, v)}
+                  />
+                ))}
+              </div>
+            )}
+
+            <BigButton onClick={printSelectedRange} icon={Printer} disabled={printSelectedDays.length === 0}>
+              Печать выбранных дней ({printSelectedDays.length})
+            </BigButton>
+          </>
+        )}
+      </Section>
 
       <div className="flex flex-col gap-2 mb-4">
         {days.map((day) => {
