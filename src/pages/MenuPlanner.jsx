@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus, Printer,
-  BookOpen, Pencil, Camera, Calendar, Check,
+  BookOpen, Pencil, Camera, Calendar, Check, ExternalLink,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow, PrintButton } from '../components/UI'
 import { DEFAULT_MENU_COURSES } from '../utils/constants'
@@ -886,6 +886,15 @@ export default function MenuPlanner({
 
       {menuTab === 'recipes' && (
         <>
+          <a
+            href="https://1400837-create.github.io/Chef/"
+            target="_blank"
+            rel="noopener"
+            className="flex items-center justify-center gap-2 min-h-[44px] mb-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 text-sm font-semibold active:bg-slate-50 dark:active:bg-slate-800"
+          >
+            <ExternalLink size={15} /> Открыть Rational Chef OS (параметры печи)
+          </a>
+
           <Section
             title="Импорт из Google Таблиц"
             icon={Upload}
