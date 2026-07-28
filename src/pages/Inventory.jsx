@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
-  ShoppingCart, Flame, Tags, Download, Calendar,
+  ShoppingCart, Flame, Tags, Download, Calendar, Search,
   ArrowUpDown, ArrowRightLeft, ClipboardPlus, MessageSquare,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
@@ -14,6 +14,12 @@ import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
 import { downloadCsv } from '../utils/csv'
 import { coursesForDay } from '../utils/menuCourses'
+
+function matchesSearch(name, search) {
+  const q = search.trim().toLowerCase()
+  if (!q) return true
+  return (name || '').toLowerCase().includes(q)
+}
 
 function computeExpiry(item) {
   return addDays(parseLocalDate(item.packDate), Number(item.shelfLifeDays || 0))
@@ -55,6 +61,8 @@ export default function Inventory({
   const [newCatalogItem, setNewCatalogItem] = useState({ name: '', unit: 'шт', zone: 'fridges', category: 'other' })
   const [catalogSort, setCatalogSort] = useState('alpha')
   const [balanceSort, setBalanceSort] = useState('alpha')
+  const [catalogSearch, setCatalogSearch] = useState('')
+  const [recountSearch, setRecountSearch] = useState('')
 
   const [purchaseForm, setPurchaseForm] = useState({ productName: '', qty: '', date: todayKey() })
   const [purchaseError, setPurchaseError] = useState(null)
@@ -771,8 +779,18 @@ export default function Inventory({
             </button>
           </div>
 
+          <div className="relative mb-4">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              className={inputClass + ' pl-9'}
+              placeholder="Поиск по названию…"
+              value={recountSearch}
+              onChange={(e) => setRecountSearch(e.target.value)}
+            />
+          </div>
+
           {INVENTORY_AUDIT_ZONES.map((zone) => {
-            const zoneItems = recountCatalog.filter((i) => i.zone === zone.key)
+            const zoneItems = recountCatalog.filter((i) => i.zone === zone.key && matchesSearch(i.name, recountSearch))
             if (zoneItems.length === 0) return null
             return (
               <Section key={zone.key} title={zone.label}>
@@ -849,6 +867,9 @@ export default function Inventory({
               Каталог пуст — наполните его во вкладке «Каталог» (базовая номенклатура, импорт
               или добавление вручную)
             </p>
+          )}
+          {recountCatalog.length > 0 && recountSearch.trim() && !recountCatalog.some((i) => matchesSearch(i.name, recountSearch)) && (
+            <p className="text-sm text-slate-400 text-center py-3">Ничего не найдено</p>
           )}
 
           <Section title="Подтверждение">
@@ -986,6 +1007,15 @@ export default function Inventory({
               </div>
             }
           >
+            <div className="relative mb-3">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                className={inputClass + ' pl-9'}
+                placeholder="Поиск по названию…"
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+              />
+            </div>
             <div className="flex gap-1.5 mb-3">
               {SORT_OPTIONS.map((opt) => (
                 <button
@@ -1002,8 +1032,11 @@ export default function Inventory({
             {recountCatalog.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-3">Каталог пуст</p>
             )}
+            {recountCatalog.length > 0 && catalogSearch.trim() && !recountCatalog.some((i) => matchesSearch(i.name, catalogSearch)) && (
+              <p className="text-sm text-slate-400 text-center py-3">Ничего не найдено</p>
+            )}
             <div className="flex flex-col gap-2">
-              {sortedCatalog.map((item) => (
+              {sortedCatalog.filter((item) => matchesSearch(item.name, catalogSearch)).map((item) => (
                 <div
                   key={item.id}
                   id={`catalog-item-${item.id}`}
