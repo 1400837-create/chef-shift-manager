@@ -1,14 +1,20 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus, Printer } from 'lucide-react'
+import {
+  ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus, Printer,
+  BookOpen, Pencil, Camera, Calendar, Check,
+} from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow } from '../components/UI'
 import { DEFAULT_MENU_COURSES } from '../utils/constants'
 import {
   MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex, formatRu,
   todayKey, toKey, parseLocalDate, addDays, monthKey as monthKeyOf,
 } from '../utils/dateUtils'
-import { parseMenuImport } from '../utils/importParsers'
+import { parseMenuImport, parseRecipesImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { coursesForDay } from '../utils/menuCourses'
+import { computeRecipeCost } from '../utils/recipeCost'
+import { compressToDataUrl } from '../utils/imageCompress'
+import { sanitizeDecimal } from '../utils/number'
 
 function slugify(label) {
   return (label || '')
@@ -18,12 +24,31 @@ function slugify(label) {
     .replace(/^-+|-+$/g, '') || 'blyudo'
 }
 
-export default function MenuPlanner({ menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary, recipes }) {
+export default function MenuPlanner({
+  menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary,
+  recipes, setRecipes, recountCatalog,
+}) {
+  const [menuTab, setMenuTab] = useState('calendar')
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
   })
   const [openDay, setOpenDay] = useState(null)
+
+  // Рецепты tab state
+  const [showRecipeImport, setShowRecipeImport] = useState(false)
+  const [recipeImportText, setRecipeImportText] = useState('')
+  const [recipeImportOverwrite, setRecipeImportOverwrite] = useState(false)
+  const [recipeImportResult, setRecipeImportResult] = useState(null)
+  const [recipeForm, setRecipeForm] = useState({ name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null })
+  const [recipeError, setRecipeError] = useState(null)
+  const [showNewRecipeForm, setShowNewRecipeForm] = useState(false)
+  const [expandedRecipeId, setExpandedRecipeId] = useState(null)
+  const [editingRecipeId, setEditingRecipeId] = useState(null)
+  const [recipePhotoProcessing, setRecipePhotoProcessing] = useState(false)
+  const [recipePhotoError, setRecipePhotoError] = useState(null)
+  const [recipePrintMode, setRecipePrintMode] = useState(false)
+  const [selectedForPrint, setSelectedForPrint] = useState(() => new Set())
 
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
@@ -124,6 +149,217 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
       if (list.some((d) => d.toLowerCase() === dish.toLowerCase())) return prev
       return { ...prev, [label]: [dish, ...list].slice(0, 40) }
     })
+  }
+
+  // ---- Рецепты ----
+
+  function findProductByName(name) {
+    const key = (name || '').trim().toLowerCase()
+    if (!key) return null
+    return recountCatalog.find((p) => p.name.trim().toLowerCase() === key) || null
+  }
+
+  function productNameById(id) {
+    const product = recountCatalog.find((p) => p.id === Number(id) || p.id === id)
+    return product?.name || ''
+  }
+
+  function recipeCost(recipe) {
+    return computeRecipeCost(recipe, recountCatalog)
+  }
+
+  function blankRecipeForm() {
+    return { name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null }
+  }
+
+  function openNewRecipeForm() {
+    setRecipeForm(blankRecipeForm())
+    setRecipeError(null)
+    setEditingRecipeId(null)
+    setExpandedRecipeId(null)
+    setShowNewRecipeForm(true)
+  }
+
+  function closeNewRecipeForm() {
+    setShowNewRecipeForm(false)
+    setRecipeForm(blankRecipeForm())
+    setRecipeError(null)
+  }
+
+  function toggleExpandRecipe(recipe) {
+    if (expandedRecipeId === recipe.id) {
+      setExpandedRecipeId(null)
+      setEditingRecipeId(null)
+      return
+    }
+    setExpandedRecipeId(recipe.id)
+    setEditingRecipeId(null)
+    setShowNewRecipeForm(false)
+  }
+
+  function startEditRecipe(recipe) {
+    setRecipeForm({
+      name: recipe.name,
+      ingredients: recipe.ingredients.map((ing) => ({ productName: productNameById(ing.productId), qty: ing.qty })),
+      comment: recipe.comment || '',
+      photo: recipe.photo || null,
+    })
+    setEditingRecipeId(recipe.id)
+    setRecipeError(null)
+  }
+
+  function cancelEditRecipe() {
+    setEditingRecipeId(null)
+    setRecipeError(null)
+  }
+
+  function addIngredientRow() {
+    setRecipeForm((f) => ({ ...f, ingredients: [...f.ingredients, { productName: '', qty: '' }] }))
+  }
+
+  function updateIngredientRow(idx, patch) {
+    setRecipeForm((f) => ({
+      ...f,
+      ingredients: f.ingredients.map((ing, i) => (i === idx ? { ...ing, ...patch } : ing)),
+    }))
+  }
+
+  function removeIngredientRow(idx) {
+    setRecipeForm((f) => ({ ...f, ingredients: f.ingredients.filter((_, i) => i !== idx) }))
+  }
+
+  async function handleRecipePhoto(file) {
+    setRecipePhotoError(null)
+    setRecipePhotoProcessing(true)
+    try {
+      const dataUrl = await compressToDataUrl(file)
+      if (dataUrl) setRecipeForm((f) => ({ ...f, photo: dataUrl }))
+      else setRecipePhotoError('Не удалось обработать это фото.')
+    } catch {
+      setRecipePhotoError('Не удалось обработать это фото.')
+    } finally {
+      setRecipePhotoProcessing(false)
+    }
+  }
+
+  function removeRecipePhoto() {
+    setRecipeForm((f) => ({ ...f, photo: null }))
+  }
+
+  function saveRecipe() {
+    if (!recipeForm.name.trim()) {
+      setRecipeError('Укажите название блюда.')
+      return
+    }
+    const filledRows = recipeForm.ingredients.filter((i) => i.productName.trim() || i.qty)
+    const ingredients = []
+    for (const row of filledRows) {
+      const product = findProductByName(row.productName)
+      if (!product || !row.qty) {
+        setRecipeError(`Продукт «${row.productName}» не найден в каталоге — выберите вариант из подсказок.`)
+        return
+      }
+      ingredients.push({ productId: product.id, qty: row.qty })
+    }
+    if (ingredients.length === 0) {
+      setRecipeError('Добавьте хотя бы один ингредиент из каталога.')
+      return
+    }
+    setRecipeError(null)
+    const payload = { name: recipeForm.name.trim(), ingredients, comment: recipeForm.comment.trim(), photo: recipeForm.photo || null }
+    if (editingRecipeId) {
+      setRecipes((prev) => prev.map((r) => (r.id === editingRecipeId ? { ...r, ...payload } : r)))
+      setEditingRecipeId(null)
+    } else {
+      setRecipes((prev) => [...prev, { id: Date.now(), ...payload }])
+      setShowNewRecipeForm(false)
+    }
+    setRecipeForm(blankRecipeForm())
+  }
+
+  function removeRecipe(id) {
+    setRecipes((prev) => prev.filter((r) => r.id !== id))
+    if (expandedRecipeId === id) setExpandedRecipeId(null)
+    if (editingRecipeId === id) setEditingRecipeId(null)
+  }
+
+  function importRecipes() {
+    const { recipes: parsed, skipped } = parseRecipesImport(recipeImportText)
+    const existingByName = new Map(recipes.map((r) => [r.name.trim().toLowerCase(), r]))
+    let imported = 0
+    let skippedExisting = 0
+    let unresolvedIngredients = 0
+    const nextRecipes = [...recipes]
+
+    parsed.forEach((parsedRecipe) => {
+      const key = parsedRecipe.name.toLowerCase()
+      const existing = existingByName.get(key)
+      if (existing && !recipeImportOverwrite) {
+        skippedExisting += 1
+        return
+      }
+
+      const ingredients = []
+      parsedRecipe.ingredients.forEach(({ ingredientName, qty }) => {
+        const product = findProductByName(ingredientName)
+        if (!product) {
+          unresolvedIngredients += 1
+          return
+        }
+        ingredients.push({ productId: product.id, qty })
+      })
+      if (ingredients.length === 0) return
+
+      if (existing) {
+        const idx = nextRecipes.findIndex((r) => r.id === existing.id)
+        nextRecipes[idx] = { ...existing, ingredients }
+      } else {
+        nextRecipes.push({ id: Date.now() + Math.random(), name: parsedRecipe.name, ingredients })
+      }
+      imported += 1
+    })
+
+    setRecipes(nextRecipes)
+    const parts = [`Импортировано рецептов: ${imported}`]
+    if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
+    if (unresolvedIngredients) parts.push(`не найдено в каталоге ингредиентов: ${unresolvedIngredients}`)
+    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
+    setRecipeImportResult(parts.join(', '))
+    setRecipeImportText('')
+  }
+
+  function toggleSelectForPrint(id) {
+    setSelectedForPrint((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function buildTtkPayload(recipeList) {
+    return recipeList.map((r) => ({
+      name: r.name,
+      photo: r.photo || null,
+      comment: r.comment || '',
+      cost: recipeCost(r),
+      ingredients: r.ingredients.map((ing) => {
+        const product = recountCatalog.find((p) => String(p.id) === String(ing.productId))
+        return { name: product?.name || '?', qty: ing.qty, unit: product?.unit || '' }
+      }),
+    }))
+  }
+
+  function printOneTtk(recipe) {
+    printReport({ type: 'ttk', recipes: buildTtkPayload([recipe]) })
+  }
+
+  function printSelectedTtk() {
+    const selected = recipes.filter((r) => selectedForPrint.has(r.id))
+    if (selected.length === 0) return
+    printReport({ type: 'ttk', recipes: buildTtkPayload(selected) })
+    setRecipePrintMode(false)
+    setSelectedForPrint(new Set())
   }
 
   function dayLabel(day) {
@@ -305,6 +541,27 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
 
   return (
     <div className="pb-4">
+      <div className="flex gap-1.5 mb-4 overflow-x-auto -mx-3 px-3">
+        <button
+          onClick={() => setMenuTab('calendar')}
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
+            menuTab === 'calendar' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+          }`}
+        >
+          <Calendar size={16} /> Меню
+        </button>
+        <button
+          onClick={() => setMenuTab('recipes')}
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
+            menuTab === 'recipes' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+          }`}
+        >
+          <BookOpen size={16} /> Рецепты
+        </button>
+      </div>
+
+      {menuTab === 'calendar' && (
+      <>
       <Section title="Email Küchenleiterin" icon={Mail}>
         <Field label="Куда отправлять меню">
           <input
@@ -591,6 +848,208 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
       <p className="text-xs text-slate-400 mt-2">
         Если кнопка «Отправить» не открывает почту, используйте «Копировать» и вставьте текст вручную.
       </p>
+      </>
+      )}
+
+      {menuTab === 'recipes' && (
+        <>
+          <Section
+            title="Импорт из Google Таблиц"
+            icon={Upload}
+            right={
+              <button onClick={() => setShowRecipeImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+                {showRecipeImport ? 'Скрыть' : 'Показать'}
+              </button>
+            }
+          >
+            {showRecipeImport && (
+              <>
+                <p className="text-xs text-slate-500 mb-2">
+                  Столбцы: <b>Блюдо, Ингредиент, Кол-во</b> — по одной строке на ингредиент.
+                  Несколько строк с одинаковым названием блюда объединятся в один рецепт.
+                  Выделите в Google Таблице → Ctrl+C → вставьте сюда.
+                </p>
+                <textarea
+                  className={inputClass + ' h-28 py-2'}
+                  placeholder={'Бульон\tКуриное крыло\t0.5\nБульон\tЛавровый лист\t1\nБорщ\tСвёкла\t1'}
+                  value={recipeImportText}
+                  onChange={(e) => setRecipeImportText(e.target.value)}
+                />
+                <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={recipeImportOverwrite}
+                    onChange={(e) => setRecipeImportOverwrite(e.target.checked)}
+                    className="w-5 h-5"
+                  />
+                  Перезаписывать уже существующие рецепты (по названию)
+                </label>
+                <BigButton onClick={importRecipes} icon={Upload} disabled={!recipeImportText.trim()}>
+                  Импортировать рецепты
+                </BigButton>
+                {recipeImportResult && (
+                  <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+                    {recipeImportResult}
+                  </p>
+                )}
+              </>
+            )}
+          </Section>
+
+          <Section
+            title={`Рецепты (${recipes.length})`}
+            icon={BookOpen}
+            right={
+              recipePrintMode ? (
+                <button
+                  onClick={() => { setRecipePrintMode(false); setSelectedForPrint(new Set()) }}
+                  className="text-xs font-semibold text-slate-500"
+                >
+                  Отмена
+                </button>
+              ) : (
+                <button onClick={() => setRecipePrintMode(true)} className="text-xs font-semibold text-orange-600">
+                  Печать ТТК
+                </button>
+              )
+            }
+          >
+            {recipes.length === 0 && <p className="text-sm text-slate-400 text-center py-2">Рецептов пока нет</p>}
+            <div className="flex flex-col gap-2">
+              {recipes.map((r) => {
+                const isExpanded = expandedRecipeId === r.id
+                const isEditing = editingRecipeId === r.id
+                const isSelected = selectedForPrint.has(r.id)
+                const cost = recipeCost(r)
+                return (
+                  <div key={r.id} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <button
+                      onClick={() => (recipePrintMode ? toggleSelectForPrint(r.id) : toggleExpandRecipe(r))}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-3 min-h-[52px] active:bg-slate-50 dark:active:bg-slate-700"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {recipePrintMode && (
+                          <span
+                            className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center ${
+                              isSelected ? 'bg-orange-500 border-orange-500' : 'border-slate-300 dark:border-slate-600'
+                            }`}
+                          >
+                            {isSelected && <Check size={14} className="text-white" />}
+                          </span>
+                        )}
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{r.name}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {cost !== null && <Badge color="green">≈ {cost.toFixed(2)}</Badge>}
+                        {!recipePrintMode && (
+                          <ChevronDown size={18} className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        )}
+                      </div>
+                    </button>
+
+                    {isExpanded && !recipePrintMode && !isEditing && (
+                      <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
+                        {r.photo && (
+                          <img src={r.photo} alt={r.name} className="w-full max-h-56 object-cover rounded-lg mb-2" />
+                        )}
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Ингредиенты</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
+                          {r.ingredients.map((ing) => {
+                            const product = recountCatalog.find((p) => String(p.id) === String(ing.productId))
+                            return `${product?.name || '?'} × ${ing.qty}${product?.unit ? ' ' + product.unit : ''}`
+                          }).join(', ')}
+                        </p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Технология приготовления</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap mb-3">
+                          {r.comment || <span className="text-slate-400">Не описано</span>}
+                        </p>
+                        <div className="flex gap-2">
+                          <BigButton onClick={() => startEditRecipe(r)} icon={Pencil} color="outline" full={false}>
+                            Редактировать
+                          </BigButton>
+                          <PrintButton onClick={() => printOneTtk(r)} label="Печать ТТК" />
+                          <ConfirmDeleteButton onConfirm={() => removeRecipe(r.id)} />
+                        </div>
+                      </div>
+                    )}
+
+                    {isExpanded && !recipePrintMode && isEditing && (
+                      <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
+                        <RecipeFormFields
+                          recipeForm={recipeForm}
+                          setRecipeForm={setRecipeForm}
+                          addIngredientRow={addIngredientRow}
+                          updateIngredientRow={updateIngredientRow}
+                          removeIngredientRow={removeIngredientRow}
+                          handleRecipePhoto={handleRecipePhoto}
+                          removeRecipePhoto={removeRecipePhoto}
+                          recipePhotoProcessing={recipePhotoProcessing}
+                          recipePhotoError={recipePhotoError}
+                        />
+                        {recipeError && (
+                          <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
+                            {recipeError}
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <BigButton onClick={saveRecipe}>Сохранить изменения</BigButton>
+                          <BigButton onClick={cancelEditRecipe} color="outline" full={false}>Отмена</BigButton>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {recipePrintMode && (
+              <BigButton
+                onClick={printSelectedTtk}
+                icon={Printer}
+                disabled={selectedForPrint.size === 0}
+              >
+                Печать ТТК ({selectedForPrint.size})
+              </BigButton>
+            )}
+          </Section>
+
+          <Section
+            title="Новый рецепт"
+            icon={Plus}
+            right={
+              showNewRecipeForm && (
+                <button onClick={closeNewRecipeForm} className="text-xs font-semibold text-slate-500">
+                  Скрыть
+                </button>
+              )
+            }
+          >
+            {!showNewRecipeForm ? (
+              <BigButton onClick={openNewRecipeForm} icon={Plus}>Добавить рецепт</BigButton>
+            ) : (
+              <>
+                <RecipeFormFields
+                  recipeForm={recipeForm}
+                  setRecipeForm={setRecipeForm}
+                  addIngredientRow={addIngredientRow}
+                  updateIngredientRow={updateIngredientRow}
+                  removeIngredientRow={removeIngredientRow}
+                  handleRecipePhoto={handleRecipePhoto}
+                  removeRecipePhoto={removeRecipePhoto}
+                  recipePhotoProcessing={recipePhotoProcessing}
+                  recipePhotoError={recipePhotoError}
+                />
+                {recipeError && (
+                  <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
+                    {recipeError}
+                  </p>
+                )}
+                <BigButton onClick={saveRecipe} icon={Plus}>Сохранить рецепт</BigButton>
+              </>
+            )}
+          </Section>
+        </>
+      )}
 
       {allLabels.map((label) => (
         <datalist key={label} id={`dishlist-${slugify(label)}`}>
@@ -600,5 +1059,107 @@ export default function MenuPlanner({ menuData, setMenuData, settings, setSettin
         </datalist>
       ))}
     </div>
+  )
+}
+
+// Defined as a real top-level component (not nested inside MenuPlanner) so it
+// keeps a stable identity across renders — a component defined inline inside
+// another component's render body gets treated as a brand-new type on every
+// render, which would remount this form (and drop focus/input state) on
+// every keystroke.
+function RecipeFormFields({
+  recipeForm, setRecipeForm, addIngredientRow, updateIngredientRow, removeIngredientRow,
+  handleRecipePhoto, removeRecipePhoto, recipePhotoProcessing, recipePhotoError,
+}) {
+  return (
+    <>
+      <Field label="Название блюда">
+        <input
+          className={inputClass}
+          placeholder="Например: Бульон"
+          value={recipeForm.name}
+          onChange={(e) => setRecipeForm((f) => ({ ...f, name: e.target.value }))}
+        />
+      </Field>
+      {recipeForm.ingredients.map((ing, idx) => (
+        <div key={idx} className="flex gap-2 mb-2">
+          <div className="flex-1 min-w-0">
+            <input
+              className={inputClass}
+              placeholder="Продукт…"
+              list="product-nomenclature"
+              value={ing.productName}
+              onChange={(e) => updateIngredientRow(idx, { productName: e.target.value })}
+            />
+          </div>
+          <div className="w-20 shrink-0">
+            <input
+              type="text"
+              inputMode="decimal"
+              className={inputClass}
+              placeholder="Кол-во"
+              value={ing.qty}
+              onChange={(e) => updateIngredientRow(idx, { qty: sanitizeDecimal(e.target.value) })}
+            />
+          </div>
+          <button
+            onClick={() => removeIngredientRow(idx)}
+            className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={addIngredientRow}
+        className="w-full min-h-[40px] flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 text-sm font-semibold active:bg-slate-50 mb-2"
+      >
+        <Plus size={14} /> Ингредиент
+      </button>
+
+      <Field label="Технология приготовления">
+        <textarea
+          className={inputClass + ' h-24 py-2'}
+          placeholder="Опишите процесс приготовления…"
+          value={recipeForm.comment}
+          onChange={(e) => setRecipeForm((f) => ({ ...f, comment: e.target.value }))}
+        />
+      </Field>
+
+      <Field label="Фото блюда (необязательно)">
+        {recipeForm.photo ? (
+          <div className="relative">
+            <img src={recipeForm.photo} alt="" className="w-full max-h-48 object-cover rounded-xl" />
+            <button
+              onClick={removeRecipePhoto}
+              className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50">
+            <Camera size={20} />
+            <span className="text-sm">{recipePhotoProcessing ? 'Обработка фото…' : 'Сфотографировать / выбрать фото'}</span>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null
+                e.target.value = ''
+                if (file) handleRecipePhoto(file)
+              }}
+            />
+          </label>
+        )}
+        {recipePhotoError && (
+          <p className="text-xs text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mt-2">
+            {recipePhotoError}
+          </p>
+        )}
+      </Field>
+    </>
   )
 }

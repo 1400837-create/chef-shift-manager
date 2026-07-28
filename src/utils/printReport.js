@@ -67,13 +67,14 @@ function buildRecountHtml(payload) {
             <td>${escapeHtml(item.name)}</td>
             <td>${escapeHtml(item.unit)}</td>
             <td>${payload.blank ? '' : escapeHtml(item.qty)}</td>
+            <td>${payload.blank ? '' : escapeHtml(item.comment)}</td>
           </tr>`).join('')
-      : '<tr><td colspan="3" class="muted">—</td></tr>'
+      : '<tr><td colspan="4" class="muted">—</td></tr>'
 
     return `
       <h2>${escapeHtml(zone.label)}</h2>
       <table>
-        <thead><tr><th>Продукт</th><th style="width:60px;">Ед.</th><th style="width:90px;">Кол-во</th></tr></thead>
+        <thead><tr><th>Продукт</th><th style="width:60px;">Ед.</th><th style="width:80px;">Кол-во</th><th style="width:140px;">Комментарий</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     `
@@ -83,6 +84,60 @@ function buildRecountHtml(payload) {
     <h1>${escapeHtml(payload.title)}</h1>
     ${zones}
     <p style="margin-top:20px;">Подпись Küchenleiterin: ______________________</p>
+  `
+}
+
+// ТТК = технико-технологическая карта — the standard restaurant kitchen
+// format: name, photo, ingredients, then a free-text cooking process.
+function buildTtkHtml(payload) {
+  const cards = payload.recipes.map((r) => {
+    const photo = r.photo ? `<img src="${r.photo}" style="max-width:220px;max-height:220px;object-fit:cover;border:1px solid #000;margin-bottom:8px;" />` : ''
+    const rows = r.ingredients.length
+      ? r.ingredients.map((ing) => `
+          <tr>
+            <td>${escapeHtml(ing.name)}</td>
+            <td style="width:70px;">${escapeHtml(ing.qty)}</td>
+            <td style="width:50px;">${escapeHtml(ing.unit)}</td>
+          </tr>`).join('')
+      : '<tr><td colspan="3" class="muted">—</td></tr>'
+    const cost = r.cost !== null && r.cost !== undefined ? `<p class="muted">Себестоимость: ≈ ${escapeHtml(r.cost.toFixed(2))}</p>` : ''
+
+    return `
+      <div class="print-no-break" style="margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid #000;">
+        <h1>Технико-технологическая карта</h1>
+        <h2 style="border:none;">${escapeHtml(r.name)}</h2>
+        ${photo}
+        <table>
+          <thead><tr><th>Ингредиент</th><th>Кол-во</th><th>Ед.</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        ${cost}
+        <h2>Технология приготовления</h2>
+        <p>${r.comment ? escapeHtml(r.comment).replace(/\n/g, '<br>') : '<span class="muted">—</span>'}</p>
+      </div>
+    `
+  }).join('')
+
+  return cards
+}
+
+function buildPurchaseLogHtml(payload) {
+  const rows = payload.items.length
+    ? payload.items.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.date)}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.qty)} ${escapeHtml(item.unit)}</td>
+          <td>${escapeHtml(item.comment)}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="4" class="muted">Список пуст</td></tr>'
+
+  return `
+    <h1>${escapeHtml(payload.title)}</h1>
+    <table>
+      <thead><tr><th style="width:90px;">Дата</th><th>Продукт</th><th style="width:90px;">Кол-во</th><th style="width:160px;">Комментарий</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
   `
 }
 
@@ -110,6 +165,8 @@ const BUILDERS = {
   menu: buildMenuHtml,
   recount: buildRecountHtml,
   'shopping-list': buildShoppingListHtml,
+  ttk: buildTtkHtml,
+  'purchase-log': buildPurchaseLogHtml,
 }
 
 export function printReport(payload) {
@@ -133,6 +190,7 @@ export function printReport(payload) {
   .box { width: 14px; height: 14px; border: 1.5px solid #000; display: inline-block; flex-shrink: 0; margin-top: 1px; }
   .muted { color: #555; }
   .nowrap { white-space: nowrap; }
+  .print-no-break { break-inside: avoid; page-break-inside: avoid; }
 </style>
 </head>
 <body>

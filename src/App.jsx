@@ -58,13 +58,13 @@ export default function App() {
   const menuHistory = useTabHistory({
     menuData: [menuData, setMenuData],
     dishLibrary: [dishLibrary, setDishLibrary],
+    recipes: [recipes, setRecipes],
   })
   const inventoryHistory = useTabHistory({
     inventoryItems: [inventoryItems, setInventoryItems],
     audits: [audits, setAudits],
     recountCatalog: [recountCatalog, setRecountCatalog],
     recounts: [recounts, setRecounts],
-    recipes: [recipes, setRecipes],
     purchases: [purchases, setPurchases],
     productions: [productions, setProductions],
     plannedPurchases: [plannedPurchases, setPlannedPurchases],
@@ -265,6 +265,8 @@ export default function App() {
               dishLibrary={dishLibrary}
               setDishLibrary={setDishLibrary}
               recipes={recipes}
+              setRecipes={setRecipes}
+              recountCatalog={recountCatalog}
             />
           </>
         )}
@@ -281,7 +283,6 @@ export default function App() {
               recounts={recounts}
               setRecounts={setRecounts}
               recipes={recipes}
-              setRecipes={setRecipes}
               purchases={purchases}
               setPurchases={setPurchases}
               productions={productions}

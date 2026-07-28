@@ -2,17 +2,16 @@ import { useMemo, useState } from 'react'
 import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
-  BookOpen, ShoppingCart, Flame, Tags, Download, Pencil,
-  ArrowUpDown, ClipboardPlus,
+  ShoppingCart, Flame, Tags, Download,
+  ArrowUpDown, ClipboardPlus, MessageSquare,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES, WASTE_REASONS } from '../utils/constants'
 import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey } from '../utils/dateUtils'
-import { parseRecountCatalogImport, parseRecipesImport } from '../utils/importParsers'
+import { parseRecountCatalogImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
-import { computeRecipeCost } from '../utils/recipeCost'
 import { downloadCsv } from '../utils/csv'
 
 function computeExpiry(item) {
@@ -34,7 +33,7 @@ const toneClasses = {
 export default function Inventory({
   items, setItems, audits, setAudits,
   recountCatalog, setRecountCatalog, recounts, setRecounts,
-  recipes, setRecipes, purchases, setPurchases, productions, setProductions,
+  recipes, purchases, setPurchases, productions, setProductions,
   plannedPurchases, setPlannedPurchases, staffName,
 }) {
   const [form, setForm] = useState({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
@@ -54,16 +53,11 @@ export default function Inventory({
   const [catalogSort, setCatalogSort] = useState('alpha')
   const [balanceSort, setBalanceSort] = useState('alpha')
 
-  const [recipeForm, setRecipeForm] = useState({ name: '', ingredients: [{ productName: '', qty: '' }] })
-  const [recipeError, setRecipeError] = useState(null)
-  const [editingRecipeId, setEditingRecipeId] = useState(null)
-  const [showRecipeImport, setShowRecipeImport] = useState(false)
-  const [recipeImportText, setRecipeImportText] = useState('')
-  const [recipeImportOverwrite, setRecipeImportOverwrite] = useState(false)
-  const [recipeImportResult, setRecipeImportResult] = useState(null)
   const [purchaseForm, setPurchaseForm] = useState({ productName: '', qty: '', date: todayKey() })
   const [purchaseError, setPurchaseError] = useState(null)
   const [productionForm, setProductionForm] = useState({ recipeId: '', qty: '1', date: todayKey() })
+  const [openRecountComment, setOpenRecountComment] = useState(null)
+  const [openPurchaseComment, setOpenPurchaseComment] = useState(null)
 
   const recount = recounts[currentMonth] || { qty: {}, verifiedWithLead: false, countedAt: '' }
 
@@ -213,6 +207,16 @@ export default function Inventory({
     }))
   }
 
+  function setRecountComment(itemId, value) {
+    setRecounts((prev) => ({
+      ...prev,
+      [currentMonth]: {
+        ...(prev[currentMonth] || { qty: {}, verifiedWithLead: false }),
+        comments: { ...(prev[currentMonth]?.comments || {}), [itemId]: value },
+      },
+    }))
+  }
+
   function setRecountVerified(v) {
     setRecounts((prev) => ({
       ...prev,
@@ -240,124 +244,6 @@ export default function Inventory({
     return recountCatalog.find((p) => p.name.trim().toLowerCase() === key) || null
   }
 
-  function recipeCost(recipe) {
-    return computeRecipeCost(recipe, recountCatalog)
-  }
-
-  function productNameById(id) {
-    const product = recountCatalog.find((p) => p.id === Number(id) || p.id === id)
-    return product?.name || ''
-  }
-
-  function addIngredientRow() {
-    setRecipeForm((f) => ({ ...f, ingredients: [...f.ingredients, { productName: '', qty: '' }] }))
-  }
-
-  function updateIngredientRow(idx, patch) {
-    setRecipeForm((f) => ({
-      ...f,
-      ingredients: f.ingredients.map((ing, i) => (i === idx ? { ...ing, ...patch } : ing)),
-    }))
-  }
-
-  function removeIngredientRow(idx) {
-    setRecipeForm((f) => ({ ...f, ingredients: f.ingredients.filter((_, i) => i !== idx) }))
-  }
-
-  function saveRecipe() {
-    if (!recipeForm.name.trim()) {
-      setRecipeError('Укажите название блюда.')
-      return
-    }
-    const filledRows = recipeForm.ingredients.filter((i) => i.productName.trim() || i.qty)
-    const ingredients = []
-    for (const row of filledRows) {
-      const product = findProductByName(row.productName)
-      if (!product || !row.qty) {
-        setRecipeError(`Продукт «${row.productName}» не найден в каталоге — выберите вариант из подсказок.`)
-        return
-      }
-      ingredients.push({ productId: product.id, qty: row.qty })
-    }
-    if (ingredients.length === 0) {
-      setRecipeError('Добавьте хотя бы один ингредиент из каталога.')
-      return
-    }
-    setRecipeError(null)
-    if (editingRecipeId) {
-      setRecipes((prev) => prev.map((r) => (r.id === editingRecipeId ? { ...r, name: recipeForm.name.trim(), ingredients } : r)))
-      setEditingRecipeId(null)
-    } else {
-      setRecipes((prev) => [...prev, { id: Date.now(), name: recipeForm.name.trim(), ingredients }])
-    }
-    setRecipeForm({ name: '', ingredients: [{ productName: '', qty: '' }] })
-  }
-
-  function editRecipe(recipe) {
-    setRecipeForm({
-      name: recipe.name,
-      ingredients: recipe.ingredients.map((ing) => ({ productName: productNameById(ing.productId), qty: ing.qty })),
-    })
-    setEditingRecipeId(recipe.id)
-    setRecipeError(null)
-  }
-
-  function cancelEditRecipe() {
-    setEditingRecipeId(null)
-    setRecipeForm({ name: '', ingredients: [{ productName: '', qty: '' }] })
-    setRecipeError(null)
-  }
-
-  function removeRecipe(id) {
-    setRecipes((prev) => prev.filter((r) => r.id !== id))
-    if (editingRecipeId === id) cancelEditRecipe()
-  }
-
-  function importRecipes() {
-    const { recipes: parsed, skipped } = parseRecipesImport(recipeImportText)
-    const existingByName = new Map(recipes.map((r) => [r.name.trim().toLowerCase(), r]))
-    let imported = 0
-    let skippedExisting = 0
-    let unresolvedIngredients = 0
-    const nextRecipes = [...recipes]
-
-    parsed.forEach((parsedRecipe) => {
-      const key = parsedRecipe.name.toLowerCase()
-      const existing = existingByName.get(key)
-      if (existing && !recipeImportOverwrite) {
-        skippedExisting += 1
-        return
-      }
-
-      const ingredients = []
-      parsedRecipe.ingredients.forEach(({ ingredientName, qty }) => {
-        const product = findProductByName(ingredientName)
-        if (!product) {
-          unresolvedIngredients += 1
-          return
-        }
-        ingredients.push({ productId: product.id, qty })
-      })
-      if (ingredients.length === 0) return
-
-      if (existing) {
-        const idx = nextRecipes.findIndex((r) => r.id === existing.id)
-        nextRecipes[idx] = { ...existing, ingredients }
-      } else {
-        nextRecipes.push({ id: Date.now() + Math.random(), name: parsedRecipe.name, ingredients })
-      }
-      imported += 1
-    })
-
-    setRecipes(nextRecipes)
-    const parts = [`Импортировано рецептов: ${imported}`]
-    if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
-    if (unresolvedIngredients) parts.push(`не найдено в каталоге ингредиентов: ${unresolvedIngredients}`)
-    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
-    setRecipeImportResult(parts.join(', '))
-    setRecipeImportText('')
-  }
-
   function addPurchase() {
     const product = findProductByName(purchaseForm.productName)
     if (!product) {
@@ -380,6 +266,29 @@ export default function Inventory({
     setPurchases((prev) => prev.filter((p) => p.id !== id))
   }
 
+  function setPurchaseComment(id, value) {
+    setPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, comment: value } : p)))
+  }
+
+  function printPurchaseLog() {
+    printReport({
+      type: 'purchase-log',
+      title: `Приход (закупка) — ${monthLabel}`,
+      items: purchases
+        .filter((p) => monthKey(parseLocalDate(p.date)) === currentMonth)
+        .map((p) => {
+          const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
+          return {
+            date: formatRu(parseLocalDate(p.date)),
+            name: product?.name || '?',
+            qty: p.qty,
+            unit: product?.unit || '',
+            comment: p.comment || '',
+          }
+        }),
+    })
+  }
+
   function addProduction() {
     if (!productionForm.recipeId || !productionForm.qty) return
     setProductions((prev) => [
@@ -398,7 +307,7 @@ export default function Inventory({
       label: z.label,
       items: recountCatalog
         .filter((i) => i.zone === z.key)
-        .map((i) => ({ name: i.name, unit: i.unit, qty: recount.qty[i.id] ?? '' })),
+        .map((i) => ({ name: i.name, unit: i.unit, qty: recount.qty[i.id] ?? '', comment: recount.comments?.[i.id] || '' })),
     }))
   }
 
@@ -415,7 +324,7 @@ export default function Inventory({
 
   function exportMonthCsv() {
     const rows = [['Переучёт', monthLabel]]
-    rows.push(['Продукт', 'Ед.', 'Учтено', 'Ожидалось', 'Расхождение'])
+    rows.push(['Продукт', 'Ед.', 'Учтено', 'Ожидалось', 'Расхождение', 'Комментарий'])
     recountCatalog.forEach((item) => {
       const curQty = recount.qty[item.id]
       const actual = curQty !== undefined && curQty !== '' ? Number(curQty) : ''
@@ -425,17 +334,17 @@ export default function Inventory({
         recountAsOfDate
       )
       const shrinkage = expected !== null && actual !== '' ? actual - expected : ''
-      rows.push([item.name, item.unit, actual, expected ?? '', shrinkage])
+      rows.push([item.name, item.unit, actual, expected ?? '', shrinkage, recount.comments?.[item.id] || ''])
     })
 
     rows.push([])
     rows.push(['Приход за месяц'])
-    rows.push(['Дата', 'Продукт', 'Кол-во'])
+    rows.push(['Дата', 'Продукт', 'Кол-во', 'Комментарий'])
     purchases
       .filter((p) => monthKey(parseLocalDate(p.date)) === currentMonth)
       .forEach((p) => {
         const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
-        rows.push([p.date, product?.name || '?', p.qty])
+        rows.push([p.date, product?.name || '?', p.qty, p.comment || ''])
       })
 
     rows.push([])
@@ -795,31 +704,56 @@ export default function Inventory({
                       recountAsOfDate
                     )
                     const shrinkage = expected !== null && actual !== null ? actual - expected : null
+                    const hasComment = !!recount.comments?.[item.id]
+                    const commentOpen = openRecountComment === item.id
                     return (
-                      <div key={item.id} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{item.name}</p>
-                          <p className="text-xs text-slate-400">
-                            {item.unit}
-                            {expected !== null && ` · ожидалось ${expected}`}
-                            {shrinkage !== null && shrinkage !== 0 && (
-                              <span className={shrinkage > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                                {' '}({shrinkage > 0 ? '+' : ''}{shrinkage}{shrinkage < 0 ? ' недостача' : ' излишек'})
-                              </span>
-                            )}
-                          </p>
+                      <div key={item.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{item.name}</p>
+                            <p className="text-xs text-slate-400">
+                              {item.unit}
+                              {expected !== null && ` · ожидалось ${expected}`}
+                              {shrinkage !== null && shrinkage !== 0 && (
+                                <span className={shrinkage > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                                  {' '}({shrinkage > 0 ? '+' : ''}{shrinkage}{shrinkage < 0 ? ' недостача' : ' излишек'})
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="w-20 shrink-0">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              className={inputClass + ' text-center'}
+                              value={curQty ?? ''}
+                              onChange={(e) => setQty(item.id, sanitizeDecimal(e.target.value))}
+                              placeholder="0"
+                            />
+                          </div>
+                          <button
+                            onClick={() => setOpenRecountComment(commentOpen ? null : item.id)}
+                            className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
+                              hasComment ? 'text-orange-600' : 'text-slate-400 dark:text-slate-500'
+                            }`}
+                            title="Комментарий"
+                          >
+                            <MessageSquare size={16} />
+                          </button>
+                          <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
                         </div>
-                        <div className="w-20 shrink-0">
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            className={inputClass + ' text-center'}
-                            value={curQty ?? ''}
-                            onChange={(e) => setQty(item.id, sanitizeDecimal(e.target.value))}
-                            placeholder="0"
+                        {commentOpen && (
+                          <textarea
+                            className={inputClass + ' mt-2 h-16 py-2 text-sm'}
+                            placeholder="Комментарий (например: недостача из-за банкета)"
+                            value={recount.comments?.[item.id] || ''}
+                            onChange={(e) => setRecountComment(item.id, e.target.value)}
+                            autoFocus
                           />
-                        </div>
-                        <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
+                        )}
+                        {!commentOpen && hasComment && (
+                          <p className="text-xs text-orange-600 mt-1.5">💬 {recount.comments[item.id]}</p>
+                        )}
                       </div>
                     )
                   })}
@@ -1071,138 +1005,10 @@ export default function Inventory({
           </p>
 
           <Section
-            title="Рецепты"
-            icon={BookOpen}
-            right={
-              <button onClick={() => setShowRecipeImport((v) => !v)} className="text-xs font-semibold text-orange-600">
-                {showRecipeImport ? 'Скрыть импорт' : 'Импорт из таблиц'}
-              </button>
-            }
+            title="Приход (закупка)"
+            icon={ShoppingCart}
+            right={<PrintButton onClick={printPurchaseLog} label="Печать" />}
           >
-            {showRecipeImport && (
-              <div className="mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
-                <p className="text-xs text-slate-500 mb-2">
-                  Столбцы: <b>Блюдо, Ингредиент, Кол-во</b> — по одной строке на ингредиент.
-                  Несколько строк с одинаковым названием блюда объединятся в один рецепт.
-                  Выделите в Google Таблице → Ctrl+C → вставьте сюда.
-                </p>
-                <textarea
-                  className={inputClass + ' h-28 py-2'}
-                  placeholder={'Бульон\tКуриное крыло\t0.5\nБульон\tЛавровый лист\t1\nБорщ\tСвёкла\t1'}
-                  value={recipeImportText}
-                  onChange={(e) => setRecipeImportText(e.target.value)}
-                />
-                <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={recipeImportOverwrite}
-                    onChange={(e) => setRecipeImportOverwrite(e.target.checked)}
-                    className="w-5 h-5"
-                  />
-                  Перезаписывать уже существующие рецепты (по названию)
-                </label>
-                <BigButton onClick={importRecipes} icon={Upload} disabled={!recipeImportText.trim()}>
-                  Импортировать рецепты
-                </BigButton>
-                {recipeImportResult && (
-                  <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
-                    {recipeImportResult}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {recipes.length === 0 && <p className="text-sm text-slate-400 text-center py-2">Рецептов пока нет</p>}
-            <div className="flex flex-col gap-2 mb-3">
-              {recipes.map((r) => (
-                <div key={r.id} className={`rounded-xl border px-3 py-2 ${editingRecipeId === r.id ? 'border-orange-400 bg-orange-50' : 'border-slate-200 dark:border-slate-700'}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 min-w-0 truncate">{r.name}</p>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {recipeCost(r) !== null && <Badge color="green">≈ {recipeCost(r).toFixed(2)}</Badge>}
-                      <button
-                        onClick={() => editRecipe(r)}
-                        className="w-9 h-9 flex items-center justify-center text-slate-400 active:text-orange-600"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <ConfirmDeleteButton onConfirm={() => removeRecipe(r.id)} />
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {r.ingredients.map((ing) => {
-                      const product = recountCatalog.find((p) => p.id === Number(ing.productId) || p.id === ing.productId)
-                      return `${product?.name || '?'} × ${ing.qty}${product?.unit ? ' ' + product.unit : ''}`
-                    }).join(', ')}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {editingRecipeId ? 'Редактирование рецепта' : 'Новый рецепт'}
-              </p>
-              {editingRecipeId && (
-                <button onClick={cancelEditRecipe} className="text-xs font-semibold text-slate-500">
-                  Отменить
-                </button>
-              )}
-            </div>
-            <Field label="Название блюда">
-              <input
-                className={inputClass}
-                placeholder="Например: Бульон"
-                value={recipeForm.name}
-                onChange={(e) => setRecipeForm((f) => ({ ...f, name: e.target.value }))}
-              />
-            </Field>
-            {recipeForm.ingredients.map((ing, idx) => (
-              <div key={idx} className="flex gap-2 mb-2">
-                <div className="flex-1 min-w-0">
-                  <input
-                    className={inputClass}
-                    placeholder="Продукт…"
-                    list="product-nomenclature"
-                    value={ing.productName}
-                    onChange={(e) => updateIngredientRow(idx, { productName: e.target.value })}
-                  />
-                </div>
-                <div className="w-20 shrink-0">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className={inputClass}
-                    placeholder="Кол-во"
-                    value={ing.qty}
-                    onChange={(e) => updateIngredientRow(idx, { qty: sanitizeDecimal(e.target.value) })}
-                  />
-                </div>
-                <button
-                  onClick={() => removeIngredientRow(idx)}
-                  className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={addIngredientRow}
-              className="w-full min-h-[40px] flex items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 text-sm font-semibold active:bg-slate-50 mb-2"
-            >
-              <Plus size={14} /> Ингредиент
-            </button>
-            {recipeError && (
-              <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
-                {recipeError}
-              </p>
-            )}
-            <BigButton onClick={saveRecipe} icon={editingRecipeId ? undefined : Plus}>
-              {editingRecipeId ? 'Сохранить изменения' : 'Сохранить рецепт'}
-            </BigButton>
-          </Section>
-
-          <Section title="Приход (закупка)" icon={ShoppingCart}>
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
                 <input
@@ -1248,15 +1054,40 @@ export default function Inventory({
 
             {purchases.slice(0, 8).map((p) => {
               const product = recountCatalog.find((pr) => pr.id === Number(p.productId) || pr.id === p.productId)
+              const hasComment = !!p.comment
+              const commentOpen = openPurchaseComment === p.id
               return (
-                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
-                  <span className="text-sm text-slate-700 dark:text-slate-200">
-                    {product?.name || '?'} <span className="text-slate-400">+{p.qty} {product?.unit}</span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
-                    <ConfirmDeleteButton onConfirm={() => removePurchase(p.id)} size="w-8 h-8" iconSize={14} />
+                <div key={p.id} className="py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-700 dark:text-slate-200">
+                      {product?.name || '?'} <span className="text-slate-400">+{p.qty} {product?.unit}</span>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
+                      <button
+                        onClick={() => setOpenPurchaseComment(commentOpen ? null : p.id)}
+                        className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg ${
+                          hasComment ? 'text-orange-600' : 'text-slate-400 dark:text-slate-500'
+                        }`}
+                        title="Комментарий"
+                      >
+                        <MessageSquare size={14} />
+                      </button>
+                      <ConfirmDeleteButton onConfirm={() => removePurchase(p.id)} size="w-8 h-8" iconSize={14} />
+                    </div>
                   </div>
+                  {commentOpen && (
+                    <textarea
+                      className={inputClass + ' mt-1.5 h-14 py-2 text-sm'}
+                      placeholder="Комментарий"
+                      value={p.comment || ''}
+                      onChange={(e) => setPurchaseComment(p.id, e.target.value)}
+                      autoFocus
+                    />
+                  )}
+                  {!commentOpen && hasComment && (
+                    <p className="text-xs text-orange-600 mt-1">💬 {p.comment}</p>
+                  )}
                 </div>
               )
             })}
