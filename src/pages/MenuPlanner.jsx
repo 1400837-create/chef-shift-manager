@@ -3,7 +3,7 @@ import {
   ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus, Printer,
   BookOpen, Pencil, Camera, Calendar, Check,
 } from 'lucide-react'
-import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow } from '../components/UI'
+import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow, PrintButton } from '../components/UI'
 import { DEFAULT_MENU_COURSES } from '../utils/constants'
 import {
   MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex, formatRu,
