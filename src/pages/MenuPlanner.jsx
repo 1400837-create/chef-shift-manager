@@ -15,6 +15,7 @@ import { coursesForDay } from '../utils/menuCourses'
 import { computeRecipeCost } from '../utils/recipeCost'
 import { compressToDataUrl } from '../utils/imageCompress'
 import { sanitizeDecimal } from '../utils/number'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 
 function slugify(label) {
   return (label || '')
@@ -26,9 +27,14 @@ function slugify(label) {
 
 export default function MenuPlanner({
   menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary,
-  recipes, setRecipes, recountCatalog,
+  recipes, setRecipes, recountCatalog, setRecountCatalog, onNavigateToCatalog,
 }) {
-  const [menuTab, setMenuTab] = useState('calendar')
+  // Рецепты draft state (menuTab + everything below down to editingRecipeId)
+  // is persisted rather than plain useState: adding an ingredient whose
+  // product doesn't exist yet in the nomenclature sends the user over to
+  // Склад → Каталог to fill it in, which unmounts this page — persisting the
+  // in-progress recipe means it's still there, untouched, when they come back.
+  const [menuTab, setMenuTab] = useLocalStorage('menuTab', 'calendar')
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -40,11 +46,12 @@ export default function MenuPlanner({
   const [recipeImportText, setRecipeImportText] = useState('')
   const [recipeImportOverwrite, setRecipeImportOverwrite] = useState(false)
   const [recipeImportResult, setRecipeImportResult] = useState(null)
-  const [recipeForm, setRecipeForm] = useState({ name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null })
+  const [recipeForm, setRecipeForm] = useLocalStorage('recipeFormDraft', () => ({ name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null }))
   const [recipeError, setRecipeError] = useState(null)
-  const [showNewRecipeForm, setShowNewRecipeForm] = useState(false)
-  const [expandedRecipeId, setExpandedRecipeId] = useState(null)
-  const [editingRecipeId, setEditingRecipeId] = useState(null)
+  const [missingProductPrompt, setMissingProductPrompt] = useState(null)
+  const [showNewRecipeForm, setShowNewRecipeForm] = useLocalStorage('showNewRecipeFormDraft', false)
+  const [expandedRecipeId, setExpandedRecipeId] = useLocalStorage('expandedRecipeIdDraft', null)
+  const [editingRecipeId, setEditingRecipeId] = useLocalStorage('editingRecipeIdDraft', null)
   const [recipePhotoProcessing, setRecipePhotoProcessing] = useState(false)
   const [recipePhotoError, setRecipePhotoError] = useState(null)
   const [recipePrintMode, setRecipePrintMode] = useState(false)
@@ -175,6 +182,7 @@ export default function MenuPlanner({
   function openNewRecipeForm() {
     setRecipeForm(blankRecipeForm())
     setRecipeError(null)
+    setMissingProductPrompt(null)
     setEditingRecipeId(null)
     setExpandedRecipeId(null)
     setShowNewRecipeForm(true)
@@ -184,6 +192,7 @@ export default function MenuPlanner({
     setShowNewRecipeForm(false)
     setRecipeForm(blankRecipeForm())
     setRecipeError(null)
+    setMissingProductPrompt(null)
   }
 
   function toggleExpandRecipe(recipe) {
@@ -195,6 +204,8 @@ export default function MenuPlanner({
     setExpandedRecipeId(recipe.id)
     setEditingRecipeId(null)
     setShowNewRecipeForm(false)
+    setRecipeError(null)
+    setMissingProductPrompt(null)
   }
 
   function startEditRecipe(recipe) {
@@ -206,11 +217,13 @@ export default function MenuPlanner({
     })
     setEditingRecipeId(recipe.id)
     setRecipeError(null)
+    setMissingProductPrompt(null)
   }
 
   function cancelEditRecipe() {
     setEditingRecipeId(null)
     setRecipeError(null)
+    setMissingProductPrompt(null)
   }
 
   function addIngredientRow() {
@@ -247,6 +260,7 @@ export default function MenuPlanner({
   }
 
   function saveRecipe() {
+    setMissingProductPrompt(null)
     if (!recipeForm.name.trim()) {
       setRecipeError('Укажите название блюда.')
       return
@@ -254,9 +268,15 @@ export default function MenuPlanner({
     const filledRows = recipeForm.ingredients.filter((i) => i.productName.trim() || i.qty)
     const ingredients = []
     for (const row of filledRows) {
-      const product = findProductByName(row.productName)
-      if (!product || !row.qty) {
-        setRecipeError(`Продукт «${row.productName}» не найден в каталоге — выберите вариант из подсказок.`)
+      const name = row.productName.trim()
+      const product = findProductByName(name)
+      if (!product) {
+        setRecipeError(null)
+        setMissingProductPrompt(name)
+        return
+      }
+      if (!row.qty) {
+        setRecipeError(`Укажите количество для «${name}».`)
         return
       }
       ingredients.push({ productId: product.id, qty: row.qty })
@@ -275,6 +295,19 @@ export default function MenuPlanner({
       setShowNewRecipeForm(false)
     }
     setRecipeForm(blankRecipeForm())
+  }
+
+  function confirmAddMissingProduct() {
+    const name = missingProductPrompt
+    if (!name) return
+    const newId = Date.now()
+    setRecountCatalog((prev) => [...prev, { id: newId, name, unit: 'шт', zone: 'fridges', category: 'other' }])
+    setMissingProductPrompt(null)
+    onNavigateToCatalog?.(newId)
+  }
+
+  function cancelMissingProduct() {
+    setMissingProductPrompt(null)
   }
 
   function removeRecipe(id) {
@@ -986,6 +1019,17 @@ export default function MenuPlanner({
                           recipePhotoProcessing={recipePhotoProcessing}
                           recipePhotoError={recipePhotoError}
                         />
+                        {missingProductPrompt && (
+                          <div className="text-sm bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-3 mb-2">
+                            <p className="text-orange-800 dark:text-orange-200 mb-2">
+                              Продукт «{missingProductPrompt}» не найден в номенклатуре. Добавить его в каталог?
+                            </p>
+                            <div className="flex gap-2">
+                              <BigButton onClick={confirmAddMissingProduct} full={false}>Да, добавить</BigButton>
+                              <BigButton onClick={cancelMissingProduct} color="outline" full={false}>Нет</BigButton>
+                            </div>
+                          </div>
+                        )}
                         {recipeError && (
                           <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
                             {recipeError}
@@ -1039,6 +1083,17 @@ export default function MenuPlanner({
                   recipePhotoProcessing={recipePhotoProcessing}
                   recipePhotoError={recipePhotoError}
                 />
+                {missingProductPrompt && (
+                  <div className="text-sm bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-3 mb-2">
+                    <p className="text-orange-800 dark:text-orange-200 mb-2">
+                      Продукт «{missingProductPrompt}» не найден в номенклатуре. Добавить его в каталог?
+                    </p>
+                    <div className="flex gap-2">
+                      <BigButton onClick={confirmAddMissingProduct} full={false}>Да, добавить</BigButton>
+                      <BigButton onClick={cancelMissingProduct} color="outline" full={false}>Нет</BigButton>
+                    </div>
+                  </div>
+                )}
                 {recipeError && (
                   <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
                     {recipeError}

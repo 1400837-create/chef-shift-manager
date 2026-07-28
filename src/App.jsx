@@ -20,6 +20,21 @@ export default function App() {
   const [tab, setTab] = useState('dashboard')
   const [searchOpen, setSearchOpen] = useState(false)
 
+  // One-shot cross-page navigation request: MenuPlanner sets this when a
+  // recipe ingredient's product doesn't exist yet in the nomenclature and the
+  // user confirms adding it — Inventory reads it once on mount (to land on
+  // Каталог with the new item scrolled into view) and immediately hands back
+  // control via onInitialConsumed so a later, unrelated visit to Склад doesn't
+  // get stuck reopening on Каталог.
+  const [pendingInventoryTab, setPendingInventoryTab] = useState(null)
+  const [pendingCatalogHighlight, setPendingCatalogHighlight] = useState(null)
+
+  function goToCatalogForNewProduct(productId) {
+    setPendingInventoryTab('catalog')
+    setPendingCatalogHighlight(productId)
+    setTab('inventory')
+  }
+
   const [shiftChecklist, setShiftChecklist] = useLocalStorage('shiftChecklist', {})
   const [kuchenhilfeTasks, setKuchenhilfeTasks] = useLocalStorage('kuchenhilfeTasks', {})
 
@@ -267,6 +282,8 @@ export default function App() {
               recipes={recipes}
               setRecipes={setRecipes}
               recountCatalog={recountCatalog}
+              setRecountCatalog={setRecountCatalog}
+              onNavigateToCatalog={goToCatalogForNewProduct}
             />
           </>
         )}
@@ -289,7 +306,11 @@ export default function App() {
               setProductions={setProductions}
               plannedPurchases={plannedPurchases}
               setPlannedPurchases={setPlannedPurchases}
+              menuData={menuData}
               staffName={staffName}
+              initialTab={pendingInventoryTab}
+              initialHighlightId={pendingCatalogHighlight}
+              onInitialConsumed={() => { setPendingInventoryTab(null); setPendingCatalogHighlight(null) }}
             />
           </>
         )}

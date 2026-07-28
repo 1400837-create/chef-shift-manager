@@ -1,18 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
-  ShoppingCart, Flame, Tags, Download,
+  ShoppingCart, Flame, Tags, Download, Calendar,
   ArrowUpDown, ArrowRightLeft, ClipboardPlus, MessageSquare,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES, WASTE_REASONS } from '../utils/constants'
-import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey } from '../utils/dateUtils'
+import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey, toKey } from '../utils/dateUtils'
 import { parseRecountCatalogImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
 import { downloadCsv } from '../utils/csv'
+import { coursesForDay } from '../utils/menuCourses'
 
 function computeExpiry(item) {
   return addDays(parseLocalDate(item.packDate), Number(item.shelfLifeDays || 0))
@@ -34,11 +35,13 @@ export default function Inventory({
   items, setItems, audits, setAudits,
   recountCatalog, setRecountCatalog, recounts, setRecounts,
   recipes, purchases, setPurchases, productions, setProductions,
-  plannedPurchases, setPlannedPurchases, staffName,
+  plannedPurchases, setPlannedPurchases, menuData, staffName,
+  initialTab, initialHighlightId, onInitialConsumed,
 }) {
   const [form, setForm] = useState({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
   const [disposalPromptId, setDisposalPromptId] = useState(null)
-  const [tab, setTab] = useState('fifo')
+  const [tab, setTab] = useState(() => initialTab || 'fifo')
+  const [highlightCatalogId, setHighlightCatalogId] = useState(initialHighlightId || null)
   const [monthOffset, setMonthOffset] = useState(0)
   const now = new Date()
   const viewedMonth = addMonths(now, monthOffset)
@@ -58,6 +61,25 @@ export default function Inventory({
   const [productionForm, setProductionForm] = useState({ recipeId: '', qty: '1', date: todayKey() })
   const [openRecountComment, setOpenRecountComment] = useState(null)
   const [openPurchaseComment, setOpenPurchaseComment] = useState(null)
+  const [menuRangeFrom, setMenuRangeFrom] = useState(todayKey())
+  const [menuRangeTo, setMenuRangeTo] = useState(todayKey())
+  const [menuImportResult, setMenuImportResult] = useState(null)
+
+  // initialTab/initialHighlightId are a one-shot navigation request from
+  // MenuPlanner (added a nomenclature item mid-recipe, wants to land here to
+  // fill in its details) — read once on mount into local state, then hand
+  // control straight back via onInitialConsumed so a later, unrelated visit
+  // to Склад doesn't get stuck reopening on Каталог.
+  useEffect(() => {
+    if (initialTab) onInitialConsumed?.()
+    if (initialHighlightId) {
+      const el = document.getElementById(`catalog-item-${initialHighlightId}`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      const t = setTimeout(() => setHighlightCatalogId(null), 4000)
+      return () => clearTimeout(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const recount = recounts[currentMonth] || { qty: {}, verifiedWithLead: false, countedAt: '' }
 
@@ -300,6 +322,58 @@ export default function Inventory({
 
   function removeProduction(id) {
     setProductions((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  function findRecipeByName(name) {
+    const key = (name || '').trim().toLowerCase()
+    if (!key) return null
+    return recipes.find((r) => r.name.trim().toLowerCase() === key) || null
+  }
+
+  // Menu quantities are free text ("40 шт", "по 2 порции") since they're
+  // meant for printing, not math — pull out the leading number so the
+  // multiplier used against a recipe's ingredients is actually numeric.
+  function extractQtyNumber(qtyStr) {
+    const match = String(qtyStr || '').match(/[\d.,]+/)
+    if (!match) return '1'
+    return match[0].replace(',', '.')
+  }
+
+  function addProductionsFromMenu(fromStr, toStr) {
+    const from = parseLocalDate(fromStr)
+    const to = parseLocalDate(toStr)
+    if (to < from) {
+      setMenuImportResult('Дата «по» раньше даты «от».')
+      return
+    }
+    const newEntries = []
+    const missingDishes = new Set()
+    let cursor = from
+    while (cursor <= to) {
+      const mk = monthKey(cursor)
+      const dayData = menuData[mk]?.[cursor.getDate()]
+      if (dayData) {
+        coursesForDay(dayData).forEach((c) => {
+          if (!c.dish) return
+          const recipe = findRecipeByName(c.dish)
+          if (recipe) {
+            newEntries.push({
+              id: Date.now() + Math.random(),
+              recipeId: recipe.id,
+              qty: extractQtyNumber(c.qty),
+              date: toKey(cursor),
+            })
+          } else {
+            missingDishes.add(c.dish)
+          }
+        })
+      }
+      cursor = addDays(cursor, 1)
+    }
+    if (newEntries.length) setProductions((prev) => [...newEntries, ...prev])
+    const parts = [`Добавлено записей расхода: ${newEntries.length}`]
+    if (missingDishes.size) parts.push(`нет рецепта для: ${Array.from(missingDishes).join(', ')}`)
+    setMenuImportResult(parts.join('; '))
   }
 
   function zonesForPrint() {
@@ -930,7 +1004,15 @@ export default function Inventory({
             )}
             <div className="flex flex-col gap-2">
               {sortedCatalog.map((item) => (
-                <div key={item.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-2">
+                <div
+                  key={item.id}
+                  id={`catalog-item-${item.id}`}
+                  className={`rounded-xl border px-2 py-2 ${
+                    item.id === highlightCatalogId
+                      ? 'border-orange-400 ring-2 ring-orange-300 dark:ring-orange-700'
+                      : 'border-slate-200 dark:border-slate-700'
+                  }`}
+                >
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <div className="flex-1 min-w-0">
                       <input
@@ -1156,6 +1238,32 @@ export default function Inventory({
                 </div>
               )
             })}
+
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                Добавить из меню за период
+              </p>
+              <p className="text-xs text-slate-400 mb-2">
+                Для каждого блюда из меню за выбранные даты, у которого есть рецепт с таким же
+                названием, добавит запись расхода (количество — из поля «Кол-во» в меню, если указано).
+              </p>
+              <div className="flex gap-2 mb-2">
+                <div className="flex-1 min-w-0">
+                  <input type="date" className={inputClass} value={menuRangeFrom} onChange={(e) => setMenuRangeFrom(e.target.value)} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <input type="date" className={inputClass} value={menuRangeTo} onChange={(e) => setMenuRangeTo(e.target.value)} />
+                </div>
+              </div>
+              <BigButton onClick={() => addProductionsFromMenu(menuRangeFrom, menuRangeTo)} icon={Calendar}>
+                Добавить из меню
+              </BigButton>
+              {menuImportResult && (
+                <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+                  {menuImportResult}
+                </p>
+              )}
+            </div>
           </Section>
         </>
       )}
