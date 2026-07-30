@@ -273,6 +273,37 @@ export default function Inventory({
     }
   }
 
+  // Temporary diagnostic for the "search shows unrelated items" report —
+  // checks whether recountCatalog has duplicate ids (would confuse React's
+  // key-based list reconciliation) or other data anomalies not visible from
+  // the exported name/unit/zone/category columns alone.
+  function runCatalogDiagnostics() {
+    const idCounts = new Map()
+    recountCatalog.forEach((i) => idCounts.set(i.id, (idCounts.get(i.id) || 0) + 1))
+    const dupIds = [...idCounts.entries()].filter(([, c]) => c > 1)
+
+    const nameCounts = new Map()
+    recountCatalog.forEach((i) => {
+      const key = (i.name || '').trim().toLowerCase()
+      nameCounts.set(key, (nameCounts.get(key) || 0) + 1)
+    })
+    const dupNames = [...nameCounts.entries()].filter(([, c]) => c > 1)
+
+    const lines = [
+      `Всего товаров: ${recountCatalog.length}`,
+      `Повторяющихся ID: ${dupIds.length} (затронуто товаров: ${dupIds.reduce((s, [, c]) => s + c, 0)})`,
+      `Повторяющихся названий: ${dupNames.length}`,
+    ]
+    if (dupIds.length) {
+      lines.push('', 'Примеры повторных ID:')
+      dupIds.slice(0, 6).forEach(([id, c]) => {
+        const names = recountCatalog.filter((i) => i.id === id).map((i) => i.name).join(' | ')
+        lines.push(`ID ${id} (×${c}): ${names}`)
+      })
+    }
+    alert(lines.join('\n'))
+  }
+
   function importCatalog() {
     const { items: parsed, skipped } = parseRecountCatalogImport(catalogImportText)
     const existingNames = new Set(recountCatalog.map((i) => (i.name || '').trim().toLowerCase()))
@@ -1154,11 +1185,16 @@ export default function Inventory({
                 onFocus={handleSearchFocus}
               />
             </div>
-            {catalogSearch.trim() && (
-              <p className="text-[11px] text-slate-400 -mt-2 mb-3 px-1">
-                Найдено: {recountCatalog.filter((i) => matchesSearch(i.name, catalogSearch)).length}
-              </p>
-            )}
+            <div className="flex items-center justify-between -mt-2 mb-3 px-1">
+              {catalogSearch.trim() ? (
+                <p className="text-[11px] text-slate-400">
+                  Найдено: {recountCatalog.filter((i) => matchesSearch(i.name, catalogSearch)).length}
+                </p>
+              ) : <span />}
+              <button onClick={runCatalogDiagnostics} className="text-[11px] text-slate-400 underline">
+                Диагностика
+              </button>
+            </div>
             <div className="flex gap-1.5 mb-3">
               {SORT_OPTIONS.map((opt) => (
                 <button
