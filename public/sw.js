@@ -23,8 +23,13 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
 
   if (request.mode === 'navigate') {
+    // GitHub Pages sends the HTML with Cache-Control: max-age=600, so a plain
+    // fetch() here can be satisfied entirely from the browser's own HTTP
+    // cache for up to 10 minutes after a deploy — "network-first" in name
+    // only, never actually reaching the network. Force revalidation so a
+    // fresh deploy is picked up on the very next load, not up to 10 min later.
     event.respondWith(
-      fetch(request).catch(() => caches.match('/chef-shift-manager/') )
+      fetch(request, { cache: 'no-store' }).catch(() => caches.match('/chef-shift-manager/'))
     )
     return
   }
