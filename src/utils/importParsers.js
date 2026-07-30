@@ -11,6 +11,14 @@ function splitCells(line) {
   // selection) often collapses tabs into a run of spaces instead — treat
   // 2+ spaces as a column break before falling back to a bare comma split.
   if (/\s{2,}/.test(line)) return line.split(/\s{2,}/)
+  // Typed straight into the box (not pasted from a real sheet) has neither
+  // of the above — people write "Молоко - 3" or just "Молоко 3" with a
+  // single space. Try a spaced dash first, then a trailing number, so a
+  // 2-column row (name + qty) still comes through as two cells.
+  const dashMatch = line.match(/^(.+?)\s+[-–—]\s+(.+)$/)
+  if (dashMatch) return [dashMatch[1].trim(), dashMatch[2].trim()]
+  const trailingNumber = line.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*$/)
+  if (trailingNumber) return [trailingNumber[1].trim(), trailingNumber[2].replace(',', '.')]
   return line.split(',')
 }
 
