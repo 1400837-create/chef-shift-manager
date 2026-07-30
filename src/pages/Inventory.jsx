@@ -230,7 +230,7 @@ export default function Inventory({
 
   function importCatalog() {
     const { items: parsed, skipped } = parseRecountCatalogImport(catalogImportText)
-    const existingNames = new Set(recountCatalog.map((i) => i.name.trim().toLowerCase()))
+    const existingNames = new Set(recountCatalog.map((i) => (i.name || '').trim().toLowerCase()))
     const toAdd = []
     parsed.forEach((p) => {
       const key = p.name.toLowerCase()
@@ -288,7 +288,7 @@ export default function Inventory({
   function findProductByName(name) {
     const key = (name || '').trim().toLowerCase()
     if (!key) return null
-    return recountCatalog.find((p) => p.name.trim().toLowerCase() === key) || null
+    return recountCatalog.find((p) => (p.name || '').trim().toLowerCase() === key) || null
   }
 
   function addPurchase() {
@@ -419,7 +419,7 @@ export default function Inventory({
   function findRecipeByName(name) {
     const key = (name || '').trim().toLowerCase()
     if (!key) return null
-    return recipes.find((r) => r.name.trim().toLowerCase() === key) || null
+    return recipes.find((r) => (r.name || '').trim().toLowerCase() === key) || null
   }
 
   // Menu quantities are free text ("40 шт", "по 2 порции") since they're
@@ -547,13 +547,17 @@ export default function Inventory({
   }, [recountCatalog, recounts, purchases, productions, recipes])
 
   function sortByKey(list, sortKey, getName) {
+    // getName reads straight off stored items, which can predate a validation
+    // fix or come from a hand-edited import — a missing/undefined name here
+    // must not throw, or the whole tab (not just sorting) goes blank.
+    const safeName = (item) => getName(item) || ''
     const copy = [...list]
     if (sortKey === 'alpha') {
-      copy.sort((a, b) => getName(a).localeCompare(getName(b), 'ru'))
+      copy.sort((a, b) => safeName(a).localeCompare(safeName(b), 'ru'))
     } else if (sortKey === 'zone') {
-      copy.sort((a, b) => zoneLabel(a.zone).localeCompare(zoneLabel(b.zone), 'ru') || getName(a).localeCompare(getName(b), 'ru'))
+      copy.sort((a, b) => zoneLabel(a.zone).localeCompare(zoneLabel(b.zone), 'ru') || safeName(a).localeCompare(safeName(b), 'ru'))
     } else if (sortKey === 'category') {
-      copy.sort((a, b) => categoryLabel(a.category).localeCompare(categoryLabel(b.category), 'ru') || getName(a).localeCompare(getName(b), 'ru'))
+      copy.sort((a, b) => categoryLabel(a.category).localeCompare(categoryLabel(b.category), 'ru') || safeName(a).localeCompare(safeName(b), 'ru'))
     }
     return copy
   }

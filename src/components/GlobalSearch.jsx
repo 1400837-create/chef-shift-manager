@@ -20,7 +20,7 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
     const q = query.trim().toLowerCase()
     if (!q) return []
     return recountCatalog
-      .filter((p) => p.name.toLowerCase().includes(q))
+      .filter((p) => (p.name || '').toLowerCase().includes(q))
       .slice(0, 15)
       .map((p) => ({ product: p, ...computeBalance(p.id, { recounts, purchases, productions, recipes }, now) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -29,7 +29,7 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
   const matchedRecipes = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return []
-    return recipes.filter((r) => r.name.toLowerCase().includes(q)).slice(0, 15)
+    return recipes.filter((r) => (r.name || '').toLowerCase().includes(q)).slice(0, 15)
   }, [query, recipes])
 
   if (!open) return null

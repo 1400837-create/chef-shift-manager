@@ -173,7 +173,7 @@ export default function MenuPlanner({
   function findProductByName(name) {
     const key = (name || '').trim().toLowerCase()
     if (!key) return null
-    return recountCatalog.find((p) => p.name.trim().toLowerCase() === key) || null
+    return recountCatalog.find((p) => (p.name || '').trim().toLowerCase() === key) || null
   }
 
   function productNameById(id) {
@@ -351,7 +351,7 @@ export default function MenuPlanner({
 
   function finalizeRecipeImport(parsed) {
     const { skipped } = parseRecipesImport(recipeImportText)
-    const existingByName = new Map(recipes.map((r) => [r.name.trim().toLowerCase(), r]))
+    const existingByName = new Map(recipes.map((r) => [(r.name || '').trim().toLowerCase(), r]))
     let imported = 0
     let skippedExisting = 0
     let unresolvedIngredients = 0
@@ -424,7 +424,7 @@ export default function MenuPlanner({
       setRationalImportResult(error)
       return
     }
-    const existingByName = new Map(recipes.map((r) => [r.name.trim().toLowerCase(), r]))
+    const existingByName = new Map(recipes.map((r) => [(r.name || '').trim().toLowerCase(), r]))
     const nextRecipes = [...recipes]
     const workingCatalog = [...recountCatalog]
     const newProducts = []
@@ -433,7 +433,7 @@ export default function MenuPlanner({
 
     function resolveProduct(name, unit) {
       const key = name.trim().toLowerCase()
-      let product = workingCatalog.find((p) => p.name.trim().toLowerCase() === key)
+      let product = workingCatalog.find((p) => (p.name || '').trim().toLowerCase() === key)
       if (!product) {
         product = { id: Date.now() + Math.random(), name: name.trim(), unit: unit || 'шт', zone: 'fridges', category: 'other' }
         workingCatalog.push(product)

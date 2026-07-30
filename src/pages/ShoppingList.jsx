@@ -21,7 +21,7 @@ export default function ShoppingList({
   function findProductByName(name) {
     const key = (name || '').trim().toLowerCase()
     if (!key) return null
-    return recountCatalog.find((p) => p.name.trim().toLowerCase() === key) || null
+    return recountCatalog.find((p) => (p.name || '').trim().toLowerCase() === key) || null
   }
 
   function findPlannedByProduct(productId) {
