@@ -194,6 +194,44 @@ function splitQtyUnit(raw) {
   return { qty: s, unit: '' }
 }
 
+// A pasted date cell may be "28.07.2026" (Sheets' default RU format) or
+// "2026-07-28" — returns a YYYY-MM-DD key, or null if empty/unrecognised
+// (caller falls back to today's date).
+function parseDateCell(cell) {
+  const s = (cell || '').trim()
+  if (!s) return null
+  let m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
+  return null
+}
+
+// Expects columns: Продукт, Кол-во, [Дата] — one row per приход entry.
+// Дата is optional and defaults to today (set by the caller) if missing or unrecognised.
+export function parsePurchaseImport(text) {
+  const rows = parseRows(text)
+  const result = []
+  const skipped = []
+
+  rows.forEach((cells, idx) => {
+    const firstCell = (cells[0] || '').toLowerCase()
+    if (idx === 0 && (firstCell.includes('продукт') || firstCell.includes('назван') || firstCell.includes('name'))) return
+
+    const name = (cells[0] || '').trim()
+    const rawQty = (cells[1] || '').trim()
+    if (!name || !rawQty) {
+      skipped.push(cells.join(' | '))
+      return
+    }
+    const { qty } = splitQtyUnit(rawQty)
+    const date = parseDateCell(cells[2])
+    result.push({ name, qty: qty || rawQty, date })
+  })
+
+  return { items: result, skipped }
+}
+
 // Expects columns: Продукт, Кол-во — one row per item on the shopping list.
 // Кол-во may include a unit ("4 шт.", "600 г") — see splitQtyUnit above.
 export function parsePlannedPurchaseImport(text) {

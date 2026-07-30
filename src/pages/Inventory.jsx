@@ -8,7 +8,7 @@ import {
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES, WASTE_REASONS } from '../utils/constants'
 import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey, toKey } from '../utils/dateUtils'
-import { parseRecountCatalogImport } from '../utils/importParsers'
+import { parseRecountCatalogImport, parsePurchaseImport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
@@ -67,6 +67,14 @@ export default function Inventory({
 
   const [purchaseForm, setPurchaseForm] = useState({ productName: '', qty: '', date: todayKey() })
   const [purchaseError, setPurchaseError] = useState(null)
+  // Switching Склад's own sub-tab (this component never unmounts for that,
+  // unlike switching the app's top-level tab) so this import's in-progress
+  // state doesn't need localStorage persistence the way MenuPlanner's does.
+  const [showPurchaseImport, setShowPurchaseImport] = useState(false)
+  const [purchaseImportText, setPurchaseImportText] = useState('')
+  const [purchaseImportDeclined, setPurchaseImportDeclined] = useState([])
+  const [purchaseImportMissingPrompt, setPurchaseImportMissingPrompt] = useState(null)
+  const [purchaseImportResult, setPurchaseImportResult] = useState(null)
   const [productionForm, setProductionForm] = useState({ recipeId: '', qty: '1', date: todayKey() })
   const [openRecountComment, setOpenRecountComment] = useState(null)
   const [openPurchaseComment, setOpenPurchaseComment] = useState(null)
@@ -299,6 +307,73 @@ export default function Inventory({
 
   function setPurchaseComment(id, value) {
     setPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, comment: value } : p)))
+  }
+
+  // Same missing-product confirmation as recipe import (see MenuPlanner) —
+  // stop at the first product not in the nomenclature and not already
+  // declined this run, ask once, then either create it (jumping to the
+  // Каталог sub-tab, which stays mounted here so nothing needs to persist)
+  // or mark it declined and keep going on the next click of "Импортировать".
+  function runPurchaseImport() {
+    const { items: parsed } = parsePurchaseImport(purchaseImportText)
+    const declinedSet = new Set(purchaseImportDeclined.map((n) => n.toLowerCase()))
+
+    for (const item of parsed) {
+      const key = item.name.trim().toLowerCase()
+      if (!key || declinedSet.has(key)) continue
+      if (!findProductByName(item.name)) {
+        setPurchaseImportMissingPrompt(item.name.trim())
+        return
+      }
+    }
+
+    finalizePurchaseImport(parsed)
+  }
+
+  function finalizePurchaseImport(parsed) {
+    const { skipped } = parsePurchaseImport(purchaseImportText)
+    const declinedSet = new Set(purchaseImportDeclined.map((n) => n.toLowerCase()))
+    const newEntries = []
+    let declinedCount = 0
+
+    parsed.forEach((item) => {
+      const key = item.name.trim().toLowerCase()
+      if (declinedSet.has(key)) { declinedCount += 1; return }
+      const product = findProductByName(item.name)
+      if (!product) { declinedCount += 1; return }
+      newEntries.push({
+        id: Date.now() + Math.random(),
+        productId: product.id,
+        qty: item.qty,
+        date: item.date || todayKey(),
+      })
+    })
+
+    if (newEntries.length) setPurchases((prev) => [...newEntries, ...prev])
+    const parts = [`Добавлено записей прихода: ${newEntries.length}`]
+    if (declinedCount) parts.push(`пропущено (отказано в добавлении): ${declinedCount}`)
+    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
+    setPurchaseImportResult(parts.join(', '))
+    setPurchaseImportText('')
+    setPurchaseImportDeclined([])
+    setPurchaseImportMissingPrompt(null)
+  }
+
+  function confirmAddPurchaseImportProduct() {
+    const name = purchaseImportMissingPrompt
+    if (!name) return
+    const newId = Date.now()
+    setRecountCatalog((prev) => [...prev, { id: newId, name, unit: 'шт', zone: 'fridges', category: 'other' }])
+    setPurchaseImportMissingPrompt(null)
+    setTab('catalog')
+    setHighlightCatalogId(newId)
+  }
+
+  function declinePurchaseImportProduct() {
+    const name = purchaseImportMissingPrompt
+    if (!name) return
+    setPurchaseImportDeclined((prev) => [...prev, name])
+    setPurchaseImportMissingPrompt(null)
   }
 
   function printPurchaseLog() {
@@ -1212,6 +1287,50 @@ export default function Inventory({
                 </div>
               )
             })}
+          </Section>
+
+          <Section
+            title="Импорт прихода из Google Таблиц"
+            icon={Upload}
+            right={
+              <button onClick={() => setShowPurchaseImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+                {showPurchaseImport ? 'Скрыть' : 'Показать'}
+              </button>
+            }
+          >
+            {showPurchaseImport && (
+              <>
+                <p className="text-xs text-slate-500 mb-2">
+                  Столбцы: <b>Продукт, Кол-во, [Дата]</b> — по одной строке на позицию прихода.
+                  Дата необязательна (без неё — сегодняшняя). Выделите в Google Таблице → Ctrl+C → вставьте сюда.
+                </p>
+                <textarea
+                  className={inputClass + ' h-28 py-2'}
+                  placeholder={'Куриное филе\t10\t28.07.2026\nКартофель\t25'}
+                  value={purchaseImportText}
+                  onChange={(e) => setPurchaseImportText(e.target.value)}
+                />
+                {purchaseImportMissingPrompt && (
+                  <div className="text-sm bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-3 mt-2 mb-2">
+                    <p className="text-orange-800 dark:text-orange-200 mb-2">
+                      Продукт «{purchaseImportMissingPrompt}» не найден в номенклатуре. Добавить его в каталог?
+                    </p>
+                    <div className="flex gap-2">
+                      <BigButton onClick={confirmAddPurchaseImportProduct} full={false}>Да, добавить</BigButton>
+                      <BigButton onClick={declinePurchaseImportProduct} color="outline" full={false}>Нет</BigButton>
+                    </div>
+                  </div>
+                )}
+                <BigButton onClick={runPurchaseImport} icon={Upload} disabled={!purchaseImportText.trim()}>
+                  Импортировать приход
+                </BigButton>
+                {purchaseImportResult && (
+                  <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+                    {purchaseImportResult}
+                  </p>
+                )}
+              </>
+            )}
           </Section>
 
           <Section title="Расход (готовка по рецепту)" icon={Flame}>
