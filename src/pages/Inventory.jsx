@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash, Trash2,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale, Check,
@@ -66,6 +66,20 @@ export default function Inventory({
   const [catalogSearch, setCatalogSearch] = useState('')
   const [recountSearch, setRecountSearch] = useState('')
   const [balanceSearch, setBalanceSearch] = useState('')
+  // Search inputs scroll themselves into view shortly after focus so the
+  // on-screen keyboard doesn't cover them. If the user starts typing before
+  // that timer fires, the mid-typing smooth-scroll can desync a mobile
+  // keyboard's composing text from React's state (box keeps showing what was
+  // typed, but the app never sees it) — so cancel it the moment typing starts.
+  const searchScrollTimeout = useRef(null)
+  function handleSearchFocus(e) {
+    const target = e.target
+    clearTimeout(searchScrollTimeout.current)
+    searchScrollTimeout.current = setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
+  }
+  function cancelSearchScroll() {
+    clearTimeout(searchScrollTimeout.current)
+  }
 
   const [purchaseForm, setPurchaseForm] = useState({ productName: '', qty: '', date: todayKey() })
   const [purchaseError, setPurchaseError] = useState(null)
@@ -904,8 +918,8 @@ export default function Inventory({
               className={inputClass + ' pl-9 scroll-mt-24'}
               placeholder="Поиск по названию…"
               value={recountSearch}
-              onChange={(e) => setRecountSearch(e.target.value)}
-              onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)}
+              onChange={(e) => { cancelSearchScroll(); setRecountSearch(e.target.value) }}
+              onFocus={handleSearchFocus}
             />
           </div>
 
@@ -1131,8 +1145,8 @@ export default function Inventory({
                 className={inputClass + ' pl-9 scroll-mt-24'}
                 placeholder="Поиск по названию…"
                 value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
-                onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)}
+                onChange={(e) => { cancelSearchScroll(); setCatalogSearch(e.target.value) }}
+                onFocus={handleSearchFocus}
               />
             </div>
             <div className="flex gap-1.5 mb-3">
@@ -1512,8 +1526,8 @@ export default function Inventory({
                 className={inputClass + ' pl-9 scroll-mt-24'}
                 placeholder="Поиск по названию…"
                 value={balanceSearch}
-                onChange={(e) => setBalanceSearch(e.target.value)}
-                onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)}
+                onChange={(e) => { cancelSearchScroll(); setBalanceSearch(e.target.value) }}
+                onFocus={handleSearchFocus}
               />
             </div>
             <div className="flex gap-1.5 mb-3">
