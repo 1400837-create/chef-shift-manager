@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
-  ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
+  Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash, Trash2,
+  ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale, Check,
   ShoppingCart, Flame, Tags, Download, Calendar, Search,
   ArrowRightLeft, ClipboardPlus, MessageSquare,
 } from 'lucide-react'
@@ -60,6 +60,8 @@ export default function Inventory({
   const [catalogImportResult, setCatalogImportResult] = useState(null)
   const [newCatalogItem, setNewCatalogItem] = useState({ name: '', unit: 'шт', zone: 'fridges', category: 'other' })
   const [catalogSort, setCatalogSort] = useState('alpha')
+  const [catalogSelectMode, setCatalogSelectMode] = useState(false)
+  const [selectedCatalogIds, setSelectedCatalogIds] = useState(() => new Set())
   const [balanceSort, setBalanceSort] = useState('alpha')
   const [catalogSearch, setCatalogSearch] = useState('')
   const [recountSearch, setRecountSearch] = useState('')
@@ -202,6 +204,35 @@ export default function Inventory({
 
   function removeCatalogItem(id) {
     setRecountCatalog((prev) => prev.filter((i) => i.id !== id))
+  }
+
+  function toggleCatalogSelect(id) {
+    setSelectedCatalogIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAllCatalog(visibleItems) {
+    setSelectedCatalogIds(new Set(visibleItems.map((i) => i.id)))
+  }
+
+  function exitCatalogSelectMode() {
+    setCatalogSelectMode(false)
+    setSelectedCatalogIds(new Set())
+  }
+
+  // recountCatalog is part of the shared inventoryHistory undo/redo group, so
+  // a bulk delete isn't a dead end — the confirm here is a lighter one-shot
+  // (not the per-row two-tap ConfirmDeleteButton) since "Отменить" up top
+  // already covers accidentally deleting the wrong batch.
+  function deleteSelectedCatalog() {
+    if (selectedCatalogIds.size === 0) return
+    if (!window.confirm(`Удалить выбранные позиции из каталога (${selectedCatalogIds.size})?`)) return
+    setRecountCatalog((prev) => prev.filter((i) => !selectedCatalogIds.has(i.id)))
+    exitCatalogSelectMode()
   }
 
   function updateCatalogItem(id, patch) {
@@ -1075,12 +1106,23 @@ export default function Inventory({
             title={`Каталог (${recountCatalog.length})`}
             icon={PackageSearch}
             right={
-              <button
-                onClick={exportCatalog}
-                className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
-              >
-                <Download size={15} /> Экспорт
-              </button>
+              catalogSelectMode ? (
+                <button onClick={exitCatalogSelectMode} className="text-xs font-semibold text-slate-500">
+                  Отмена
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setCatalogSelectMode(true)} className="text-xs font-semibold text-orange-600">
+                    Выбрать
+                  </button>
+                  <button
+                    onClick={exportCatalog}
+                    className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+                  >
+                    <Download size={15} /> Экспорт
+                  </button>
+                </div>
+              )
             }
           >
             <div className="relative mb-3">
@@ -1112,18 +1154,49 @@ export default function Inventory({
             {recountCatalog.length > 0 && catalogSearch.trim() && !recountCatalog.some((i) => matchesSearch(i.name, catalogSearch)) && (
               <p className="text-sm text-slate-400 text-center py-3">Ничего не найдено</p>
             )}
-            <div className="flex flex-col gap-2">
-              {sortedCatalog.filter((item) => matchesSearch(item.name, catalogSearch)).map((item) => (
+            {(() => {
+              const visibleCatalog = sortedCatalog.filter((item) => matchesSearch(item.name, catalogSearch))
+              return (
+                <>
+                  {catalogSelectMode && visibleCatalog.length > 0 && (
+                    <div className="flex items-center justify-between gap-2 mb-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
+                      <button onClick={() => selectAllCatalog(visibleCatalog)} className="text-xs font-semibold text-orange-600">
+                        Выбрать все ({visibleCatalog.length})
+                      </button>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Выбрано: {selectedCatalogIds.size}</span>
+                      <button
+                        onClick={deleteSelectedCatalog}
+                        disabled={selectedCatalogIds.size === 0}
+                        className="flex items-center gap-1 min-h-[32px] px-3 rounded-lg text-xs font-semibold text-white bg-red-600 active:bg-red-700 disabled:bg-slate-300 disabled:dark:bg-slate-700"
+                      >
+                        <Trash2 size={14} /> Удалить ({selectedCatalogIds.size})
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    {visibleCatalog.map((item) => (
                 <div
                   key={item.id}
                   id={`catalog-item-${item.id}`}
                   className={`rounded-xl border px-2 py-2 ${
                     item.id === highlightCatalogId
                       ? 'border-orange-400 ring-2 ring-orange-300 dark:ring-orange-700'
+                      : selectedCatalogIds.has(item.id)
+                      ? 'border-orange-400 bg-orange-50 dark:bg-orange-900/20'
                       : 'border-slate-200 dark:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center gap-1.5 mb-1.5">
+                    {catalogSelectMode && (
+                      <button
+                        onClick={() => toggleCatalogSelect(item.id)}
+                        className={`shrink-0 w-7 h-7 rounded-md border-2 flex items-center justify-center ${
+                          selectedCatalogIds.has(item.id) ? 'bg-orange-500 border-orange-500' : 'border-slate-300 dark:border-slate-600'
+                        }`}
+                      >
+                        {selectedCatalogIds.has(item.id) && <Check size={14} className="text-white" />}
+                      </button>
+                    )}
                     <div className="flex-1 min-w-0">
                       <input
                         className={inputClass + ' text-sm'}
@@ -1191,8 +1264,11 @@ export default function Inventory({
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+                    ))}
+                  </div>
+                </>
+              )
+            })()}
           </Section>
         </>
       )}
