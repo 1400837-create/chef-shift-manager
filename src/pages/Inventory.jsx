@@ -3,7 +3,7 @@ import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale,
   ShoppingCart, Flame, Tags, Download, Calendar, Search,
-  ArrowUpDown, ArrowRightLeft, ClipboardPlus, MessageSquare,
+  ArrowRightLeft, ClipboardPlus, MessageSquare,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES, WASTE_REASONS } from '../utils/constants'
@@ -208,16 +208,24 @@ export default function Inventory({
     setRecountCatalog((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
   }
 
-  function loadStandardNomenclature() {
-    const existingNames = new Set(recountCatalog.map((i) => i.name.trim().toLowerCase()))
-    const toAdd = DEFAULT_NOMENCLATURE.filter((n) => !existingNames.has(n.name.toLowerCase()))
-      .map((n) => ({ id: Date.now() + Math.random(), ...n }))
-    setRecountCatalog((prev) => [...prev, ...toAdd])
-    setCatalogImportResult(
-      toAdd.length
-        ? `Добавлено из базовой номенклатуры: ${toAdd.length}`
-        : 'Все позиции базовой номенклатуры уже есть в каталоге'
+  // Export mirrors exactly what the import above expects (Название, Ед.
+  // изм., Зона, Рубрика, tab-separated) so the round trip works: export,
+  // paste into a sheet, edit, copy, paste back into "Импорт из Google Таблиц".
+  function exportCatalog() {
+    const rows = sortedCatalog.map((item) =>
+      [item.name, item.unit, zoneLabel(item.zone), categoryLabel(item.category || 'other')].join('\t')
     )
+    const text = rows.join('\n')
+    const finish = () => {
+      alert(`Скопировано в буфер обмена: ${rows.length} товаров.\nВставьте в Google Таблицу, отредактируйте и при необходимости вставьте обратно через «Импорт из Google Таблиц».`)
+    }
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(finish).catch(() => {
+        downloadCsv('Номенклатура.csv', rows.map((r) => r.split('\t')))
+      })
+    } else {
+      downloadCsv('Номенклатура.csv', rows.map((r) => r.split('\t')))
+    }
   }
 
   function importCatalog() {
@@ -961,22 +969,6 @@ export default function Inventory({
 
       {tab === 'catalog' && (
         <>
-          <Section title="Номенклатура продуктов" icon={Tags}>
-            <p className="text-xs text-slate-500 mb-3">
-              Единый список продуктов, из которого подставляются варианты названий во всех
-              полях (Склад, Переучёт, Остатки, закупки, рецепты). Редактируется вручную —
-              название, единица измерения, зона хранения, рубрика, минимальный остаток для
-              подсветки и цена за единицу (для расчёта себестоимости рецептов).
-            </p>
-            <BigButton onClick={loadStandardNomenclature} icon={Download} color="outline">
-              Загрузить базовую номенклатуру
-            </BigButton>
-            <p className="text-xs text-slate-400 mt-2">
-              Добавит мясо/курицу/индейку (и их части), овощи, фрукты, бакалею и специи —
-              пропустит то, что уже есть в каталоге по названию.
-            </p>
-          </Section>
-
           <Section
             title="Импорт из Google Таблиц"
             icon={Upload}
@@ -1079,9 +1071,12 @@ export default function Inventory({
             title={`Каталог (${recountCatalog.length})`}
             icon={PackageSearch}
             right={
-              <div className="flex items-center gap-1 text-slate-400">
-                <ArrowUpDown size={14} />
-              </div>
+              <button
+                onClick={exportCatalog}
+                className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+              >
+                <Download size={15} /> Экспорт
+              </button>
             }
           >
             <div className="relative mb-3">
