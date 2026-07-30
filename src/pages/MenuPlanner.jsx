@@ -42,9 +42,15 @@ export default function MenuPlanner({
   const [openDay, setOpenDay] = useState(null)
 
   // Рецепты tab state
-  const [showRecipeImport, setShowRecipeImport] = useState(false)
-  const [recipeImportText, setRecipeImportText] = useState('')
-  const [recipeImportOverwrite, setRecipeImportOverwrite] = useState(false)
+  const [showRecipeImport, setShowRecipeImport] = useLocalStorage('showRecipeImportDraft', false)
+  // Persisted (not plain useState): confirming a missing ingredient sends the
+  // user to Склад → Каталог and back, same as the manual recipe form — the
+  // pasted text, overwrite choice and already-declined ingredients need to
+  // survive that round trip so the import can resume where it left off.
+  const [recipeImportText, setRecipeImportText] = useLocalStorage('recipeImportTextDraft', '')
+  const [recipeImportOverwrite, setRecipeImportOverwrite] = useLocalStorage('recipeImportOverwriteDraft', false)
+  const [recipeImportDeclined, setRecipeImportDeclined] = useLocalStorage('recipeImportDeclinedDraft', [])
+  const [recipeImportMissingPrompt, setRecipeImportMissingPrompt] = useState(null)
   const [recipeImportResult, setRecipeImportResult] = useState(null)
   const [showRationalImport, setShowRationalImport] = useState(false)
   const [rationalImportText, setRationalImportText] = useState('')
@@ -320,8 +326,31 @@ export default function MenuPlanner({
     if (editingRecipeId === id) setEditingRecipeId(null)
   }
 
-  function importRecipes() {
-    const { recipes: parsed, skipped } = parseRecipesImport(recipeImportText)
+  // Same missing-ingredient confirmation as the manual recipe form (see
+  // saveRecipe/confirmAddMissingProduct below), but scanning across every
+  // recipe in the pasted sheet: stop at the first ingredient not yet in the
+  // nomenclature and not already declined this run, ask once, then either
+  // create it (and hand off to Каталог) or mark it declined and keep scanning.
+  function runRecipeImport() {
+    const { recipes: parsed } = parseRecipesImport(recipeImportText)
+    const declinedSet = new Set(recipeImportDeclined.map((n) => n.toLowerCase()))
+
+    for (const parsedRecipe of parsed) {
+      for (const { ingredientName } of parsedRecipe.ingredients) {
+        const key = ingredientName.trim().toLowerCase()
+        if (!key || declinedSet.has(key)) continue
+        if (!findProductByName(ingredientName)) {
+          setRecipeImportMissingPrompt(ingredientName.trim())
+          return
+        }
+      }
+    }
+
+    finalizeRecipeImport(parsed)
+  }
+
+  function finalizeRecipeImport(parsed) {
+    const { skipped } = parseRecipesImport(recipeImportText)
     const existingByName = new Map(recipes.map((r) => [r.name.trim().toLowerCase(), r]))
     let imported = 0
     let skippedExisting = 0
@@ -359,10 +388,28 @@ export default function MenuPlanner({
     setRecipes(nextRecipes)
     const parts = [`Импортировано рецептов: ${imported}`]
     if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
-    if (unresolvedIngredients) parts.push(`не найдено в каталоге ингредиентов: ${unresolvedIngredients}`)
+    if (unresolvedIngredients) parts.push(`пропущено ингредиентов (отказано в добавлении): ${unresolvedIngredients}`)
     if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
     setRecipeImportResult(parts.join(', '))
     setRecipeImportText('')
+    setRecipeImportDeclined([])
+    setRecipeImportMissingPrompt(null)
+  }
+
+  function confirmAddImportIngredient() {
+    const name = recipeImportMissingPrompt
+    if (!name) return
+    const newId = Date.now()
+    setRecountCatalog((prev) => [...prev, { id: newId, name, unit: 'шт', zone: 'fridges', category: 'other' }])
+    setRecipeImportMissingPrompt(null)
+    onNavigateToCatalog?.(newId)
+  }
+
+  function declineImportIngredient() {
+    const name = recipeImportMissingPrompt
+    if (!name) return
+    setRecipeImportDeclined((prev) => [...prev, name])
+    setRecipeImportMissingPrompt(null)
   }
 
   // Rational Chef OS's export already flattens its oven-mode/kashrut fields
@@ -990,7 +1037,18 @@ export default function MenuPlanner({
                   />
                   Перезаписывать уже существующие рецепты (по названию)
                 </label>
-                <BigButton onClick={importRecipes} icon={Upload} disabled={!recipeImportText.trim()}>
+                {recipeImportMissingPrompt && (
+                  <div className="text-sm bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-3 mb-2">
+                    <p className="text-orange-800 dark:text-orange-200 mb-2">
+                      Продукт «{recipeImportMissingPrompt}» не найден в номенклатуре. Добавить его в каталог?
+                    </p>
+                    <div className="flex gap-2">
+                      <BigButton onClick={confirmAddImportIngredient} full={false}>Да, добавить</BigButton>
+                      <BigButton onClick={declineImportIngredient} color="outline" full={false}>Нет</BigButton>
+                    </div>
+                  </div>
+                )}
+                <BigButton onClick={runRecipeImport} icon={Upload} disabled={!recipeImportText.trim()}>
                   Импортировать рецепты
                 </BigButton>
                 {recipeImportResult && (
