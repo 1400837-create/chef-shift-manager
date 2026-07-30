@@ -207,6 +207,8 @@ export default function App() {
           <p className="font-bold leading-tight truncate text-[15px]">Kitchen OS</p>
           <p className="text-[10px] text-slate-400 leading-tight truncate">
             {now.toLocaleDateString('ru-RU', { weekday: 'long', day: '2-digit', month: 'long' })}
+            {' · сборка '}
+            {new Date(__BUILD_TIME__).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
         <button

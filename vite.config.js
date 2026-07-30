@@ -7,4 +7,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/chef-shift-manager/',
+  define: {
+    // Shown in the header (small, greyed out) so a report of "still broken"
+    // can be checked against whether the device actually has this build —
+    // installed PWAs can sit on a stale cached bundle for a while.
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
 })

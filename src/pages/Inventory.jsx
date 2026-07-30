@@ -922,6 +922,11 @@ export default function Inventory({
               onFocus={handleSearchFocus}
             />
           </div>
+          {recountSearch.trim() && (
+            <p className="text-[11px] text-slate-400 -mt-3 mb-3 px-1">
+              Найдено: {recountCatalog.filter((i) => matchesSearch(i.name, recountSearch)).length}
+            </p>
+          )}
 
           {INVENTORY_AUDIT_ZONES.map((zone) => {
             const zoneItems = recountCatalog.filter((i) => i.zone === zone.key && matchesSearch(i.name, recountSearch))
@@ -1149,6 +1154,11 @@ export default function Inventory({
                 onFocus={handleSearchFocus}
               />
             </div>
+            {catalogSearch.trim() && (
+              <p className="text-[11px] text-slate-400 -mt-2 mb-3 px-1">
+                Найдено: {recountCatalog.filter((i) => matchesSearch(i.name, catalogSearch)).length}
+              </p>
+            )}
             <div className="flex gap-1.5 mb-3">
               {SORT_OPTIONS.map((opt) => (
                 <button
@@ -1530,6 +1540,11 @@ export default function Inventory({
                 onFocus={handleSearchFocus}
               />
             </div>
+            {balanceSearch.trim() && (
+              <p className="text-[11px] text-slate-400 -mt-2 mb-3 px-1">
+                Найдено: {balances.filter((row) => matchesSearch(row.product.name, balanceSearch)).length}
+              </p>
+            )}
             <div className="flex gap-1.5 mb-3">
               {[...SORT_OPTIONS, { key: 'qty', label: 'Кол-во' }].map((opt) => (
                 <button
