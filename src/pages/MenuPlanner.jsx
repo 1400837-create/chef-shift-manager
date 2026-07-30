@@ -16,6 +16,7 @@ import { computeRecipeCost } from '../utils/recipeCost'
 import { compressToDataUrl } from '../utils/imageCompress'
 import { sanitizeDecimal } from '../utils/number'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { uid } from '../utils/id'
 
 function slugify(label) {
   return (label || '')
@@ -380,7 +381,7 @@ export default function MenuPlanner({
         const idx = nextRecipes.findIndex((r) => r.id === existing.id)
         nextRecipes[idx] = { ...existing, ingredients }
       } else {
-        nextRecipes.push({ id: Date.now() + Math.random(), name: parsedRecipe.name, ingredients })
+        nextRecipes.push({ id: uid(), name: parsedRecipe.name, ingredients })
       }
       imported += 1
     })
@@ -435,7 +436,7 @@ export default function MenuPlanner({
       const key = name.trim().toLowerCase()
       let product = workingCatalog.find((p) => (p.name || '').trim().toLowerCase() === key)
       if (!product) {
-        product = { id: Date.now() + Math.random(), name: name.trim(), unit: unit || 'шт', zone: 'fridges', category: 'other' }
+        product = { id: uid(), name: name.trim(), unit: unit || 'шт', zone: 'fridges', category: 'other' }
         workingCatalog.push(product)
         newProducts.push(product)
       }
@@ -458,7 +459,7 @@ export default function MenuPlanner({
         const idx = nextRecipes.findIndex((r) => r.id === existing.id)
         nextRecipes[idx] = { ...existing, ...payload }
       } else {
-        nextRecipes.push({ id: Date.now() + Math.random(), ...payload })
+        nextRecipes.push({ id: uid(), ...payload })
       }
       imported += 1
     })

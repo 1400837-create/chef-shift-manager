@@ -6,6 +6,7 @@ import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
 import { parsePlannedPurchaseImport } from '../utils/importParsers'
+import { uid } from '../utils/id'
 
 export default function ShoppingList({
   recountCatalog, setRecountCatalog, recounts, purchases, productions, recipes,
@@ -77,7 +78,7 @@ export default function ShoppingList({
         findProductByName(row.name) ||
         toAddCatalog.find((p) => p.name.trim().toLowerCase() === row.name.trim().toLowerCase())
       if (existing) return existing
-      const created = { id: Date.now() + Math.random(), name: row.name, unit: row.unit || 'шт', zone: 'dry', category: 'other' }
+      const created = { id: uid(), name: row.name, unit: row.unit || 'шт', zone: 'dry', category: 'other' }
       toAddCatalog.push(created)
       createdProducts += 1
       return created
@@ -89,7 +90,7 @@ export default function ShoppingList({
         alreadyPlanned += 1
         return
       }
-      toAddPlanned.push({ id: Date.now() + Math.random(), productId: product.id, qty: row.qty })
+      toAddPlanned.push({ id: uid(), productId: product.id, qty: row.qty })
       added += 1
     })
 

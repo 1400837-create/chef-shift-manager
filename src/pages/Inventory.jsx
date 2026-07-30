@@ -13,6 +13,7 @@ import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
 import { downloadCsv } from '../utils/csv'
+import { uid } from '../utils/id'
 import { coursesForDay } from '../utils/menuCourses'
 
 function matchesSearch(name, search) {
@@ -302,6 +303,32 @@ export default function Inventory({
       })
     }
     alert(lines.join('\n'))
+
+    if (dupIds.length) {
+      const proceed = window.confirm(
+        `Исправить повторяющиеся ID сейчас? Каждому товару, кроме первого с таким ID, будет присвоен новый уникальный ID.\n\n` +
+        `Важно: история переучётов/прихода/расхода для товаров, у которых ID изменится, была привязана к общему (ошибочному) ID и не сможет однозначно разделиться между задвоенными товарами — она останется у первого из них, а у переименованного товара учёт по факту начнётся заново. Названия и текущие настройки (зона, рубрика, мин. остаток, цена) не пострадают.`
+      )
+      if (proceed) fixDuplicateCatalogIds(dupIds)
+    }
+  }
+
+  function fixDuplicateCatalogIds(dupIds) {
+    const idsToRenumber = new Set(dupIds.map(([id]) => id))
+    const seenOnce = new Set()
+    let fixed = 0
+    setRecountCatalog((prev) =>
+      prev.map((item) => {
+        if (!idsToRenumber.has(item.id)) return item
+        if (!seenOnce.has(item.id)) {
+          seenOnce.add(item.id)
+          return item
+        }
+        fixed += 1
+        return { ...item, id: uid() }
+      })
+    )
+    alert(`Готово. Новые ID присвоены: ${dupIds.reduce((s, [, c]) => s + c, 0) - dupIds.length} товар(ам).`)
   }
 
   function importCatalog() {
@@ -312,7 +339,7 @@ export default function Inventory({
       const key = p.name.toLowerCase()
       if (existingNames.has(key)) return
       existingNames.add(key)
-      toAdd.push({ id: Date.now() + Math.random(), ...p })
+      toAdd.push({ id: uid(), ...p })
     })
     setRecountCatalog((prev) => [...prev, ...toAdd])
     const parts = [`Добавлено товаров: ${toAdd.length}`]
@@ -426,7 +453,7 @@ export default function Inventory({
       const product = findProductByName(item.name)
       if (!product) { declinedCount += 1; return }
       newEntries.push({
-        id: Date.now() + Math.random(),
+        id: uid(),
         productId: product.id,
         qty: item.qty,
         date: item.date || todayKey(),
@@ -526,7 +553,7 @@ export default function Inventory({
           const recipe = findRecipeByName(c.dish)
           if (recipe) {
             newEntries.push({
-              id: Date.now() + Math.random(),
+              id: uid(),
               recipeId: recipe.id,
               qty: extractQtyNumber(c.qty),
               date: toKey(cursor),
