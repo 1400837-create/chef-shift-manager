@@ -60,13 +60,20 @@ export function computeBalance(productId, { recounts, purchases, productions, re
   })
 
   ;(productions || []).forEach((prod) => {
-    const recipe = (recipes || []).find((r) => String(r.id) === String(prod.recipeId))
-    if (!recipe) return
-    const ingredient = recipe.ingredients.find((i) => String(i.productId) === targetId)
-    if (!ingredient) return
     const instant = effectiveInstant(prod.date, prod.enteredAt)
-    if (instant >= baselineInstant && instant <= asOfMs) {
+    if (instant < baselineInstant || instant > asOfMs) return
+    if (prod.recipeId) {
+      // Recipe-based расход: one "production" is N runs of a recipe, so
+      // subtract each ingredient's qty × how many times it was made.
+      const recipe = (recipes || []).find((r) => String(r.id) === String(prod.recipeId))
+      if (!recipe) return
+      const ingredient = recipe.ingredients.find((i) => String(i.productId) === targetId)
+      if (!ingredient) return
       total -= (Number(ingredient.qty) || 0) * (Number(prod.qty) || 1)
+    } else if (prod.productId != null) {
+      // Direct расход — a product used up outside of any recipe.
+      if (String(prod.productId) !== targetId) return
+      total -= Number(prod.qty) || 0
     }
   })
 

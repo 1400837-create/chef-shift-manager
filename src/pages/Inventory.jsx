@@ -94,6 +94,8 @@ export default function Inventory({
   const [purchaseImportMissingPrompt, setPurchaseImportMissingPrompt] = useState(null)
   const [purchaseImportResult, setPurchaseImportResult] = useState(null)
   const [productionForm, setProductionForm] = useState({ recipeId: '', qty: '1', date: todayKey() })
+  const [usageForm, setUsageForm] = useState({ productName: '', qty: '', date: todayKey() })
+  const [usageError, setUsageError] = useState(null)
   const [openRecountComment, setOpenRecountComment] = useState(null)
   const [openPurchaseComment, setOpenPurchaseComment] = useState(null)
   const [wasteWritingId, setWasteWritingId] = useState(null)
@@ -594,6 +596,27 @@ export default function Inventory({
     setProductionForm({ recipeId: '', qty: '1', date: todayKey() })
   }
 
+  // Расход товара напрямую, без рецепта — same `productions` array/history
+  // as recipe-based расход (an entry just has productId instead of
+  // recipeId), so it shares the same undo/redo stack and balance math.
+  function addProductUsage() {
+    const product = findProductByName(usageForm.productName)
+    if (!product) {
+      setUsageError('Товар не найден в каталоге — выберите вариант из подсказок.')
+      return
+    }
+    if (!usageForm.qty) {
+      setUsageError('Укажите количество.')
+      return
+    }
+    setUsageError(null)
+    setProductions((prev) => [
+      { id: Date.now(), productId: product.id, qty: usageForm.qty, date: usageForm.date, enteredAt: Date.now() },
+      ...prev,
+    ])
+    setUsageForm({ productName: '', qty: '', date: todayKey() })
+  }
+
   function removeProduction(id) {
     setProductions((prev) => prev.filter((p) => p.id !== id))
   }
@@ -701,10 +724,20 @@ export default function Inventory({
     rows.push(['Расход по рецептам за месяц'])
     rows.push(['Дата', 'Рецепт', 'Раз'])
     productions
-      .filter((p) => monthKey(parseLocalDate(p.date)) === currentMonth)
+      .filter((p) => p.recipeId && monthKey(parseLocalDate(p.date)) === currentMonth)
       .forEach((p) => {
         const recipe = recipes.find((r) => String(r.id) === String(p.recipeId))
         rows.push([p.date, recipe?.name || '?', p.qty])
+      })
+
+    rows.push([])
+    rows.push(['Расход товара без рецепта за месяц'])
+    rows.push(['Дата', 'Товар', 'Кол-во'])
+    productions
+      .filter((p) => !p.recipeId && p.productId != null && monthKey(parseLocalDate(p.date)) === currentMonth)
+      .forEach((p) => {
+        const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
+        rows.push([p.date, product?.name || '?', p.qty])
       })
 
     rows.push([])
@@ -1740,7 +1773,7 @@ export default function Inventory({
               <p className="text-xs text-slate-400 mt-2">Сначала добавьте хотя бы один рецепт выше</p>
             )}
 
-            {productions.slice(0, 8).map((p) => {
+            {productions.filter((p) => p.recipeId).slice(0, 8).map((p) => {
               const recipe = recipes.find((r) => r.id === Number(p.recipeId) || r.id === p.recipeId)
               return (
                 <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
@@ -1780,6 +1813,69 @@ export default function Inventory({
                 </p>
               )}
             </div>
+          </Section>
+
+          <Section title="Расход товара (без рецепта)" icon={Flame}>
+            <p className="text-xs text-slate-500 mb-2">
+              Для случаев, когда товар потратили не по рецепту (например, отдали, использовали на что-то разовое) —
+              списывается из остатка так же, как расход по рецепту.
+            </p>
+            <div className="flex gap-2">
+              <div className="flex-1 min-w-0">
+                <input
+                  className={inputClass}
+                  placeholder="Продукт…"
+                  list="product-nomenclature"
+                  value={usageForm.productName}
+                  onChange={(e) => setUsageForm((f) => ({ ...f, productName: e.target.value }))}
+                />
+              </div>
+              <div className="w-20 shrink-0">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className={inputClass}
+                  placeholder="Кол-во"
+                  value={usageForm.qty}
+                  onChange={(e) => setUsageForm((f) => ({ ...f, qty: sanitizeDecimal(e.target.value) }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <div className="flex-1 min-w-0">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={usageForm.date}
+                  onChange={(e) => setUsageForm((f) => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+              <button
+                onClick={addProductUsage}
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 active:bg-orange-600 text-white"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+            {usageError && (
+              <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mt-2">
+                {usageError}
+              </p>
+            )}
+            {productions.filter((p) => !p.recipeId && p.productId != null).slice(0, 8).map((p) => {
+              const product = recountCatalog.find((pr) => pr.id === Number(p.productId) || pr.id === p.productId)
+              return (
+                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                  <span className="text-sm text-slate-700 dark:text-slate-200">
+                    {product?.name || '?'} <span className="text-slate-400">−{p.qty} {product?.unit}</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
+                    <ConfirmDeleteButton onConfirm={() => removeProduction(p.id)} size="w-8 h-8" iconSize={14} />
+                  </div>
+                </div>
+              )
+            })}
           </Section>
         </>
       )}
