@@ -103,6 +103,11 @@ export default function Inventory({
   const [menuRangeFrom, setMenuRangeFrom] = useState(todayKey())
   const [menuRangeTo, setMenuRangeTo] = useState(todayKey())
   const [menuImportResult, setMenuImportResult] = useState(null)
+  // Приход/Расход logs default to the last 8 entries so the page doesn't
+  // load with a huge scroll — these let the user expand to the full list.
+  const [showAllPurchases, setShowAllPurchases] = useState(false)
+  const [showAllProductions, setShowAllProductions] = useState(false)
+  const [showAllUsage, setShowAllUsage] = useState(false)
 
   // initialTab/initialHighlightId are a one-shot navigation request from
   // MenuPlanner (added a nomenclature item mid-recipe, wants to land here to
@@ -1642,7 +1647,7 @@ export default function Inventory({
               </p>
             )}
 
-            {purchases.slice(0, 8).map((p) => {
+            {purchases.slice(0, showAllPurchases ? undefined : 8).map((p) => {
               const product = recountCatalog.find((pr) => pr.id === Number(p.productId) || pr.id === p.productId)
               const hasComment = !!p.comment
               const commentOpen = openPurchaseComment === p.id
@@ -1681,6 +1686,14 @@ export default function Inventory({
                 </div>
               )
             })}
+            {purchases.length > 8 && (
+              <button
+                onClick={() => setShowAllPurchases((v) => !v)}
+                className="w-full text-center text-xs font-semibold text-orange-600 py-2"
+              >
+                {showAllPurchases ? 'Свернуть' : `Показать все (${purchases.length})`}
+              </button>
+            )}
           </Section>
 
           <Section
@@ -1773,20 +1786,35 @@ export default function Inventory({
               <p className="text-xs text-slate-400 mt-2">Сначала добавьте хотя бы один рецепт выше</p>
             )}
 
-            {productions.filter((p) => p.recipeId).slice(0, 8).map((p) => {
-              const recipe = recipes.find((r) => r.id === Number(p.recipeId) || r.id === p.recipeId)
+            {(() => {
+              const recipeProductions = productions.filter((p) => p.recipeId)
               return (
-                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
-                  <span className="text-sm text-slate-700 dark:text-slate-200">
-                    {recipe?.name || '?'} <span className="text-slate-400">× {p.qty}</span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
-                    <ConfirmDeleteButton onConfirm={() => removeProduction(p.id)} size="w-8 h-8" iconSize={14} />
-                  </div>
-                </div>
+                <>
+                  {recipeProductions.slice(0, showAllProductions ? undefined : 8).map((p) => {
+                    const recipe = recipes.find((r) => r.id === Number(p.recipeId) || r.id === p.recipeId)
+                    return (
+                      <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                        <span className="text-sm text-slate-700 dark:text-slate-200">
+                          {recipe?.name || '?'} <span className="text-slate-400">× {p.qty}</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
+                          <ConfirmDeleteButton onConfirm={() => removeProduction(p.id)} size="w-8 h-8" iconSize={14} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {recipeProductions.length > 8 && (
+                    <button
+                      onClick={() => setShowAllProductions((v) => !v)}
+                      className="w-full text-center text-xs font-semibold text-orange-600 py-2"
+                    >
+                      {showAllProductions ? 'Свернуть' : `Показать все (${recipeProductions.length})`}
+                    </button>
+                  )}
+                </>
               )
-            })}
+            })()}
 
             <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
@@ -1862,20 +1890,35 @@ export default function Inventory({
                 {usageError}
               </p>
             )}
-            {productions.filter((p) => !p.recipeId && p.productId != null).slice(0, 8).map((p) => {
-              const product = recountCatalog.find((pr) => pr.id === Number(p.productId) || pr.id === p.productId)
+            {(() => {
+              const directUsage = productions.filter((p) => !p.recipeId && p.productId != null)
               return (
-                <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
-                  <span className="text-sm text-slate-700 dark:text-slate-200">
-                    {product?.name || '?'} <span className="text-slate-400">−{p.qty} {product?.unit}</span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
-                    <ConfirmDeleteButton onConfirm={() => removeProduction(p.id)} size="w-8 h-8" iconSize={14} />
-                  </div>
-                </div>
+                <>
+                  {directUsage.slice(0, showAllUsage ? undefined : 8).map((p) => {
+                    const product = recountCatalog.find((pr) => pr.id === Number(p.productId) || pr.id === p.productId)
+                    return (
+                      <div key={p.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                        <span className="text-sm text-slate-700 dark:text-slate-200">
+                          {product?.name || '?'} <span className="text-slate-400">−{p.qty} {product?.unit}</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400">{formatRu(parseLocalDate(p.date))}</span>
+                          <ConfirmDeleteButton onConfirm={() => removeProduction(p.id)} size="w-8 h-8" iconSize={14} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {directUsage.length > 8 && (
+                    <button
+                      onClick={() => setShowAllUsage((v) => !v)}
+                      className="w-full text-center text-xs font-semibold text-orange-600 py-2"
+                    >
+                      {showAllUsage ? 'Свернуть' : `Показать все (${directUsage.length})`}
+                    </button>
+                  )}
+                </>
               )
-            })}
+            })()}
           </Section>
         </>
       )}
