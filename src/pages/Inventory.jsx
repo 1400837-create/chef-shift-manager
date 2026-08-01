@@ -1548,10 +1548,19 @@ export default function Inventory({
 
         const daysInMonth = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1, 0).getDate()
         const firstWeekday = (new Date(viewedMonth.getFullYear(), viewedMonth.getMonth(), 1).getDay() + 6) % 7
-        const activityDays = new Set()
-        ;[...purchasesThisMonth, ...recipeProductionsThisMonth, ...directUsageThisMonth, ...catalogWasteThisMonth].forEach((e) => {
-          activityDays.add(Number(e.date.slice(-2)))
-        })
+        // One dot colour per activity kind, not just a single generic marker —
+        // a day with приход AND расход AND списание shows all three dots.
+        const activityByDay = new Map()
+        function markDay(dateStr, kind) {
+          const day = Number(dateStr.slice(-2))
+          if (!activityByDay.has(day)) activityByDay.set(day, new Set())
+          activityByDay.get(day).add(kind)
+        }
+        purchasesThisMonth.forEach((p) => markDay(p.date, 'purchase'))
+        recipeProductionsThisMonth.forEach((p) => markDay(p.date, 'usage'))
+        directUsageThisMonth.forEach((p) => markDay(p.date, 'usage'))
+        catalogWasteThisMonth.forEach((w) => markDay(w.date, 'waste'))
+        const DOT_COLOR = { purchase: 'bg-green-500', usage: 'bg-blue-500', waste: 'bg-red-500' }
         const selectedDateStr = selectedDay ? `${currentMonth}-${String(selectedDay).padStart(2, '0')}` : null
         const dayEntries = selectedDateStr ? [
           ...purchasesThisMonth.filter((p) => p.date === selectedDateStr).map((p) => ({ kind: 'purchase', ...p })),
@@ -1570,7 +1579,7 @@ export default function Inventory({
               {Array.from({ length: firstWeekday }).map((_, i) => <div key={`blank-${i}`} />)}
               {Array.from({ length: daysInMonth }).map((_, i) => {
                 const day = i + 1
-                const hasActivity = activityDays.has(day)
+                const kinds = activityByDay.get(day)
                 const isSelected = selectedDay === day
                 return (
                   <button
@@ -1581,12 +1590,21 @@ export default function Inventory({
                     }`}
                   >
                     {day}
-                    {hasActivity && !isSelected && (
-                      <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500" />
+                    {kinds && !isSelected && (
+                      <span className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+                        {['purchase', 'usage', 'waste'].filter((k) => kinds.has(k)).map((k) => (
+                          <span key={k} className={`w-1 h-1 rounded-full ${DOT_COLOR[k]}`} />
+                        ))}
+                      </span>
                     )}
                   </button>
                 )
               })}
+            </div>
+            <div className="flex items-center gap-3 mt-2 px-1 text-[11px] text-slate-400">
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Приход</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Расход</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Списание</span>
             </div>
             {selectedDay && (
               <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
