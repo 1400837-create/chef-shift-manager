@@ -42,6 +42,7 @@ export default function Inventory({
   items, setItems, audits, setAudits,
   recountCatalog, setRecountCatalog, recounts, setRecounts,
   recipes, purchases, setPurchases, productions, setProductions,
+  catalogWaste, setCatalogWaste,
   plannedPurchases, setPlannedPurchases, menuData, staffName,
   initialTab, initialHighlightId, onInitialConsumed,
 }) {
@@ -95,6 +96,8 @@ export default function Inventory({
   const [productionForm, setProductionForm] = useState({ recipeId: '', qty: '1', date: todayKey() })
   const [openRecountComment, setOpenRecountComment] = useState(null)
   const [openPurchaseComment, setOpenPurchaseComment] = useState(null)
+  const [wasteWritingId, setWasteWritingId] = useState(null)
+  const [wasteQtyDraft, setWasteQtyDraft] = useState('')
   const [menuRangeFrom, setMenuRangeFrom] = useState(todayKey())
   const [menuRangeTo, setMenuRangeTo] = useState(todayKey())
   const [menuImportResult, setMenuImportResult] = useState(null)
@@ -198,7 +201,7 @@ export default function Inventory({
         const itemInstant = r.qtyTimestamps?.[item.id] ?? parseLocalDate(dateStr).getTime()
         const { balance: expected } = computeBalance(
           item.id,
-          { recounts: recountsExcludingThis, purchases, productions, recipes },
+          { recounts: recountsExcludingThis, purchases, productions, recipes, waste: catalogWaste },
           new Date(itemInstant)
         )
         if (expected === null) return
@@ -219,7 +222,7 @@ export default function Inventory({
     })
     return entries.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recounts, recountCatalog, purchases, productions, recipes])
+  }, [recounts, recountCatalog, purchases, productions, recipes, catalogWaste])
 
   function toggleAuditItem(zoneKey, idx) {
     setAudits((prev) => {
@@ -421,6 +424,25 @@ export default function Inventory({
         comments: { ...(prev[currentMonth]?.comments || {}), [itemId]: value },
       },
     }))
+  }
+
+  // Списание с причиной, tied to a Каталог product (unlike the FIFO waste
+  // log, which tracks batches by name only) — counts as an outflow in
+  // computeBalance just like recipe consumption, so a documented write-off
+  // is what turns an "unexplained" недостача in the shrinkage report back
+  // to zero instead of just noting it in a comment.
+  function addCatalogWaste(productId, qty, reasonKey) {
+    if (!qty) return
+    setCatalogWaste((prev) => [
+      { id: uid(), productId, qty, reason: reasonKey, date: todayKey(), enteredAt: Date.now(), by: staffName || undefined },
+      ...prev,
+    ])
+    setWasteWritingId(null)
+    setWasteQtyDraft('')
+  }
+
+  function removeCatalogWaste(id) {
+    setCatalogWaste((prev) => prev.filter((w) => w.id !== id))
   }
 
   function setRecountVerified(v) {
@@ -658,7 +680,7 @@ export default function Inventory({
       const itemAsOf = new Date(recount.qtyTimestamps?.[item.id] ?? recountAsOfDate.getTime())
       const { balance: expected } = computeBalance(
         item.id,
-        { recounts: recountsExcludingCurrent, purchases, productions, recipes },
+        { recounts: recountsExcludingCurrent, purchases, productions, recipes, waste: catalogWaste },
         itemAsOf
       )
       const shrinkage = expected !== null && actual !== '' ? actual - expected : ''
@@ -711,10 +733,10 @@ export default function Inventory({
   const balances = useMemo(() => {
     return recountCatalog.map((product) => ({
       product,
-      ...computeBalance(product.id, { recounts, purchases, productions, recipes }, now),
+      ...computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now),
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recountCatalog, recounts, purchases, productions, recipes])
+  }, [recountCatalog, recounts, purchases, productions, recipes, catalogWaste])
 
   function sortByKey(list, sortKey, getName) {
     // getName reads straight off stored items, which can predate a validation
@@ -1070,7 +1092,7 @@ export default function Inventory({
                     const itemAsOf = new Date(recount.qtyTimestamps?.[item.id] ?? Date.now())
                     const { balance: expected } = computeBalance(
                       item.id,
-                      { recounts: recountsExcludingCurrent, purchases, productions, recipes },
+                      { recounts: recountsExcludingCurrent, purchases, productions, recipes, waste: catalogWaste },
                       itemAsOf
                     )
                     const shrinkage = expected !== null && actual !== null ? actual - expected : null
@@ -1116,8 +1138,50 @@ export default function Inventory({
                           >
                             <MessageSquare size={16} />
                           </button>
+                          <button
+                            onClick={() => {
+                              if (wasteWritingId === item.id) {
+                                setWasteWritingId(null)
+                              } else {
+                                setWasteWritingId(item.id)
+                                setWasteQtyDraft(shrinkage !== null && shrinkage < 0 ? String(-shrinkage) : '')
+                              }
+                            }}
+                            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 dark:text-slate-500"
+                            title="Списать с причиной"
+                          >
+                            <AlertTriangle size={16} />
+                          </button>
                           <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
                         </div>
+                        {wasteWritingId === item.id && (
+                          <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">Кол-во ({item.unit}):</span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                className={inputClass + ' text-sm h-8'}
+                                value={wasteQtyDraft}
+                                onChange={(e) => setWasteQtyDraft(sanitizeDecimal(e.target.value))}
+                                placeholder="0"
+                                autoFocus
+                              />
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {WASTE_REASONS.map((r) => (
+                                <button
+                                  key={r.key}
+                                  onClick={() => addCatalogWaste(item.id, wasteQtyDraft, r.key)}
+                                  disabled={!wasteQtyDraft}
+                                  className="min-h-[32px] px-2.5 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 disabled:opacity-40 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+                                >
+                                  {r.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         {commentOpen && (
                           <textarea
                             className={inputClass + ' mt-2 h-16 py-2 text-sm'}
@@ -1155,6 +1219,30 @@ export default function Inventory({
               onChange={setRecountVerified}
             />
           </Section>
+
+          {catalogWaste.length > 0 && (
+            <Section title={`Списания по каталогу (${catalogWaste.length})`} icon={Trash2}>
+              <div className="flex flex-col gap-2">
+                {[...catalogWaste].sort((a, b) => (b.enteredAt || 0) - (a.enteredAt || 0)).map((w) => {
+                  const product = recountCatalog.find((p) => String(p.id) === String(w.productId))
+                  return (
+                    <div key={w.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                          {product?.name || '?'} · {w.qty} {product?.unit || ''}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {wasteReasonLabel(w.reason)} · {formatRu(parseLocalDate(w.date))}
+                          {w.by && ` · ${w.by}`}
+                        </p>
+                      </div>
+                      <ConfirmDeleteButton onConfirm={() => removeCatalogWaste(w.id)} />
+                    </div>
+                  )
+                })}
+              </div>
+            </Section>
+          )}
 
           {shrinkageLog.length > 0 && (
             <Section

@@ -11,7 +11,7 @@ import { uid } from '../utils/id'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 
 export default function ShoppingList({
-  recountCatalog, setRecountCatalog, recounts, purchases, productions, recipes,
+  recountCatalog, setRecountCatalog, recounts, purchases, productions, catalogWaste, recipes,
   plannedPurchases, setPlannedPurchases, setPurchases,
 }) {
   const [form, setForm] = useState({ productName: '', qty: '' })
@@ -164,13 +164,13 @@ export default function ShoppingList({
 
   const lowStockNotPlanned = useMemo(() => {
     return recountCatalog
-      .map((product) => ({ product, ...computeBalance(product.id, { recounts, purchases, productions, recipes }, now) }))
+      .map((product) => ({ product, ...computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now) }))
       .filter((row) => {
         const min = Number(row.product.minQty)
         return min > 0 && row.balance !== null && row.balance <= min && !findPlannedByProduct(row.product.id)
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recountCatalog, recounts, purchases, productions, recipes, plannedPurchases])
+  }, [recountCatalog, recounts, purchases, productions, recipes, plannedPurchases, catalogWaste])
 
   return (
     <div className="pb-4">

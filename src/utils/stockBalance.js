@@ -28,7 +28,7 @@ function effectiveInstant(dateStr, enteredAt) {
 // (purchase/production.enteredAt), not just the shared recount date, so a
 // recount session spanning many hours (or days) still orders correctly
 // against purchases/consumption logged partway through it.
-export function computeBalance(productId, { recounts, purchases, productions, recipes }, asOf = new Date()) {
+export function computeBalance(productId, { recounts, purchases, productions, recipes, waste }, asOf = new Date()) {
   const asOfMs = asOf.getTime()
   let baselineQty = null
   let baselineInstant = null
@@ -68,6 +68,15 @@ export function computeBalance(productId, { recounts, purchases, productions, re
     if (instant >= baselineInstant && instant <= asOfMs) {
       total -= (Number(ingredient.qty) || 0) * (Number(prod.qty) || 1)
     }
+  })
+
+  // Documented write-offs (списание с причиной) count as an outflow just
+  // like recipe consumption — logging one is what turns an otherwise
+  // "unexplained" недостача in the shrinkage report back to zero.
+  ;(waste || []).forEach((w) => {
+    if (String(w.productId) !== targetId) return
+    const instant = effectiveInstant(w.date, w.enteredAt)
+    if (instant >= baselineInstant && instant <= asOfMs) total -= Number(w.qty) || 0
   })
 
   return { balance: total, baselineDate: new Date(baselineInstant), baselineQty }

@@ -57,6 +57,7 @@ export default function App() {
   const [recipes, setRecipes] = useLocalStorage('recipes', [])
   const [purchases, setPurchases] = useLocalStorage('purchases', [])
   const [productions, setProductions] = useLocalStorage('productions', [])
+  const [catalogWaste, setCatalogWaste] = useLocalStorage('catalogWaste', [])
   const [plannedPurchases, setPlannedPurchases] = useLocalStorage('plannedPurchases', [])
   const [notifiedLog, setNotifiedLog] = useLocalStorage('notifiedLog', {})
   const [darkMode, setDarkMode] = useLocalStorage('darkMode', false)
@@ -82,6 +83,7 @@ export default function App() {
     recounts: [recounts, setRecounts],
     purchases: [purchases, setPurchases],
     productions: [productions, setProductions],
+    catalogWaste: [catalogWaste, setCatalogWaste],
     plannedPurchases: [plannedPurchases, setPlannedPurchases],
   })
   const cleaningHistory = useTabHistory({
@@ -144,7 +146,7 @@ export default function App() {
     const shoppingNeeded = recountCatalog.some((product) => {
       const min = Number(product.minQty)
       if (!(min > 0)) return false
-      const { balance } = computeBalance(product.id, { recounts, purchases, productions, recipes }, now)
+      const { balance } = computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now)
       if (balance === null || balance > min) return false
       return !plannedPurchases.some((p) => String(p.productId) === String(product.id))
     })
@@ -158,7 +160,7 @@ export default function App() {
       shopping: shoppingNeeded,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inventoryItems, dailyCleaning, shiftChecklist, today, recountCatalog, recounts, purchases, productions, recipes, plannedPurchases])
+  }, [inventoryItems, dailyCleaning, shiftChecklist, today, recountCatalog, recounts, purchases, productions, recipes, plannedPurchases, catalogWaste])
 
   // Best-effort reminders: GitHub Pages is static (no server), so there is no
   // real background push — this only fires while the app/tab is open.
@@ -249,6 +251,7 @@ export default function App() {
         recounts={recounts}
         purchases={purchases}
         productions={productions}
+        catalogWaste={catalogWaste}
       />
 
       <main className="max-w-lg md:max-w-none mx-auto px-3 md:px-6 lg:px-10 pt-3 pb-24">
@@ -264,6 +267,7 @@ export default function App() {
               recounts={recounts}
               purchases={purchases}
               productions={productions}
+              catalogWaste={catalogWaste}
               recipes={recipes}
               plannedPurchases={plannedPurchases}
               menuData={menuData}
@@ -306,6 +310,8 @@ export default function App() {
               setPurchases={setPurchases}
               productions={productions}
               setProductions={setProductions}
+              catalogWaste={catalogWaste}
+              setCatalogWaste={setCatalogWaste}
               plannedPurchases={plannedPurchases}
               setPlannedPurchases={setPlannedPurchases}
               menuData={menuData}
@@ -325,6 +331,7 @@ export default function App() {
               recounts={recounts}
               purchases={purchases}
               productions={productions}
+              catalogWaste={catalogWaste}
               recipes={recipes}
               plannedPurchases={plannedPurchases}
               setPlannedPurchases={setPlannedPurchases}

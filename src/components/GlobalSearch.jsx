@@ -12,7 +12,7 @@ function categoryLabel(key) {
   return PRODUCT_CATEGORIES.find((c) => c.key === key)?.label || 'Другое'
 }
 
-export default function GlobalSearch({ open, onClose, recountCatalog, recipes, recounts, purchases, productions }) {
+export default function GlobalSearch({ open, onClose, recountCatalog, recipes, recounts, purchases, productions, catalogWaste }) {
   const [query, setQuery] = useState('')
   const now = new Date()
 
@@ -22,9 +22,9 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
     return recountCatalog
       .filter((p) => (p.name || '').toLowerCase().includes(q))
       .slice(0, 15)
-      .map((p) => ({ product: p, ...computeBalance(p.id, { recounts, purchases, productions, recipes }, now) }))
+      .map((p) => ({ product: p, ...computeBalance(p.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, recountCatalog, recounts, purchases, productions, recipes])
+  }, [query, recountCatalog, recounts, purchases, productions, recipes, catalogWaste])
 
   const matchedRecipes = useMemo(() => {
     const q = query.trim().toLowerCase()

@@ -12,7 +12,7 @@ import { coursesForDay } from '../utils/menuCourses'
 export default function Dashboard({
   shiftChecklist, setShiftChecklist,
   kuchenhilfeTasks, setKuchenhilfeTasks,
-  recountCatalog, recounts, purchases, productions, recipes, plannedPurchases,
+  recountCatalog, recounts, purchases, productions, catalogWaste, recipes, plannedPurchases,
   menuData, onNavigate,
 }) {
   const today = todayKey()
@@ -52,14 +52,14 @@ export default function Dashboard({
 
   const lowStockItems = useMemo(() => {
     return recountCatalog
-      .map((product) => ({ product, ...computeBalance(product.id, { recounts, purchases, productions, recipes }, now) }))
+      .map((product) => ({ product, ...computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now) }))
       .filter((row) => {
         const min = Number(row.product.minQty)
         return min > 0 && row.balance !== null && row.balance <= min &&
           !plannedPurchases.some((p) => String(p.productId) === String(row.product.id))
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recountCatalog, recounts, purchases, productions, recipes, plannedPurchases])
+  }, [recountCatalog, recounts, purchases, productions, recipes, plannedPurchases, catalogWaste])
 
   const todayCourses = useMemo(() => {
     const dayData = menuData[monthKey(now)]?.[now.getDate()]
