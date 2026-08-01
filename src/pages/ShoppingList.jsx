@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, ShoppingBasket, AlertTriangle, Upload, X } from 'lucide-react'
 import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
 import { formatRu, todayKey } from '../utils/dateUtils'
@@ -25,6 +26,33 @@ export default function ShoppingList({
     if (q.length < 2) return []
     return recountCatalog.filter((p) => (p.name || '').toLowerCase().includes(q)).slice(0, 8)
   }, [form.productName, recountCatalog])
+
+  // The "Продукт" field lives inside a Section card, which clips overflow
+  // for its rounded corners — an absolutely-positioned dropdown nested
+  // inside it gets cut off at the card edge instead of floating over the
+  // page. Portal it to document.body instead, positioned from the input's
+  // own screen rect, so it always renders on top uncropped.
+  const productInputRef = useRef(null)
+  const [dropdownRect, setDropdownRect] = useState(null)
+
+  function updateDropdownRect() {
+    const el = productInputRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setDropdownRect({ top: r.bottom, left: r.left, width: r.width })
+  }
+
+  useEffect(() => {
+    if (!showProductSuggestions) return
+    updateDropdownRect()
+    const onScrollOrResize = () => updateDropdownRect()
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+    }
+  }, [showProductSuggestions])
 
   function findProductByName(name) {
     const key = (name || '').trim().toLowerCase()
@@ -218,8 +246,9 @@ export default function ShoppingList({
           обновит остаток.
         </p>
         <div className="flex gap-2 mb-3">
-          <div className="flex-1 min-w-0 relative">
+          <div className="flex-1 min-w-0">
             <input
+              ref={productInputRef}
               className={inputClass}
               placeholder="Продукт…"
               value={form.productName}
@@ -227,8 +256,11 @@ export default function ShoppingList({
               onFocus={() => setShowProductSuggestions(true)}
               onBlur={() => setTimeout(() => setShowProductSuggestions(false), 150)}
             />
-            {showProductSuggestions && productSuggestions.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+            {showProductSuggestions && productSuggestions.length > 0 && dropdownRect && createPortal(
+              <div
+                style={{ position: 'fixed', top: dropdownRect.top + 4, left: dropdownRect.left, width: dropdownRect.width }}
+                className="z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-56 overflow-y-auto"
+              >
                 {productSuggestions.map((p) => (
                   <button
                     key={p.id}
@@ -240,7 +272,8 @@ export default function ShoppingList({
                     {p.name}
                   </button>
                 ))}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
           <div className="w-20 shrink-0">
