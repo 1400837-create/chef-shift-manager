@@ -3,7 +3,7 @@ import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash, Trash2,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale, Check,
   ShoppingCart, Flame, Tags, Download, Calendar, Search,
-  ArrowRightLeft, ClipboardPlus, MessageSquare,
+  ArrowRightLeft, ClipboardPlus, MessageSquare, AlertTriangle,
 } from 'lucide-react'
 import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES, WASTE_REASONS } from '../utils/constants'
@@ -171,6 +171,55 @@ export default function Inventory({
     () => [...items].filter((i) => i.status === 'disposal').sort((a, b) => (b.wasteDate || '').localeCompare(a.wasteDate || '')),
     [items]
   )
+
+  function monthKeyLabel(mk) {
+    const [y, m] = mk.split('-').map(Number)
+    return `${MONTHS_RU[m - 1]} ${y}`
+  }
+
+  // Недостачи/излишки history across every recount ever entered — not a
+  // separate stored log, just recomputed from data that's already kept
+  // forever (recounts/purchases/productions), so it can't go stale or
+  // duplicate the source of truth. Same per-item "ожидалось" logic as the
+  // live Переучёт tab, just run for every past (month, product) pair with a
+  // filled-in count instead of only the currently viewed month.
+  const shrinkageLog = useMemo(() => {
+    const entries = []
+    Object.keys(recounts).sort().forEach((mk) => {
+      const r = recounts[mk]
+      if (!r?.qty) return
+      const recountsExcludingThis = { ...recounts }
+      delete recountsExcludingThis[mk]
+      recountCatalog.forEach((item) => {
+        const curQty = r.qty[item.id]
+        if (curQty === undefined || curQty === '') return
+        const actual = Number(curQty) || 0
+        const dateStr = r.countedAt || `${mk}-01`
+        const itemInstant = r.qtyTimestamps?.[item.id] ?? parseLocalDate(dateStr).getTime()
+        const { balance: expected } = computeBalance(
+          item.id,
+          { recounts: recountsExcludingThis, purchases, productions, recipes },
+          new Date(itemInstant)
+        )
+        if (expected === null) return
+        const shrinkage = actual - expected
+        if (shrinkage === 0) return
+        entries.push({
+          id: `${mk}-${item.id}`,
+          monthLabel: monthKeyLabel(mk),
+          date: dateStr,
+          productName: item.name,
+          unit: item.unit,
+          expected,
+          actual,
+          shrinkage,
+          comment: r.comments?.[item.id] || '',
+        })
+      })
+    })
+    return entries.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recounts, recountCatalog, purchases, productions, recipes])
 
   function toggleAuditItem(zoneKey, idx) {
     setAudits((prev) => {
@@ -353,7 +402,14 @@ export default function Inventory({
   function setQty(itemId, value) {
     setRecounts((prev) => ({
       ...prev,
-      [currentMonth]: { ...(prev[currentMonth] || { qty: {}, verifiedWithLead: false }), qty: { ...(prev[currentMonth]?.qty || {}), [itemId]: value } },
+      [currentMonth]: {
+        ...(prev[currentMonth] || { qty: {}, verifiedWithLead: false }),
+        qty: { ...(prev[currentMonth]?.qty || {}), [itemId]: value },
+        // Per-item entry moment, not just the shared "Дата подсчёта" — lets a
+        // recount session spanning hours (or days) order correctly against
+        // purchases/consumption logged partway through it.
+        qtyTimestamps: { ...(prev[currentMonth]?.qtyTimestamps || {}), [itemId]: Date.now() },
+      },
     }))
   }
 
@@ -406,7 +462,7 @@ export default function Inventory({
     }
     setPurchaseError(null)
     setPurchases((prev) => [
-      { id: Date.now(), productId: product.id, qty: purchaseForm.qty, date: purchaseForm.date },
+      { id: Date.now(), productId: product.id, qty: purchaseForm.qty, date: purchaseForm.date, enteredAt: Date.now() },
       ...prev,
     ])
     setPurchaseForm({ productName: '', qty: '', date: todayKey() })
@@ -457,6 +513,7 @@ export default function Inventory({
         productId: product.id,
         qty: item.qty,
         date: item.date || todayKey(),
+        enteredAt: Date.now(),
       })
     })
 
@@ -509,7 +566,7 @@ export default function Inventory({
   function addProduction() {
     if (!productionForm.recipeId || !productionForm.qty) return
     setProductions((prev) => [
-      { id: Date.now(), recipeId: productionForm.recipeId, qty: productionForm.qty, date: productionForm.date },
+      { id: Date.now(), recipeId: productionForm.recipeId, qty: productionForm.qty, date: productionForm.date, enteredAt: Date.now() },
       ...prev,
     ])
     setProductionForm({ recipeId: '', qty: '1', date: todayKey() })
@@ -557,6 +614,7 @@ export default function Inventory({
               recipeId: recipe.id,
               qty: extractQtyNumber(c.qty),
               date: toKey(cursor),
+              enteredAt: Date.now(),
             })
           } else {
             missingDishes.add(c.dish)
@@ -597,10 +655,11 @@ export default function Inventory({
     recountCatalog.forEach((item) => {
       const curQty = recount.qty[item.id]
       const actual = curQty !== undefined && curQty !== '' ? Number(curQty) : ''
+      const itemAsOf = new Date(recount.qtyTimestamps?.[item.id] ?? recountAsOfDate.getTime())
       const { balance: expected } = computeBalance(
         item.id,
         { recounts: recountsExcludingCurrent, purchases, productions, recipes },
-        recountAsOfDate
+        itemAsOf
       )
       const shrinkage = expected !== null && actual !== '' ? actual - expected : ''
       rows.push([item.name, item.unit, actual, expected ?? '', shrinkage, recount.comments?.[item.id] || ''])
@@ -636,6 +695,14 @@ export default function Inventory({
       })
 
     downloadCsv(`Отчёт_${currentMonth}.csv`, rows)
+  }
+
+  function exportShrinkageLogCsv() {
+    const rows = [['Месяц', 'Дата', 'Товар', 'Ед.', 'Ожидалось', 'Факт', 'Расхождение', 'Комментарий']]
+    shrinkageLog.forEach((row) => {
+      rows.push([row.monthLabel, row.date, row.productName, row.unit, row.expected, row.actual, row.shrinkage, row.comment])
+    })
+    downloadCsv('Журнал_недостач.csv', rows)
   }
 
   const catalogTotal = recountCatalog.length
@@ -995,10 +1062,16 @@ export default function Inventory({
                   {zoneItems.map((item) => {
                     const curQty = recount.qty[item.id]
                     const actual = curQty !== undefined && curQty !== '' ? Number(curQty) : null
+                    // This item's own entry moment, not the shared recount
+                    // date — so "ожидалось" is pinned to when THIS item was
+                    // actually counted, correct regardless of how long the
+                    // overall session takes. Not-yet-counted items fall back
+                    // to right now (same as "Остаток сейчас" below).
+                    const itemAsOf = new Date(recount.qtyTimestamps?.[item.id] ?? Date.now())
                     const { balance: expected } = computeBalance(
                       item.id,
                       { recounts: recountsExcludingCurrent, purchases, productions, recipes },
-                      recountAsOfDate
+                      itemAsOf
                     )
                     const shrinkage = expected !== null && actual !== null ? actual - expected : null
                     const currentBalance = balances.find((b) => b.product.id === item.id)?.balance ?? null
@@ -1082,6 +1155,38 @@ export default function Inventory({
               onChange={setRecountVerified}
             />
           </Section>
+
+          {shrinkageLog.length > 0 && (
+            <Section
+              title={`Журнал недостач/излишков (${shrinkageLog.length})`}
+              icon={AlertTriangle}
+              right={
+                <button
+                  onClick={exportShrinkageLogCsv}
+                  className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+                >
+                  <Download size={15} /> CSV
+                </button>
+              }
+            >
+              <div className="flex flex-col gap-2">
+                {shrinkageLog.map((row) => (
+                  <div key={row.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.productName}</p>
+                      <span className={`shrink-0 text-sm font-semibold ${row.shrinkage > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {row.shrinkage > 0 ? '+' : ''}{row.shrinkage} {row.unit}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {row.monthLabel} · ожидалось {row.expected} → факт {row.actual}
+                      {row.comment && ` · ${row.comment}`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
         </>
       )}
 

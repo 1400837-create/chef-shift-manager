@@ -100,7 +100,7 @@ export default function ShoppingList({
   function markPurchased(planned) {
     if (!planned.qty) return
     setPurchases((prev) => [
-      { id: Date.now(), productId: planned.productId, qty: planned.qty, date: todayKey() },
+      { id: Date.now(), productId: planned.productId, qty: planned.qty, date: todayKey(), enteredAt: Date.now() },
       ...prev,
     ])
     remove(planned.id)
