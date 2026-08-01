@@ -109,6 +109,7 @@ export default function Inventory({
   const [showAllPurchases, setShowAllPurchases] = useState(false)
   const [showAllProductions, setShowAllProductions] = useState(false)
   const [showAllUsage, setShowAllUsage] = useState(false)
+  const [showAllWaste, setShowAllWaste] = useState(false)
 
   // initialTab/initialHighlightId are a one-shot navigation request from
   // MenuPlanner (added a nomenclature item mid-recipe, wants to land here to
@@ -2035,7 +2036,7 @@ export default function Inventory({
                 {wasteError}
               </p>
             )}
-            {catalogWasteThisMonth.slice(0, 8).map((w) => {
+            {catalogWasteThisMonth.slice(0, showAllWaste ? undefined : 8).map((w) => {
               const product = recountCatalog.find((pr) => String(pr.id) === String(w.productId))
               return (
                 <div key={w.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
@@ -2050,6 +2051,14 @@ export default function Inventory({
                 </div>
               )
             })}
+            {catalogWasteThisMonth.length > 8 && (
+              <button
+                onClick={() => setShowAllWaste((v) => !v)}
+                className="w-full text-center text-xs font-semibold text-orange-600 py-2"
+              >
+                {showAllWaste ? 'Свернуть' : `Показать все (${catalogWasteThisMonth.length})`}
+              </button>
+            )}
           </Section>
         </>
         )

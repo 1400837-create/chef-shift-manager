@@ -70,6 +70,7 @@ export default function App() {
   const dashboardHistory = useTabHistory({
     shiftChecklist: [shiftChecklist, setShiftChecklist],
     kuchenhilfeTasks: [kuchenhilfeTasks, setKuchenhilfeTasks],
+    settings: [settings, setSettings],
   })
   const menuHistory = useTabHistory({
     menuData: [menuData, setMenuData],
@@ -98,6 +99,20 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
   }, [darkMode])
+
+  // One-time default: catalog items without a "мин. остаток" get 1, so the
+  // low-stock/shopping-needed features have something to work with out of
+  // the box. Only fills in missing values — never touches ones already set —
+  // and runs once (tracked via minQtyDefaultsApplied) so it doesn't fight
+  // deliberate later edits, including setting one back to blank.
+  useEffect(() => {
+    if (localStorage.getItem('kitchenOS_minQtyDefaultsApplied')) return
+    setRecountCatalog((prev) =>
+      prev.map((item) => (item.minQty === undefined || item.minQty === '' ? { ...item, minQty: '1' } : item))
+    )
+    localStorage.setItem('kitchenOS_minQtyDefaultsApplied', 'true')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const now = new Date()
   const today = todayKey()

@@ -136,6 +136,11 @@ export default function Dashboard({
                 <span className="text-xs font-semibold text-red-700 dark:text-red-300 shrink-0">{row.balance} {row.product.unit}</span>
               </div>
             ))}
+            {lowStockItems.length > 6 && (
+              <p className="text-xs text-slate-400 text-center">
+                Показаны первые 6 из {lowStockItems.length} — остальные в «Закупке»
+              </p>
+            )}
           </div>
         )}
         {lowStockItems.length > 0 && (
