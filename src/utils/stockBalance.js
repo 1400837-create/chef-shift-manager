@@ -30,10 +30,15 @@ export function computeBalance(productId, { recounts, purchases, productions, re
   // be numbers (Date.now()) — compare as strings so "12345" and 12345 match.
   const targetId = String(productId)
 
+  // Dates carry no time-of-day, so a purchase/production logged for the same
+  // calendar day as the recount is indistinguishable from "at the same
+  // moment" — treat it as on-or-after (>=), not strictly after, or it gets
+  // silently dropped from the balance (reported: recount 25kg + same-day
+  // purchase +100kg still showed 25kg).
   ;(purchases || []).forEach((p) => {
     if (String(p.productId) !== targetId) return
     const d = parseLocalDate(p.date)
-    if (d > baselineDate && d <= asOf) total += Number(p.qty) || 0
+    if (d >= baselineDate && d <= asOf) total += Number(p.qty) || 0
   })
 
   ;(productions || []).forEach((prod) => {
@@ -42,7 +47,7 @@ export function computeBalance(productId, { recounts, purchases, productions, re
     const ingredient = recipe.ingredients.find((i) => String(i.productId) === targetId)
     if (!ingredient) return
     const d = parseLocalDate(prod.date)
-    if (d > baselineDate && d <= asOf) {
+    if (d >= baselineDate && d <= asOf) {
       total -= (Number(ingredient.qty) || 0) * (Number(prod.qty) || 1)
     }
   })
