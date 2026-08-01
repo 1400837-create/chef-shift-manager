@@ -33,6 +33,32 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
     setAdvances((prev) => ({ ...prev, [periodKey]: { ...advance, budget: value } }))
   }
 
+  // Shared by both the "Камера" and "Галерея" file inputs — capture="environment"
+  // on a file input is unreliable across browsers (some force the camera and skip
+  // the file picker entirely, others do the opposite), so instead of one input
+  // relying on that, there are two separate inputs/buttons and this one handler.
+  async function handleReceiptFile(e) {
+    const rawFile = e.target.files?.[0] || null
+    e.target.value = ''
+    if (!rawFile) return
+    setPhotoError(null)
+    setPhotoProcessing(true)
+    try {
+      const dataUrl = await compressToDataUrl(rawFile)
+      if (dataUrl) {
+        setReceiptForm((f) => ({ ...f, photoDataUrl: dataUrl, fileName: rawFile.name }))
+      } else {
+        setReceiptForm((f) => ({ ...f, photoDataUrl: null, fileName: '' }))
+        setPhotoError('Не удалось обработать это фото — чек можно сохранить и без него.')
+      }
+    } catch {
+      setReceiptForm((f) => ({ ...f, photoDataUrl: null, fileName: '' }))
+      setPhotoError('Не удалось обработать это фото — чек можно сохранить и без него.')
+    } finally {
+      setPhotoProcessing(false)
+    }
+  }
+
   function addReceipt() {
     if (!receiptForm.amount) {
       setFormError('Укажите сумму чека — без неё чек не сохранится.')
@@ -172,38 +198,32 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
           </select>
         </Field>
         <Field label="Фото чека (необязательно)">
-          <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50">
-            <Camera size={20} />
-            <span className="text-sm">
-              {photoProcessing ? 'Обработка фото…' : receiptForm.fileName || 'Сфотографировать / выбрать чек'}
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={async (e) => {
-                const rawFile = e.target.files?.[0] || null
-                e.target.value = ''
-                if (!rawFile) return
-                setPhotoError(null)
-                setPhotoProcessing(true)
-                try {
-                  const dataUrl = await compressToDataUrl(rawFile)
-                  if (dataUrl) {
-                    setReceiptForm((f) => ({ ...f, photoDataUrl: dataUrl, fileName: rawFile.name }))
-                  } else {
-                    setReceiptForm((f) => ({ ...f, photoDataUrl: null, fileName: '' }))
-                    setPhotoError('Не удалось обработать это фото — чек можно сохранить и без него.')
-                  }
-                } catch {
-                  setReceiptForm((f) => ({ ...f, photoDataUrl: null, fileName: '' }))
-                  setPhotoError('Не удалось обработать это фото — чек можно сохранить и без него.')
-                } finally {
-                  setPhotoProcessing(false)
-                }
-              }}
-            />
-          </label>
+          {receiptForm.fileName && (
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-2 truncate">{receiptForm.fileName}</p>
+          )}
+          <div className="flex gap-2">
+            <label className="flex-1 flex items-center justify-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
+              <Camera size={20} />
+              <span className="text-sm">{photoProcessing ? 'Обработка…' : 'Камера'}</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleReceiptFile}
+              />
+            </label>
+            <label className="flex-1 flex items-center justify-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
+              <ImageIcon size={20} />
+              <span className="text-sm">{photoProcessing ? 'Обработка…' : 'Галерея'}</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleReceiptFile}
+              />
+            </label>
+          </div>
         </Field>
         {photoError && (
           <p className="text-sm text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-xl px-3 py-2 mb-2">
