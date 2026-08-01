@@ -180,7 +180,6 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
             <input
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={async (e) => {
                 const rawFile = e.target.files?.[0] || null
