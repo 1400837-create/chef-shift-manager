@@ -1001,6 +1001,7 @@ export default function Inventory({
                       recountAsOfDate
                     )
                     const shrinkage = expected !== null && actual !== null ? actual - expected : null
+                    const currentBalance = balances.find((b) => b.product.id === item.id)?.balance ?? null
                     const hasComment = !!recount.comments?.[item.id]
                     const commentOpen = openRecountComment === item.id
                     return (
@@ -1017,6 +1018,11 @@ export default function Inventory({
                                 </span>
                               )}
                             </p>
+                            {currentBalance !== null && (
+                              <p className="text-xs text-slate-400">
+                                Остаток сейчас: <span className="font-semibold text-slate-500 dark:text-slate-300">{currentBalance} {item.unit}</span>
+                              </p>
+                            )}
                           </div>
                           <div className="w-20 shrink-0">
                             <input
