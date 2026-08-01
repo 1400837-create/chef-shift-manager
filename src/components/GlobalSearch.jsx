@@ -37,7 +37,7 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
   return (
     <div className="fixed inset-0 z-50 bg-white dark:bg-slate-800 flex flex-col">
       <div className="safe-top flex items-center gap-2 px-3 py-3 border-b border-slate-100 dark:border-slate-700 shrink-0">
-        <Search size={18} className="text-slate-400 shrink-0" />
+        <Search size={18} className="text-orange-400 shrink-0" />
         <input
           autoFocus
           className="flex-1 min-w-0 text-[15px] text-slate-900 dark:text-slate-100 bg-transparent focus:outline-none"

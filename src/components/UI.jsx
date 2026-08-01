@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Printer, Trash2, Undo2, Redo2 } from 'lucide-react'
+import { Check, Printer, Trash2, Undo2, Redo2, Search } from 'lucide-react'
 
 export function Section({ title, icon: Icon, children, right }) {
   return (
@@ -206,3 +206,26 @@ export function UndoRedoBar({ undo, redo, canUndo, canRedo }) {
 
 export const inputClass =
   'w-full min-h-[48px] px-3 rounded-xl border border-slate-300 bg-white text-[15px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 dark:bg-slate-900 dark:border-slate-600 dark:text-slate-100 dark:placeholder-slate-500'
+
+// Same field everywhere a "filter this list" search box appears (Каталог,
+// Переучёт, Остатки, …) — a tinted background + coloured border so it
+// visually reads as "search" at a glance instead of blending into the
+// plain white inputs around it, consistent app-wide rather than each page
+// styling its own search box slightly differently.
+export const searchInputClass =
+  'w-full min-h-[48px] pl-9 pr-3 rounded-xl border-2 border-orange-200 bg-orange-50 text-[15px] text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 dark:bg-orange-950/20 dark:border-orange-900 dark:text-slate-100 dark:placeholder-slate-500'
+
+export function SearchField({ value, onChange, onFocus, placeholder = 'Поиск по названию…', className = '', inputClassName = '' }) {
+  return (
+    <div className={`relative ${className}`}>
+      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400 pointer-events-none" />
+      <input
+        className={`${searchInputClass} ${inputClassName}`}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        onFocus={onFocus}
+      />
+    </div>
+  )
+}

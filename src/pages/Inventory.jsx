@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, PackageSearch, ClipboardCheck, Snowflake, Archive, Trash, Trash2,
   ClipboardList, Upload, X, ChevronLeft, ChevronRight, Scale, Check,
-  ShoppingCart, Flame, Tags, Download, Calendar, Search,
+  ShoppingCart, Flame, Tags, Download, Calendar,
   ArrowRightLeft, ClipboardPlus, MessageSquare, AlertTriangle,
 } from 'lucide-react'
-import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
+import { Section, Field, inputClass, Badge, CheckRow, BigButton, PrintButton, ConfirmDeleteButton, SearchField } from '../components/UI'
 import { LEFTOVER_ACTIONS, INVENTORY_AUDIT_ZONES, DEFAULT_NOMENCLATURE, PRODUCT_CATEGORIES, WASTE_REASONS } from '../utils/constants'
 import { addDays, addMonths, daysBetween, formatRu, monthKey, MONTHS_RU, parseLocalDate, startOfDay, todayKey, toKey } from '../utils/dateUtils'
 import { parseRecountCatalogImport, parsePurchaseImport } from '../utils/importParsers'
@@ -1107,16 +1107,13 @@ export default function Inventory({
             </button>
           </div>
 
-          <div className="relative mb-4">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input
-              className={inputClass + ' pl-9 scroll-mt-24'}
-              placeholder="Поиск по названию…"
-              value={recountSearch}
-              onChange={(e) => { cancelSearchScroll(); setRecountSearch(e.target.value) }}
-              onFocus={handleSearchFocus}
-            />
-          </div>
+          <SearchField
+            className="mb-4"
+            inputClassName="scroll-mt-24"
+            value={recountSearch}
+            onChange={(e) => { cancelSearchScroll(); setRecountSearch(e.target.value) }}
+            onFocus={handleSearchFocus}
+          />
           {recountSearch.trim() && (
             <p className="text-[11px] text-slate-400 -mt-3 mb-3 px-1">
               Найдено: {recountCatalog.filter((i) => matchesSearch(i.name, recountSearch)).length}
@@ -1383,16 +1380,13 @@ export default function Inventory({
               )
             }
           >
-            <div className="relative mb-3">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <input
-                className={inputClass + ' pl-9 scroll-mt-24'}
-                placeholder="Поиск по названию…"
-                value={catalogSearch}
-                onChange={(e) => { cancelSearchScroll(); setCatalogSearch(e.target.value) }}
-                onFocus={handleSearchFocus}
-              />
-            </div>
+            <SearchField
+              className="mb-3"
+              inputClassName="scroll-mt-24"
+              value={catalogSearch}
+              onChange={(e) => { cancelSearchScroll(); setCatalogSearch(e.target.value) }}
+              onFocus={handleSearchFocus}
+            />
             <div className="flex items-center justify-between -mt-2 mb-3 px-1">
               {catalogSearch.trim() ? (
                 <p className="text-[11px] text-slate-400">
@@ -2072,16 +2066,13 @@ export default function Inventory({
           </p>
 
           <Section title="Текущие остатки" icon={Scale}>
-            <div className="relative mb-3">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <input
-                className={inputClass + ' pl-9 scroll-mt-24'}
-                placeholder="Поиск по названию…"
-                value={balanceSearch}
-                onChange={(e) => { cancelSearchScroll(); setBalanceSearch(e.target.value) }}
-                onFocus={handleSearchFocus}
-              />
-            </div>
+            <SearchField
+              className="mb-3"
+              inputClassName="scroll-mt-24"
+              value={balanceSearch}
+              onChange={(e) => { cancelSearchScroll(); setBalanceSearch(e.target.value) }}
+              onFocus={handleSearchFocus}
+            />
             {balanceSearch.trim() && (
               <p className="text-[11px] text-slate-400 -mt-2 mb-3 px-1">
                 Найдено: {balances.filter((row) => matchesSearch(row.product.name, balanceSearch)).length}
