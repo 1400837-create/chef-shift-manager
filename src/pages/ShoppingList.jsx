@@ -8,12 +8,17 @@ import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
 import { parsePlannedPurchaseImport } from '../utils/importParsers'
 import { uid } from '../utils/id'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 
 export default function ShoppingList({
   recountCatalog, setRecountCatalog, recounts, purchases, productions, recipes,
   plannedPurchases, setPlannedPurchases, setPurchases,
 }) {
   const [form, setForm] = useState({ productName: '', qty: '' })
+  // Which planned-purchase rows have been armed (tapped once, orange,
+  // waiting for the confirming second tap) — persisted so it survives
+  // leaving the tab or closing the app, not just component re-renders.
+  const [armedPurchaseIds, setArmedPurchaseIds] = useLocalStorage('armedPurchaseIds', [])
   const [error, setError] = useState(null)
   const [showProductSuggestions, setShowProductSuggestions] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -89,6 +94,7 @@ export default function ShoppingList({
 
   function remove(id) {
     setPlannedPurchases((prev) => prev.filter((p) => p.id !== id))
+    setArmedPurchaseIds((prev) => prev.filter((armedId) => armedId !== id))
   }
 
   function markPurchased(planned) {
@@ -319,7 +325,11 @@ export default function ShoppingList({
                     onChange={(e) => updateQty(p.id, sanitizeDecimal(e.target.value))}
                   />
                 </div>
-                <ConfirmMarkButton onConfirm={() => markPurchased(p)} />
+                <ConfirmMarkButton
+                  confirming={armedPurchaseIds.includes(p.id)}
+                  onArm={() => setArmedPurchaseIds((prev) => [...prev, p.id])}
+                  onConfirm={() => markPurchased(p)}
+                />
                 <ConfirmDeleteButton onConfirm={() => remove(p.id)} />
               </div>
             )

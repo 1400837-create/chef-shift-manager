@@ -154,18 +154,18 @@ export function ConfirmDeleteButton({ onConfirm, size = 'w-9 h-9', iconSize = 16
 // log, so a stray tap shouldn't do that. The color swap (green → orange) on
 // the first tap is the visible "are you sure" signal. Unlike
 // ConfirmDeleteButton, this stays armed indefinitely (no auto-revert timer)
-// since the item sits in a list the user may come back to after a pause.
-export function ConfirmMarkButton({ onConfirm, icon: Icon = Check, size = 'w-11 h-11', iconSize = 18 }) {
-  const [confirming, setConfirming] = useState(false)
-
+// since the item sits in a list the user may come back to after a pause —
+// which means the armed state must be controlled by the caller and
+// persisted there (a local useState here would reset on every unmount, e.g.
+// switching away from the tab and back, defeating the whole point).
+export function ConfirmMarkButton({ confirming, onArm, onConfirm, icon: Icon = Check, size = 'w-11 h-11', iconSize = 18 }) {
   function handleClick(e) {
     e.stopPropagation()
     if (confirming) {
-      setConfirming(false)
       onConfirm()
       return
     }
-    setConfirming(true)
+    onArm()
   }
 
   return (
