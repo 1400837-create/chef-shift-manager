@@ -14,10 +14,17 @@ export default function ShoppingList({
 }) {
   const [form, setForm] = useState({ productName: '', qty: '' })
   const [error, setError] = useState(null)
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
   const [importResult, setImportResult] = useState(null)
   const now = new Date()
+
+  const productSuggestions = useMemo(() => {
+    const q = form.productName.trim().toLowerCase()
+    if (q.length < 2) return []
+    return recountCatalog.filter((p) => (p.name || '').toLowerCase().includes(q)).slice(0, 8)
+  }, [form.productName, recountCatalog])
 
   function findProductByName(name) {
     const key = (name || '').trim().toLowerCase()
@@ -211,14 +218,30 @@ export default function ShoppingList({
           обновит остаток.
         </p>
         <div className="flex gap-2 mb-3">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 relative">
             <input
               className={inputClass}
               placeholder="Продукт…"
-              list="product-nomenclature"
               value={form.productName}
-              onChange={(e) => setForm((f) => ({ ...f, productName: e.target.value }))}
+              onChange={(e) => { setForm((f) => ({ ...f, productName: e.target.value })); setShowProductSuggestions(true) }}
+              onFocus={() => setShowProductSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowProductSuggestions(false), 150)}
             />
+            {showProductSuggestions && productSuggestions.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                {productSuggestions.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { setForm((f) => ({ ...f, productName: p.name })); setShowProductSuggestions(false) }}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 active:bg-slate-100 dark:active:bg-slate-700 border-b border-slate-100 dark:border-slate-700 last:border-0"
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="w-20 shrink-0">
             <input
