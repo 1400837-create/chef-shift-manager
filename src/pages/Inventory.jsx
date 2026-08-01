@@ -98,8 +98,9 @@ export default function Inventory({
   const [usageError, setUsageError] = useState(null)
   const [openRecountComment, setOpenRecountComment] = useState(null)
   const [openPurchaseComment, setOpenPurchaseComment] = useState(null)
-  const [wasteWritingId, setWasteWritingId] = useState(null)
-  const [wasteQtyDraft, setWasteQtyDraft] = useState('')
+  const [wasteForm, setWasteForm] = useState({ productName: '', qty: '', date: todayKey() })
+  const [wasteError, setWasteError] = useState(null)
+  const [selectedDay, setSelectedDay] = useState(null)
   const [menuRangeFrom, setMenuRangeFrom] = useState(todayKey())
   const [menuRangeTo, setMenuRangeTo] = useState(todayKey())
   const [menuImportResult, setMenuImportResult] = useState(null)
@@ -438,14 +439,22 @@ export default function Inventory({
   // computeBalance just like recipe consumption, so a documented write-off
   // is what turns an "unexplained" недостача in the shrinkage report back
   // to zero instead of just noting it in a comment.
-  function addCatalogWaste(productId, qty, reasonKey) {
-    if (!qty) return
+  function addCatalogWaste(reasonKey) {
+    const product = findProductByName(wasteForm.productName)
+    if (!product) {
+      setWasteError('Товар не найден в каталоге — выберите вариант из подсказок.')
+      return
+    }
+    if (!wasteForm.qty) {
+      setWasteError('Укажите количество.')
+      return
+    }
+    setWasteError(null)
     setCatalogWaste((prev) => [
-      { id: uid(), productId, qty, reason: reasonKey, date: todayKey(), enteredAt: Date.now(), by: staffName || undefined },
+      { id: uid(), productId: product.id, qty: wasteForm.qty, reason: reasonKey, date: wasteForm.date, enteredAt: Date.now(), by: staffName || undefined },
       ...prev,
     ])
-    setWasteWritingId(null)
-    setWasteQtyDraft('')
+    setWasteForm({ productName: '', qty: '', date: todayKey() })
   }
 
   function removeCatalogWaste(id) {
@@ -885,7 +894,7 @@ export default function Inventory({
         </button>
       </div>
 
-      {(tab === 'audit' || tab === 'recount') && (
+      {(tab === 'audit' || tab === 'recount' || tab === 'movements') && (
         <div className="flex items-center justify-between mb-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
           <button onClick={() => setMonthOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
             <ChevronLeft size={20} />
@@ -1176,50 +1185,8 @@ export default function Inventory({
                           >
                             <MessageSquare size={16} />
                           </button>
-                          <button
-                            onClick={() => {
-                              if (wasteWritingId === item.id) {
-                                setWasteWritingId(null)
-                              } else {
-                                setWasteWritingId(item.id)
-                                setWasteQtyDraft(shrinkage !== null && shrinkage < 0 ? String(-shrinkage) : '')
-                              }
-                            }}
-                            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 dark:text-slate-500"
-                            title="Списать с причиной"
-                          >
-                            <AlertTriangle size={16} />
-                          </button>
                           <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
                         </div>
-                        {wasteWritingId === item.id && (
-                          <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0">Кол-во ({item.unit}):</span>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                className={inputClass + ' text-sm h-8'}
-                                value={wasteQtyDraft}
-                                onChange={(e) => setWasteQtyDraft(sanitizeDecimal(e.target.value))}
-                                placeholder="0"
-                                autoFocus
-                              />
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {WASTE_REASONS.map((r) => (
-                                <button
-                                  key={r.key}
-                                  onClick={() => addCatalogWaste(item.id, wasteQtyDraft, r.key)}
-                                  disabled={!wasteQtyDraft}
-                                  className="min-h-[32px] px-2.5 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 disabled:opacity-40 text-slate-600 dark:text-slate-300 text-xs font-semibold"
-                                >
-                                  {r.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                         {commentOpen && (
                           <textarea
                             className={inputClass + ' mt-2 h-16 py-2 text-sm'}
@@ -1257,30 +1224,6 @@ export default function Inventory({
               onChange={setRecountVerified}
             />
           </Section>
-
-          {catalogWaste.length > 0 && (
-            <Section title={`Списания по каталогу (${catalogWaste.length})`} icon={Trash2}>
-              <div className="flex flex-col gap-2">
-                {[...catalogWaste].sort((a, b) => (b.enteredAt || 0) - (a.enteredAt || 0)).map((w) => {
-                  const product = recountCatalog.find((p) => String(p.id) === String(w.productId))
-                  return (
-                    <div key={w.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
-                          {product?.name || '?'} · {w.qty} {product?.unit || ''}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {wasteReasonLabel(w.reason)} · {formatRu(parseLocalDate(w.date))}
-                          {w.by && ` · ${w.by}`}
-                        </p>
-                      </div>
-                      <ConfirmDeleteButton onConfirm={() => removeCatalogWaste(w.id)} />
-                    </div>
-                  )
-                })}
-              </div>
-            </Section>
-          )}
 
           {shrinkageLog.length > 0 && (
             <Section
@@ -1597,8 +1540,108 @@ export default function Inventory({
         </>
       )}
 
-      {tab === 'movements' && (
+      {tab === 'movements' && (() => {
+        const purchasesThisMonth = purchases.filter((p) => monthKey(parseLocalDate(p.date)) === currentMonth)
+        const recipeProductionsThisMonth = productions.filter((p) => p.recipeId && monthKey(parseLocalDate(p.date)) === currentMonth)
+        const directUsageThisMonth = productions.filter((p) => !p.recipeId && p.productId != null && monthKey(parseLocalDate(p.date)) === currentMonth)
+        const catalogWasteThisMonth = catalogWaste.filter((w) => monthKey(parseLocalDate(w.date)) === currentMonth)
+
+        const daysInMonth = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1, 0).getDate()
+        const firstWeekday = (new Date(viewedMonth.getFullYear(), viewedMonth.getMonth(), 1).getDay() + 6) % 7
+        const activityDays = new Set()
+        ;[...purchasesThisMonth, ...recipeProductionsThisMonth, ...directUsageThisMonth, ...catalogWasteThisMonth].forEach((e) => {
+          activityDays.add(Number(e.date.slice(-2)))
+        })
+        const selectedDateStr = selectedDay ? `${currentMonth}-${String(selectedDay).padStart(2, '0')}` : null
+        const dayEntries = selectedDateStr ? [
+          ...purchasesThisMonth.filter((p) => p.date === selectedDateStr).map((p) => ({ kind: 'purchase', ...p })),
+          ...recipeProductionsThisMonth.filter((p) => p.date === selectedDateStr).map((p) => ({ kind: 'production', ...p })),
+          ...directUsageThisMonth.filter((p) => p.date === selectedDateStr).map((p) => ({ kind: 'usage', ...p })),
+          ...catalogWasteThisMonth.filter((w) => w.date === selectedDateStr).map((w) => ({ kind: 'waste', ...w })),
+        ] : []
+
+        return (
         <>
+          <Section title="Календарь" icon={Calendar}>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-400 mb-1">
+              {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((d) => <div key={d}>{d}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: firstWeekday }).map((_, i) => <div key={`blank-${i}`} />)}
+              {Array.from({ length: daysInMonth }).map((_, i) => {
+                const day = i + 1
+                const hasActivity = activityDays.has(day)
+                const isSelected = selectedDay === day
+                return (
+                  <button
+                    key={day}
+                    onClick={() => setSelectedDay(isSelected ? null : day)}
+                    className={`relative h-9 rounded-lg text-sm ${
+                      isSelected ? 'bg-orange-500 text-white' : 'text-slate-700 dark:text-slate-200 active:bg-slate-100 dark:active:bg-slate-700'
+                    }`}
+                  >
+                    {day}
+                    {hasActivity && !isSelected && (
+                      <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            {selectedDay && (
+              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    {formatRu(parseLocalDate(selectedDateStr))}
+                  </p>
+                  <button onClick={() => setSelectedDay(null)} className="text-xs text-slate-400">Скрыть</button>
+                </div>
+                {dayEntries.length === 0 && (
+                  <p className="text-sm text-slate-400 text-center py-2">Нет записей за этот день</p>
+                )}
+                <div className="flex flex-col gap-2">
+                  {dayEntries.map((e) => {
+                    if (e.kind === 'purchase') {
+                      const product = recountCatalog.find((pr) => pr.id === Number(e.productId) || pr.id === e.productId)
+                      return (
+                        <div key={`p-${e.id}`} className="text-sm rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+                          <span className="text-slate-500 dark:text-slate-400 text-xs mr-1">Приход</span>
+                          {product?.name || '?'} <span className="text-green-600 dark:text-green-400">+{e.qty} {product?.unit}</span>
+                        </div>
+                      )
+                    }
+                    if (e.kind === 'production') {
+                      const recipe = recipes.find((r) => r.id === Number(e.recipeId) || r.id === e.recipeId)
+                      return (
+                        <div key={`pr-${e.id}`} className="text-sm rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+                          <span className="text-slate-500 dark:text-slate-400 text-xs mr-1">Расход</span>
+                          {recipe?.name || '?'} <span className="text-red-600 dark:text-red-400">× {e.qty}</span>
+                        </div>
+                      )
+                    }
+                    if (e.kind === 'usage') {
+                      const product = recountCatalog.find((pr) => pr.id === Number(e.productId) || pr.id === e.productId)
+                      return (
+                        <div key={`u-${e.id}`} className="text-sm rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+                          <span className="text-slate-500 dark:text-slate-400 text-xs mr-1">Расход</span>
+                          {product?.name || '?'} <span className="text-red-600 dark:text-red-400">−{e.qty} {product?.unit}</span>
+                        </div>
+                      )
+                    }
+                    const product = recountCatalog.find((pr) => String(pr.id) === String(e.productId))
+                    return (
+                      <div key={`w-${e.id}`} className="text-sm rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+                        <span className="text-slate-500 dark:text-slate-400 text-xs mr-1">Списание</span>
+                        {product?.name || '?'} <span className="text-red-600 dark:text-red-400">−{e.qty} {product?.unit}</span>
+                        <span className="text-xs text-slate-400"> · {wasteReasonLabel(e.reason)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </Section>
+
           <Section
             title="Приход (закупка)"
             icon={ShoppingCart}
@@ -1647,7 +1690,7 @@ export default function Inventory({
               </p>
             )}
 
-            {purchases.slice(0, showAllPurchases ? undefined : 8).map((p) => {
+            {purchasesThisMonth.slice(0, showAllPurchases ? undefined : 8).map((p) => {
               const product = recountCatalog.find((pr) => pr.id === Number(p.productId) || pr.id === p.productId)
               const hasComment = !!p.comment
               const commentOpen = openPurchaseComment === p.id
@@ -1686,12 +1729,12 @@ export default function Inventory({
                 </div>
               )
             })}
-            {purchases.length > 8 && (
+            {purchasesThisMonth.length > 8 && (
               <button
                 onClick={() => setShowAllPurchases((v) => !v)}
                 className="w-full text-center text-xs font-semibold text-orange-600 py-2"
               >
-                {showAllPurchases ? 'Свернуть' : `Показать все (${purchases.length})`}
+                {showAllPurchases ? 'Свернуть' : `Показать все (${purchasesThisMonth.length})`}
               </button>
             )}
           </Section>
@@ -1787,7 +1830,7 @@ export default function Inventory({
             )}
 
             {(() => {
-              const recipeProductions = productions.filter((p) => p.recipeId)
+              const recipeProductions = recipeProductionsThisMonth
               return (
                 <>
                   {recipeProductions.slice(0, showAllProductions ? undefined : 8).map((p) => {
@@ -1891,7 +1934,7 @@ export default function Inventory({
               </p>
             )}
             {(() => {
-              const directUsage = productions.filter((p) => !p.recipeId && p.productId != null)
+              const directUsage = directUsageThisMonth
               return (
                 <>
                   {directUsage.slice(0, showAllUsage ? undefined : 8).map((p) => {
@@ -1920,8 +1963,79 @@ export default function Inventory({
               )
             })()}
           </Section>
+
+          <Section title="Списания" icon={AlertTriangle}>
+            <p className="text-xs text-slate-500 mb-2">
+              Порча, просрочка и т.п. — списывается из остатка так же, как расход, но с причиной
+              (для отчётов) и учитывается при расчёте недостачи в Переучёте.
+            </p>
+            <div className="flex gap-2">
+              <div className="flex-1 min-w-0">
+                <input
+                  className={inputClass}
+                  placeholder="Продукт…"
+                  list="product-nomenclature"
+                  value={wasteForm.productName}
+                  onChange={(e) => setWasteForm((f) => ({ ...f, productName: e.target.value }))}
+                />
+              </div>
+              <div className="w-20 shrink-0">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className={inputClass}
+                  placeholder="Кол-во"
+                  value={wasteForm.qty}
+                  onChange={(e) => setWasteForm((f) => ({ ...f, qty: sanitizeDecimal(e.target.value) }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <div className="flex-1 min-w-0">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={wasteForm.date}
+                  onChange={(e) => setWasteForm((f) => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {WASTE_REASONS.map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => addCatalogWaste(r.key)}
+                  disabled={!wasteForm.productName || !wasteForm.qty}
+                  className="min-h-[32px] px-2.5 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 disabled:opacity-40 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            {wasteError && (
+              <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mt-2">
+                {wasteError}
+              </p>
+            )}
+            {catalogWasteThisMonth.slice(0, 8).map((w) => {
+              const product = recountCatalog.find((pr) => String(pr.id) === String(w.productId))
+              return (
+                <div key={w.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                  <span className="text-sm text-slate-700 dark:text-slate-200">
+                    {product?.name || '?'} <span className="text-slate-400">−{w.qty} {product?.unit}</span>
+                    <span className="text-xs text-slate-400"> · {wasteReasonLabel(w.reason)}</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">{formatRu(parseLocalDate(w.date))}</span>
+                    <ConfirmDeleteButton onConfirm={() => removeCatalogWaste(w.id)} size="w-8 h-8" iconSize={14} />
+                  </div>
+                </div>
+              )
+            })}
+          </Section>
         </>
-      )}
+        )
+      })()}
 
       {tab === 'balance' && (
         <>
