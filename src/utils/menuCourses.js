@@ -16,3 +16,12 @@ export function coursesForDay(dayData) {
   }
   return DEFAULT_MENU_COURSES.map((label, i) => ({ id: `default-${i}`, label, dish: '', kosher: false }))
 }
+
+// Menu quantities are free text ("40 шт", "по 2 порции") since they're meant
+// for printing, not math — pull out the leading number so it can be used as
+// a numeric multiplier against a recipe's ingredients.
+export function extractQtyNumber(qtyStr) {
+  const match = String(qtyStr || '').match(/[\d.,]+/)
+  if (!match) return '1'
+  return match[0].replace(',', '.')
+}

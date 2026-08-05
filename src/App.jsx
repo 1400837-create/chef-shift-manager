@@ -348,6 +348,7 @@ export default function App() {
               productions={productions}
               catalogWaste={catalogWaste}
               recipes={recipes}
+              menuData={menuData}
               plannedPurchases={plannedPurchases}
               setPlannedPurchases={setPlannedPurchases}
               setPurchases={setPurchases}

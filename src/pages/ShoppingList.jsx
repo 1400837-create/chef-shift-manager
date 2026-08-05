@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, ShoppingBasket, AlertTriangle, Upload, X } from 'lucide-react'
+import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare } from 'lucide-react'
 import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
-import { formatRu, todayKey } from '../utils/dateUtils'
+import { formatRu, todayKey, parseLocalDate, addDays, monthKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
 import { parsePlannedPurchaseImport } from '../utils/importParsers'
 import { uid } from '../utils/id'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
 
 export default function ShoppingList({
   recountCatalog, setRecountCatalog, recounts, purchases, productions, catalogWaste, recipes,
-  plannedPurchases, setPlannedPurchases, setPurchases,
+  menuData, plannedPurchases, setPlannedPurchases, setPurchases,
 }) {
   const [form, setForm] = useState({ productName: '', qty: '' })
   // Which planned-purchase rows have been armed (tapped once, orange,
@@ -24,6 +25,10 @@ export default function ShoppingList({
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
   const [importResult, setImportResult] = useState(null)
+  const [menuImportFrom, setMenuImportFrom] = useState(todayKey())
+  const [menuImportTo, setMenuImportTo] = useState(todayKey())
+  const [menuImportResult, setMenuImportResult] = useState(null)
+  const [openPlannedComment, setOpenPlannedComment] = useState(null)
   const now = new Date()
 
   const productSuggestions = useMemo(() => {
@@ -67,6 +72,75 @@ export default function ShoppingList({
 
   function findPlannedByProduct(productId) {
     return plannedPurchases.find((p) => String(p.productId) === String(productId))
+  }
+
+  function findRecipeByName(name) {
+    const key = (name || '').trim().toLowerCase()
+    if (!key) return null
+    return recipes.find((r) => (r.name || '').trim().toLowerCase() === key) || null
+  }
+
+  // Sums every ingredient across every dish scheduled in the menu for the
+  // given range into one planned-purchase entry per product — doesn't touch
+  // stock (no purchases/productions created), just tells you what the menu
+  // is going to need. Only fills in products not already on the list; if
+  // one's already there you adjust its qty yourself, same as everywhere else
+  // in this app that avoids silently overwriting a number you might have
+  // already started editing.
+  function importFromMenu() {
+    const from = parseLocalDate(menuImportFrom)
+    const to = parseLocalDate(menuImportTo)
+    if (to < from) {
+      setMenuImportResult('Дата «по» раньше даты «от».')
+      return
+    }
+    const neededByProduct = new Map()
+    const missingDishes = new Set()
+    let cursor = from
+    let guard = 0
+    while (cursor <= to && guard < 90) {
+      const mk = monthKey(cursor)
+      const dayData = menuData[mk]?.[cursor.getDate()]
+      if (dayData) {
+        coursesForDay(dayData).forEach((c) => {
+          if (!c.dish) return
+          const recipe = findRecipeByName(c.dish)
+          if (!recipe) {
+            missingDishes.add(c.dish)
+            return
+          }
+          const multiplier = Number(extractQtyNumber(c.qty)) || 1
+          recipe.ingredients.forEach((ing) => {
+            const need = (Number(ing.qty) || 0) * multiplier
+            neededByProduct.set(ing.productId, (neededByProduct.get(ing.productId) || 0) + need)
+          })
+        })
+      }
+      cursor = addDays(cursor, 1)
+      guard += 1
+    }
+
+    let added = 0
+    let alreadyPlanned = 0
+    const toAdd = []
+    neededByProduct.forEach((qty, productId) => {
+      if (findPlannedByProduct(productId)) {
+        alreadyPlanned += 1
+        return
+      }
+      toAdd.push({ id: uid(), productId, qty: String(Math.round(qty * 100) / 100) })
+      added += 1
+    })
+    if (toAdd.length) setPlannedPurchases((prev) => [...prev, ...toAdd])
+
+    const parts = [`Добавлено в закупку: ${added}`]
+    if (alreadyPlanned) parts.push(`уже в списке (не тронуто): ${alreadyPlanned}`)
+    if (missingDishes.size) parts.push(`нет рецепта для: ${Array.from(missingDishes).join(', ')}`)
+    setMenuImportResult(parts.join(', '))
+  }
+
+  function setPlannedComment(id, value) {
+    setPlannedPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, comment: value } : p)))
   }
 
   function addManual() {
@@ -198,6 +272,30 @@ export default function ShoppingList({
         </Section>
       )}
 
+      <Section title="Импорт из меню" icon={Calendar}>
+        <p className="text-xs text-slate-500 mb-2">
+          За выбранный период (можно один день) соберёт все ингредиенты по рецептам
+          запланированных блюд в один список — со склада ничего не спишет, только
+          подскажет, что понадобится. Товары, которые уже в закупке, не трогает.
+        </p>
+        <div className="flex gap-2 mb-2">
+          <div className="flex-1 min-w-0">
+            <input type="date" className={inputClass} value={menuImportFrom} onChange={(e) => setMenuImportFrom(e.target.value)} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <input type="date" className={inputClass} value={menuImportTo} onChange={(e) => setMenuImportTo(e.target.value)} />
+          </div>
+        </div>
+        <BigButton onClick={importFromMenu} icon={Calendar}>
+          Импортировать из меню
+        </BigButton>
+        {menuImportResult && (
+          <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+            {menuImportResult}
+          </p>
+        )}
+      </Section>
+
       <Section
         title="Импорт из Google Таблиц"
         icon={Upload}
@@ -310,27 +408,58 @@ export default function ShoppingList({
         <div className="flex flex-col gap-2">
           {plannedPurchases.map((p) => {
             const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
+            const { balance } = product
+              ? computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now)
+              : { balance: null }
+            const hasComment = !!p.comment
+            const commentOpen = openPlannedComment === p.id
             return (
-              <div key={p.id} className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{product?.name || '?'}</p>
-                  <p className="text-xs text-slate-400">{product?.unit}</p>
-                </div>
-                <div className="w-20 shrink-0">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className={inputClass + ' text-center'}
-                    value={p.qty}
-                    onChange={(e) => updateQty(p.id, sanitizeDecimal(e.target.value))}
+              <div key={p.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{product?.name || '?'}</p>
+                    <p className="text-xs text-slate-400">
+                      {product?.unit}
+                      {balance !== null && ` · остаток: ${balance} ${product?.unit || ''}`}
+                    </p>
+                  </div>
+                  <div className="w-20 shrink-0">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className={inputClass + ' text-center'}
+                      value={p.qty}
+                      onChange={(e) => updateQty(p.id, sanitizeDecimal(e.target.value))}
+                    />
+                  </div>
+                  <button
+                    onClick={() => setOpenPlannedComment(commentOpen ? null : p.id)}
+                    className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
+                      hasComment ? 'text-orange-600' : 'text-slate-400 dark:text-slate-500'
+                    }`}
+                    title="Комментарий"
+                  >
+                    <MessageSquare size={16} />
+                  </button>
+                  <ConfirmMarkButton
+                    confirming={armedPurchaseIds.includes(p.id)}
+                    onArm={() => setArmedPurchaseIds((prev) => [...prev, p.id])}
+                    onConfirm={() => markPurchased(p)}
                   />
+                  <ConfirmDeleteButton onConfirm={() => remove(p.id)} />
                 </div>
-                <ConfirmMarkButton
-                  confirming={armedPurchaseIds.includes(p.id)}
-                  onArm={() => setArmedPurchaseIds((prev) => [...prev, p.id])}
-                  onConfirm={() => markPurchased(p)}
-                />
-                <ConfirmDeleteButton onConfirm={() => remove(p.id)} />
+                {commentOpen && (
+                  <textarea
+                    className={inputClass + ' mt-2 h-16 py-2 text-sm'}
+                    placeholder="Комментарий"
+                    value={p.comment || ''}
+                    onChange={(e) => setPlannedComment(p.id, e.target.value)}
+                    autoFocus
+                  />
+                )}
+                {!commentOpen && hasComment && (
+                  <p className="text-xs text-orange-600 mt-1.5">💬 {p.comment}</p>
+                )}
               </div>
             )
           })}

@@ -14,7 +14,7 @@ import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
 import { downloadCsv } from '../utils/csv'
 import { uid } from '../utils/id'
-import { coursesForDay } from '../utils/menuCourses'
+import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
 
 function matchesSearch(name, search) {
   const q = search.trim().toLowerCase()
@@ -640,15 +640,6 @@ export default function Inventory({
     const key = (name || '').trim().toLowerCase()
     if (!key) return null
     return recipes.find((r) => (r.name || '').trim().toLowerCase() === key) || null
-  }
-
-  // Menu quantities are free text ("40 шт", "по 2 порции") since they're
-  // meant for printing, not math — pull out the leading number so the
-  // multiplier used against a recipe's ingredients is actually numeric.
-  function extractQtyNumber(qtyStr) {
-    const match = String(qtyStr || '').match(/[\d.,]+/)
-    if (!match) return '1'
-    return match[0].replace(',', '.')
   }
 
   function addProductionsFromMenu(fromStr, toStr) {
