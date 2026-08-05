@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare } from 'lucide-react'
 import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
-import { formatRu, todayKey, parseLocalDate, addDays, monthKey } from '../utils/dateUtils'
+import { formatRu, todayKey, parseLocalDate, addDays, monthKey, toKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { sanitizeDecimal } from '../utils/number'
@@ -27,6 +27,7 @@ export default function ShoppingList({
   const [importResult, setImportResult] = useState(null)
   const [menuImportFrom, setMenuImportFrom] = useState(todayKey())
   const [menuImportTo, setMenuImportTo] = useState(todayKey())
+  const [menuImportExcluded, setMenuImportExcluded] = useState(() => new Set())
   const [menuImportResult, setMenuImportResult] = useState(null)
   const [openPlannedComment, setOpenPlannedComment] = useState(null)
   const now = new Date()
@@ -80,22 +81,22 @@ export default function ShoppingList({
     return recipes.find((r) => (r.name || '').trim().toLowerCase() === key) || null
   }
 
-  // Sums every ingredient across every dish scheduled in the menu for the
-  // given range into one planned-purchase entry per product — doesn't touch
-  // stock (no purchases/productions created), just tells you what the menu
-  // is going to need. Only fills in products not already on the list; if
-  // one's already there you adjust its qty yourself, same as everywhere else
-  // in this app that avoids silently overwriting a number you might have
-  // already started editing.
-  function importFromMenu() {
+  function setMenuImportRange(from, to) {
+    setMenuImportFrom(from)
+    setMenuImportTo(to)
+    setMenuImportExcluded(new Set())
+  }
+
+  // Every dish scheduled in the menu across the chosen range, so the user can
+  // uncheck specific ones instead of always importing the whole period —
+  // same "list days/dishes, let them exclude some" pattern as MenuPlanner's
+  // print-range picker.
+  const menuImportDishes = useMemo(() => {
+    if (!menuImportFrom || !menuImportTo) return []
     const from = parseLocalDate(menuImportFrom)
     const to = parseLocalDate(menuImportTo)
-    if (to < from) {
-      setMenuImportResult('Дата «по» раньше даты «от».')
-      return
-    }
-    const neededByProduct = new Map()
-    const missingDishes = new Set()
+    if (to < from) return []
+    const list = []
     let cursor = from
     let guard = 0
     while (cursor <= to && guard < 90) {
@@ -104,21 +105,53 @@ export default function ShoppingList({
       if (dayData) {
         coursesForDay(dayData).forEach((c) => {
           if (!c.dish) return
-          const recipe = findRecipeByName(c.dish)
-          if (!recipe) {
-            missingDishes.add(c.dish)
-            return
-          }
-          const multiplier = Number(extractQtyNumber(c.qty)) || 1
-          recipe.ingredients.forEach((ing) => {
-            const need = (Number(ing.qty) || 0) * multiplier
-            neededByProduct.set(ing.productId, (neededByProduct.get(ing.productId) || 0) + need)
+          list.push({
+            key: `${toKey(cursor)}-${c.id}`,
+            date: new Date(cursor),
+            dish: c.dish,
+            qty: c.qty,
+            recipe: findRecipeByName(c.dish),
           })
         })
       }
       cursor = addDays(cursor, 1)
       guard += 1
     }
+    return list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuImportFrom, menuImportTo, menuData, recipes])
+
+  function toggleMenuImportDish(key) {
+    setMenuImportExcluded((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  // Sums every ingredient across every selected dish's recipe into one
+  // planned-purchase entry per product — doesn't touch stock (no
+  // purchase/production record created), just tells you what the menu is
+  // going to need. Only fills in products not already on the list; if one's
+  // already there you adjust its qty yourself, same as everywhere else in
+  // this app that avoids silently overwriting a number you might have
+  // already started editing.
+  function importFromMenu() {
+    const selected = menuImportDishes.filter((d) => !menuImportExcluded.has(d.key))
+    const neededByProduct = new Map()
+    const missingDishes = new Set()
+    selected.forEach((d) => {
+      if (!d.recipe) {
+        missingDishes.add(d.dish)
+        return
+      }
+      const multiplier = Number(extractQtyNumber(d.qty)) || 1
+      d.recipe.ingredients.forEach((ing) => {
+        const need = (Number(ing.qty) || 0) * multiplier
+        neededByProduct.set(ing.productId, (neededByProduct.get(ing.productId) || 0) + need)
+      })
+    })
 
     let added = 0
     let alreadyPlanned = 0
@@ -280,13 +313,53 @@ export default function ShoppingList({
         </p>
         <div className="flex gap-2 mb-2">
           <div className="flex-1 min-w-0">
-            <input type="date" className={inputClass} value={menuImportFrom} onChange={(e) => setMenuImportFrom(e.target.value)} />
+            <input
+              type="date"
+              className={inputClass}
+              value={menuImportFrom}
+              onChange={(e) => setMenuImportRange(e.target.value, menuImportTo)}
+            />
           </div>
           <div className="flex-1 min-w-0">
-            <input type="date" className={inputClass} value={menuImportTo} onChange={(e) => setMenuImportTo(e.target.value)} />
+            <input
+              type="date"
+              className={inputClass}
+              value={menuImportTo}
+              onChange={(e) => setMenuImportRange(menuImportFrom, e.target.value)}
+            />
           </div>
         </div>
-        <BigButton onClick={importFromMenu} icon={Calendar}>
+        {menuImportDishes.length > 0 && (
+          <div className="flex flex-col gap-1.5 mb-3">
+            {menuImportDishes.map((d) => {
+              const checked = !menuImportExcluded.has(d.key)
+              return (
+                <label
+                  key={d.key}
+                  className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${
+                    checked ? 'border-slate-200 dark:border-slate-700' : 'border-slate-100 dark:border-slate-800 opacity-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleMenuImportDish(d.key)}
+                    className="shrink-0 w-5 h-5 accent-orange-500"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-slate-700 dark:text-slate-200 truncate">
+                      {d.dish}{d.qty ? ` — ${d.qty}` : ''}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {formatRu(d.date)}{!d.recipe && ' · нет рецепта'}
+                    </p>
+                  </div>
+                </label>
+              )
+            })}
+          </div>
+        )}
+        <BigButton onClick={importFromMenu} icon={Calendar} disabled={menuImportDishes.length === 0}>
           Импортировать из меню
         </BigButton>
         {menuImportResult && (
