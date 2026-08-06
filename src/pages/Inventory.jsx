@@ -41,7 +41,7 @@ const toneClasses = {
 export default function Inventory({
   items, setItems, audits, setAudits,
   recountCatalog, setRecountCatalog, recounts, setRecounts,
-  recipes, purchases, setPurchases, productions, setProductions,
+  recipes, setRecipes, purchases, setPurchases, productions, setProductions,
   catalogWaste, setCatalogWaste,
   plannedPurchases, setPlannedPurchases, menuData, staffName,
   initialTab, initialHighlightId, onInitialConsumed,
@@ -410,6 +410,91 @@ export default function Inventory({
     })
     const sorted = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
     setUnitAuditResult(sorted)
+  }
+
+  // Automatic half of the г/мл unification — кг→г and л→мл are a pure,
+  // lossless ×1000 (no real-world weight/volume to guess, unlike
+  // шт/пучок/банка/etc.), but "pure" still means touching every place a
+  // quantity for that product is stored: the catalog's own minQty/costPerUnit,
+  // every переучёт, приход, расход, списание, and every recipe ingredient
+  // that references it — a partial conversion (e.g. catalog only) would
+  // silently break every balance calculation downstream.
+  function runAutoUnitConversion() {
+    const factorMap = new Map()
+    recountCatalog.forEach((item) => {
+      const u = (item.unit || '').trim().toLowerCase()
+      if (u === 'кг') factorMap.set(String(item.id), { factor: 1000, newUnit: 'г' })
+      else if (u === 'л') factorMap.set(String(item.id), { factor: 1000, newUnit: 'мл' })
+    })
+    if (factorMap.size === 0) {
+      alert('Товаров в «кг» или «л» не найдено — конвертировать нечего.')
+      return
+    }
+    const proceed = window.confirm(
+      `Конвертировать ${factorMap.size} товар(ов) из кг→г и л→мл?\n\n` +
+      `Пересчитается вся история по этим товарам — остатки, переучёты, приход, расход, списания и ингредиенты в рецептах: количества умножатся на 1000, а цена за единицу поделится на 1000.\n\n` +
+      `Рекомендую сначала сделать резервную копию (Дашборд → «Скачать копию (JSON)»).`
+    )
+    if (!proceed) return
+
+    setRecountCatalog((prev) => prev.map((item) => {
+      const conv = factorMap.get(String(item.id))
+      if (!conv) return item
+      return {
+        ...item,
+        unit: conv.newUnit,
+        minQty: item.minQty !== undefined && item.minQty !== '' ? String((Number(item.minQty) || 0) * conv.factor) : item.minQty,
+        costPerUnit: item.costPerUnit !== undefined && item.costPerUnit !== '' ? String((Number(item.costPerUnit) || 0) / conv.factor) : item.costPerUnit,
+      }
+    }))
+
+    setRecounts((prev) => {
+      const next = {}
+      Object.entries(prev).forEach(([mk, r]) => {
+        const newQty = { ...(r.qty || {}) }
+        let changed = false
+        Object.keys(newQty).forEach((pid) => {
+          const conv = factorMap.get(String(pid))
+          if (conv && newQty[pid] !== undefined && newQty[pid] !== '') {
+            newQty[pid] = String((Number(newQty[pid]) || 0) * conv.factor)
+            changed = true
+          }
+        })
+        next[mk] = changed ? { ...r, qty: newQty } : r
+      })
+      return next
+    })
+
+    setPurchases((prev) => prev.map((p) => {
+      const conv = factorMap.get(String(p.productId))
+      if (!conv) return p
+      return { ...p, qty: String((Number(p.qty) || 0) * conv.factor) }
+    }))
+
+    setProductions((prev) => prev.map((p) => {
+      if (p.productId == null) return p
+      const conv = factorMap.get(String(p.productId))
+      if (!conv) return p
+      return { ...p, qty: String((Number(p.qty) || 0) * conv.factor) }
+    }))
+
+    setCatalogWaste((prev) => prev.map((w) => {
+      const conv = factorMap.get(String(w.productId))
+      if (!conv) return w
+      return { ...w, qty: String((Number(w.qty) || 0) * conv.factor) }
+    }))
+
+    setRecipes((prev) => prev.map((r) => ({
+      ...r,
+      ingredients: (r.ingredients || []).map((ing) => {
+        const conv = factorMap.get(String(ing.productId))
+        if (!conv) return ing
+        return { ...ing, qty: String((Number(ing.qty) || 0) * conv.factor) }
+      }),
+    })))
+
+    alert(`Готово: ${factorMap.size} товар(ов) переведено в г/мл вместе со всей историей и рецептами.`)
+    setUnitAuditResult(null)
   }
 
   function importCatalog() {
@@ -1432,6 +1517,14 @@ export default function Inventory({
                     </div>
                   ))}
                 </div>
+                {unitAuditResult.some(([unit]) => ['кг', 'л'].includes(unit.trim().toLowerCase())) && (
+                  <button
+                    onClick={runAutoUnitConversion}
+                    className="mt-2 w-full min-h-[36px] rounded-lg bg-orange-600 text-white text-xs font-semibold"
+                  >
+                    Конвертировать кг→г и л→мл автоматически
+                  </button>
+                )}
               </div>
             )}
             <div className="flex gap-1.5 mb-3">

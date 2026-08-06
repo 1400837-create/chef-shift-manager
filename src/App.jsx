@@ -321,6 +321,7 @@ export default function App() {
               recounts={recounts}
               setRecounts={setRecounts}
               recipes={recipes}
+              setRecipes={setRecipes}
               purchases={purchases}
               setPurchases={setPurchases}
               productions={productions}
