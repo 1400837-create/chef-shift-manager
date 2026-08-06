@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus, Printer,
   BookOpen, Pencil, Camera, Calendar, Check, ExternalLink,
@@ -17,14 +18,6 @@ import { compressToDataUrl } from '../utils/imageCompress'
 import { sanitizeDecimal } from '../utils/number'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { uid } from '../utils/id'
-
-function slugify(label) {
-  return (label || '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-zа-яё0-9]+/gi, '-')
-    .replace(/^-+|-+$/g, '') || 'blyudo'
-}
 
 export default function MenuPlanner({
   menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary,
@@ -665,10 +658,6 @@ export default function MenuPlanner({
     setImportText('')
   }
 
-  const allLabels = useMemo(
-    () => [...new Set([...DEFAULT_MENU_COURSES, ...Object.keys(dishLibrary || {})])],
-    [dishLibrary]
-  )
   const recipeNames = useMemo(() => (recipes || []).map((r) => r.name), [recipes])
 
   function suggestionsFor(label) {
@@ -682,6 +671,23 @@ export default function MenuPlanner({
       combined.push(dish)
     }
     return combined
+  }
+
+  // Native <input list=datalist> dropdowns turned out unreliable on real
+  // devices (no visible arrow/affordance on most, inconsistent across
+  // browsers) — same problem already worked around elsewhere in this app.
+  // This is a custom dropdown instead: an explicit arrow button opens it,
+  // portalled to document.body since the day card it lives in clips
+  // overflow for its rounded corners.
+  const [openDishDropdown, setOpenDishDropdown] = useState(null)
+  const [dishDropdownRect, setDishDropdownRect] = useState(null)
+
+  function openDishSuggestions(e, courseId) {
+    const wrap = e.currentTarget.closest('.dish-input-wrap')
+    if (!wrap) return
+    const r = wrap.getBoundingClientRect()
+    setDishDropdownRect({ top: r.bottom, left: r.left, width: r.width })
+    setOpenDishDropdown(openDishDropdown === courseId ? null : courseId)
   }
 
   return (
@@ -902,15 +908,51 @@ export default function MenuPlanner({
                             onChange={(e) => updateCourse(day, course.id, { label: e.target.value })}
                           />
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div className="dish-input-wrap flex-1 min-w-0 relative">
                           <input
-                            className={inputClass}
+                            className={inputClass + ' pr-9'}
                             placeholder="Блюдо"
-                            list={`dishlist-${slugify(course.label)}`}
                             value={course.dish}
                             onChange={(e) => updateCourse(day, course.id, { dish: e.target.value })}
-                            onBlur={(e) => commitDish(course.label, e.target.value)}
+                            onFocus={(e) => openDishSuggestions(e, course.id)}
+                            onBlur={(e) => { commitDish(course.label, e.target.value); setTimeout(() => setOpenDishDropdown(null), 150) }}
                           />
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => openDishSuggestions(e, course.id)}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-400"
+                          >
+                            <ChevronDown size={16} className={openDishDropdown === course.id ? 'rotate-180' : ''} />
+                          </button>
+                          {openDishDropdown === course.id && dishDropdownRect && createPortal(
+                            (() => {
+                              const options = suggestionsFor(course.label).filter((d) =>
+                                d.toLowerCase().includes((course.dish || '').trim().toLowerCase())
+                              )
+                              if (options.length === 0) return null
+                              return (
+                                <div
+                                  style={{ position: 'fixed', top: dishDropdownRect.top + 4, left: dishDropdownRect.left, width: dishDropdownRect.width }}
+                                  className="z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-56 overflow-y-auto"
+                                >
+                                  {options.map((dish) => (
+                                    <button
+                                      key={dish}
+                                      type="button"
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => { updateCourse(day, course.id, { dish }); commitDish(course.label, dish); setOpenDishDropdown(null) }}
+                                      className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 active:bg-slate-100 dark:active:bg-slate-700 border-b border-slate-100 dark:border-slate-700 last:border-0"
+                                    >
+                                      {dish}
+                                    </button>
+                                  ))}
+                                </div>
+                              )
+                            })(),
+                            document.body
+                          )}
                         </div>
                         <button
                           onClick={() => updateCourse(day, course.id, { kosher: !course.kosher })}
@@ -1282,13 +1324,6 @@ export default function MenuPlanner({
         </>
       )}
 
-      {allLabels.map((label) => (
-        <datalist key={label} id={`dishlist-${slugify(label)}`}>
-          {suggestionsFor(label).map((dish) => (
-            <option key={dish} value={dish} />
-          ))}
-        </datalist>
-      ))}
     </div>
   )
 }
