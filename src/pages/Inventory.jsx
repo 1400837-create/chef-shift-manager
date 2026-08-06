@@ -65,6 +65,7 @@ export default function Inventory({
   const [catalogSelectMode, setCatalogSelectMode] = useState(false)
   const [selectedCatalogIds, setSelectedCatalogIds] = useState(() => new Set())
   const [balanceSort, setBalanceSort] = useState('alpha')
+  const [unitAuditResult, setUnitAuditResult] = useState(null)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [recountSearch, setRecountSearch] = useState('')
   const [balanceSearch, setBalanceSearch] = useState('')
@@ -390,6 +391,25 @@ export default function Inventory({
       })
     )
     alert(`Готово. Новые ID присвоены: ${dupIds.reduce((s, [, c]) => s + c, 0) - dupIds.length} товар(ам).`)
+  }
+
+  // Unit unification (г/мл everywhere) — first step is just visibility:
+  // group every catalog item whose unit isn't already г/мл, so the user can
+  // see the real scope before deciding how to handle each unit (кг/л are a
+  // safe automatic ×1000, but шт/пучок/банка/etc. need a real per-product
+  // weight only the user can supply — no guessing that here).
+  function runUnitAudit() {
+    const alreadyFine = new Set(['г', 'мл'])
+    const groups = new Map()
+    recountCatalog.forEach((item) => {
+      const unit = (item.unit || '').trim()
+      const key = unit.toLowerCase()
+      if (alreadyFine.has(key)) return
+      if (!groups.has(unit)) groups.set(unit, [])
+      groups.get(unit).push(item.name || '?')
+    })
+    const sorted = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
+    setUnitAuditResult(sorted)
   }
 
   function importCatalog() {
@@ -1387,7 +1407,33 @@ export default function Inventory({
               <button onClick={runCatalogDiagnostics} className="text-[11px] text-slate-400 underline">
                 Диагностика
               </button>
+              <button onClick={runUnitAudit} className="text-[11px] text-slate-400 underline">
+                Единицы измерения
+              </button>
             </div>
+            {unitAuditResult && (
+              <div className="mb-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 px-3 py-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-semibold text-orange-800 dark:text-orange-200">
+                    Не в г/мл: {unitAuditResult.reduce((s, [, names]) => s + names.length, 0)} товар(ов)
+                  </p>
+                  <button onClick={() => setUnitAuditResult(null)} className="text-xs text-orange-600">Скрыть</button>
+                </div>
+                {unitAuditResult.length === 0 && (
+                  <p className="text-xs text-slate-500">Все товары уже в г/мл.</p>
+                )}
+                <div className="max-h-72 overflow-y-auto flex flex-col gap-2">
+                  {unitAuditResult.map(([unit, names]) => (
+                    <div key={unit}>
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        «{unit}» — {names.length} шт.
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{names.join(', ')}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-1.5 mb-3">
               {SORT_OPTIONS.map((opt) => (
                 <button
