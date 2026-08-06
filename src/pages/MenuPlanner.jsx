@@ -423,6 +423,7 @@ export default function MenuPlanner({
     const nextRecipes = [...recipes]
     const workingCatalog = [...recountCatalog]
     const newProducts = []
+    const unitMismatches = []
     let imported = 0
     let skippedExisting = 0
 
@@ -437,6 +438,31 @@ export default function MenuPlanner({
       return product
     }
 
+    // Rational Chef OS's export carries its own per-ingredient unit, which
+    // can silently disagree with the catalog product's unit (e.g. the export
+    // says "0.21 л" but the existing nomenclature item is tracked in "г") —
+    // without reconciling them, the qty gets stored against the wrong scale
+    // (0.21 "г" instead of 210 г), which is exactly the class of bug behind
+    // the tiny/fractional ingredient amounts seen in already-imported ТК.
+    // Only кг↔г and л↔мл are auto-reconciled (an exact ×1000); anything else
+    // (e.g. import says "шт", catalog says "г") can't be resolved without a
+    // real per-item weight, so it's left as-is and flagged for manual review.
+    function reconcileQty(rawQty, importUnit, product) {
+      const iu = (importUnit || '').trim().toLowerCase()
+      const cu = (product.unit || '').trim().toLowerCase()
+      const qtyNum = Number(rawQty) || 0
+      if (!iu || iu === cu) return { qty: rawQty, mismatch: false }
+      const massFactor = { 'кг': 1000, 'г': 1 }
+      const volFactor = { 'л': 1000, 'мл': 1 }
+      for (const fam of [massFactor, volFactor]) {
+        if (iu in fam && cu in fam) {
+          return { qty: String(qtyNum * (fam[iu] / fam[cu])), mismatch: false }
+        }
+      }
+      unitMismatches.push(`${product.name} (импорт «${importUnit}» ≠ каталог «${product.unit}»)`)
+      return { qty: rawQty, mismatch: true }
+    }
+
     parsed.forEach((parsedRecipe) => {
       const key = parsedRecipe.name.toLowerCase()
       const existing = existingByName.get(key)
@@ -446,7 +472,8 @@ export default function MenuPlanner({
       }
       const ingredients = parsedRecipe.ingredients.map(({ ingredientName, qty, unit }) => {
         const product = resolveProduct(ingredientName, unit)
-        return { productId: product.id, qty: String(qty ?? '') }
+        const { qty: reconciledQty } = reconcileQty(String(qty ?? ''), unit, product)
+        return { productId: product.id, qty: reconciledQty }
       })
       const payload = { name: parsedRecipe.name, ingredients, comment: parsedRecipe.comment || '', photo: null }
       if (existing) {
@@ -463,6 +490,7 @@ export default function MenuPlanner({
     const parts = [`Импортировано рецептов: ${imported}`]
     if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
     if (newProducts.length) parts.push(`создано новых позиций в номенклатуре: ${newProducts.length}`)
+    if (unitMismatches.length) parts.push(`несовпадение единиц, нужна проверка (${unitMismatches.length}): ${unitMismatches.join('; ')}`)
     setRationalImportResult(parts.join(', '))
     setRationalImportText('')
   }
