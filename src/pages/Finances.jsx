@@ -1,18 +1,14 @@
 import { useMemo, useState } from 'react'
-import { Wallet, Receipt, Plus, Camera, Send, Copy, Image as ImageIcon } from 'lucide-react'
-import { Section, Field, inputClass, Badge, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
+import { Wallet, Receipt, Plus, Camera, Send, Copy, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Section, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { RECEIPT_CATEGORIES } from '../utils/constants'
-import { biweekKey, formatRu, parseLocalDate } from '../utils/dateUtils'
-import { financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
+import { formatRu, parseLocalDate, monthKey, MONTHS_RU } from '../utils/dateUtils'
 import { compressToDataUrl } from '../utils/imageCompress'
 import { sanitizeDecimal } from '../utils/number'
 import { downloadCsv } from '../utils/csv'
 
-export default function Finances({ advances, setAdvances, receipts, setReceipts, staffName }) {
+export default function Finances({ advance, setAdvance, receipts, setReceipts, staffName }) {
   const now = new Date()
-  const periodKey = biweekKey(now)
-  const dl = financeDeadlineInfo(now)
-  const advance = advances[periodKey] || { budget: '' }
 
   const [receiptForm, setReceiptForm] = useState({
     amount: '', category: 'vegetables', date: now.toISOString().slice(0, 10), fileName: '', photoDataUrl: null,
@@ -21,16 +17,29 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
   const [copyMessage, setCopyMessage] = useState(null)
   const [photoProcessing, setPhotoProcessing] = useState(false)
   const [photoError, setPhotoError] = useState(null)
+  const [monthOffset, setMonthOffset] = useState(0)
 
-  const periodReceipts = useMemo(
-    () => receipts.filter((r) => r.periodKey === periodKey),
-    [receipts, periodKey]
+  // Receipts entered since the advance amount was last set count against it —
+  // entering a new amount is what starts a fresh count, there's no fixed
+  // calendar period anymore.
+  const sinceAdvanceReceipts = useMemo(
+    () => receipts.filter((r) => (r.enteredAt || 0) >= (advance.updatedAt || 0)),
+    [receipts, advance.updatedAt]
   )
-  const spent = periodReceipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+  const spent = sinceAdvanceReceipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
   const remaining = (Number(advance.budget) || 0) - spent
 
+  const viewedMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const viewedMonthKey = monthKey(viewedMonth)
+  const monthLabel = `${MONTHS_RU[viewedMonth.getMonth()]} ${viewedMonth.getFullYear()}`
+  const monthReceipts = useMemo(
+    () => receipts.filter((r) => (r.date || '').slice(0, 7) === viewedMonthKey)
+      .sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [receipts, viewedMonthKey]
+  )
+
   function setBudget(value) {
-    setAdvances((prev) => ({ ...prev, [periodKey]: { ...advance, budget: value } }))
+    setAdvance({ budget: value, updatedAt: Date.now() })
   }
 
   // Shared by both the "Камера" and "Галерея" file inputs — capture="environment"
@@ -67,7 +76,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
     setFormError(null)
     const entry = {
       id: Date.now(),
-      periodKey,
+      enteredAt: Date.now(),
       date: receiptForm.date,
       amount: receiptForm.amount,
       category: receiptForm.category,
@@ -92,13 +101,13 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
 
   function buildReportText() {
     const lines = [
-      `Финансовый отчёт за период до ${dl.label}`,
+      `Финансовый отчёт на ${formatRu(now)}`,
       `Аванс: ${advance.budget || 0}`,
       `Потрачено: ${spent}`,
       `Остаток: ${remaining}`,
       '',
       'Чеки:',
-      ...periodReceipts.map(
+      ...sinceAdvanceReceipts.map(
         (r) => `- ${formatRu(parseLocalDate(r.date))} · ${RECEIPT_CATEGORIES.find((c) => c.key === r.category)?.label} · ${r.amount}`
       ),
     ]
@@ -107,13 +116,13 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
 
   function sendReport() {
     const body = encodeURIComponent(buildReportText())
-    const subject = encodeURIComponent(`Финансовый отчёт — ${dl.label}`)
+    const subject = encodeURIComponent(`Финансовый отчёт — ${formatRu(now)}`)
     window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
-  function exportReceiptsCsv() {
+  function exportMonthReceiptsCsv() {
     const rows = [['Дата', 'Категория', 'Сумма', 'Кто', 'Файл']]
-    periodReceipts.forEach((r) => {
+    monthReceipts.forEach((r) => {
       rows.push([
         r.date,
         RECEIPT_CATEGORIES.find((c) => c.key === r.category)?.label || r.category,
@@ -122,7 +131,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
         r.fileName || '',
       ])
     })
-    downloadCsv(`Чеки_${periodKey}.csv`, rows)
+    downloadCsv(`Чеки_${viewedMonthKey}.csv`, rows)
   }
 
   async function copyReport() {
@@ -138,8 +147,8 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
 
   return (
     <div className="pb-4">
-      <Section title="Аванс на 2 недели" icon={Wallet}>
-        <Field label="Сумма аванса на текущий период">
+      <Section title="Аванс" icon={Wallet}>
+        <Field label="Сумма аванса">
           <input
             type="text"
             inputMode="decimal"
@@ -149,6 +158,9 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
             placeholder="0"
           />
         </Field>
+        <p className="text-xs text-slate-400 mt-1">
+          Введите новую сумму, когда получите новый аванс — «Потрачено»/«Остаток» посчитаются заново от этого момента.
+        </p>
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 p-3 text-center">
             <p className="text-xs text-slate-500">Потрачено (авто, по чекам)</p>
@@ -158,10 +170,6 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
             <p className="text-xs text-slate-500">Остаток</p>
             <p className={`font-bold text-lg ${remaining < 0 ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>{remaining}</p>
           </div>
-        </div>
-        <div className="flex items-center justify-between mt-3">
-          <p className="text-sm text-slate-500">Отчёт до {dl.label}</p>
-          <Badge color={urgencyColor(dl.daysLeft)}>{dl.daysLeft < 0 ? 'Просрочено' : dl.daysLeft === 0 ? 'Сегодня!' : `${dl.daysLeft} дн.`}</Badge>
         </div>
       </Section>
 
@@ -244,13 +252,22 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
       </Section>
 
       <Section
-        title={`Чеки за текущий период (${periodReceipts.length})`}
+        title={`Чеки за ${monthLabel} (${monthReceipts.length})`}
         icon={Receipt}
-        right={periodReceipts.length > 0 && <PrintButton onClick={exportReceiptsCsv} label="CSV" />}
+        right={monthReceipts.length > 0 && <PrintButton onClick={exportMonthReceiptsCsv} label="CSV" />}
       >
-        {periodReceipts.length === 0 && <p className="text-sm text-slate-400 text-center py-3">Чеков пока нет</p>}
+        <div className="flex items-center justify-between mb-3">
+          <button onClick={() => setMonthOffset((o) => o - 1)} className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+            <ChevronLeft size={18} />
+          </button>
+          <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">{monthLabel}</p>
+          <button onClick={() => setMonthOffset((o) => o + 1)} disabled={monthOffset >= 0} className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 disabled:opacity-40">
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        {monthReceipts.length === 0 && <p className="text-sm text-slate-400 text-center py-3">Чеков пока нет</p>}
         <ul className="divide-y divide-slate-100">
-          {periodReceipts.map((r) => (
+          {monthReceipts.map((r) => (
             <li key={r.id} className="flex items-center justify-between py-2.5">
               <div>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -283,6 +300,7 @@ export default function Finances({ advances, setAdvances, receipts, setReceipts,
         </p>
       )}
       <p className="text-xs text-slate-400 mt-2">
+        Отчёт — по текущему авансу (все чеки с момента последнего ввода суммы), а не по месяцу из списка ниже.
         Если кнопка «Отправить» не открывает почту (бывает в некоторых мобильных браузерах),
         используйте «Копировать» и вставьте текст вручную в письмо или мессенджер.
       </p>

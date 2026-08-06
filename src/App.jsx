@@ -12,7 +12,7 @@ import { UndoRedoBar } from './components/UI'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { useTabHistory } from './hooks/useTabHistory'
 import { todayKey, addDays, daysBetween, startOfDay, parseLocalDate } from './utils/dateUtils'
-import { menuDeadlineInfo, financeDeadlineInfo } from './utils/deadlines'
+import { menuDeadlineInfo } from './utils/deadlines'
 import { DAILY_CLEANING_ITEMS } from './utils/constants'
 import { computeBalance } from './utils/stockBalance'
 
@@ -48,7 +48,11 @@ export default function App() {
   const [dailyCleaning, setDailyCleaning] = useLocalStorage('dailyCleaning', {})
   const [weeklyCleaning, setWeeklyCleaning] = useLocalStorage('weeklyCleaning', {})
 
-  const [advances, setAdvances] = useLocalStorage('advances', {})
+  // Shape is a single ongoing advance { budget, updatedAt }, not a per-period
+  // map — "Потрачено"/"Остаток" count every receipt entered since updatedAt,
+  // so entering a new advance amount is what starts a fresh count, rather
+  // than an automatic calendar-based reporting period (removed per request).
+  const [advance, setAdvance] = useLocalStorage('advances', { budget: '', updatedAt: 0 })
   const [receipts, setReceipts] = useLocalStorage('receipts', [])
 
   const [recountCatalog, setRecountCatalog] = useLocalStorage('recountCatalog', [])
@@ -92,7 +96,7 @@ export default function App() {
     weeklyCleaning: [weeklyCleaning, setWeeklyCleaning],
   })
   const financesHistory = useTabHistory({
-    advances: [advances, setAdvances],
+    advance: [advance, setAdvance],
     receipts: [receipts, setReceipts],
   })
 
@@ -111,6 +115,46 @@ export default function App() {
       prev.map((item) => (item.minQty === undefined || item.minQty === '' ? { ...item, minQty: '1' } : item))
     )
     localStorage.setItem('kitchenOS_minQtyDefaultsApplied', 'true')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // One-time: finances used to bucket advances/receipts into automatic
+  // 2-week reporting periods (keyed "P<n>"); that concept is gone, replaced
+  // by one ongoing advance. Old data was { "P123": { budget }, ... } — pick
+  // the most recent period's budget as the starting advance, dated to that
+  // period's start so receipts already logged in it still count as spent.
+  useEffect(() => {
+    if (localStorage.getItem('kitchenOS_advancePeriodsMigrated')) return
+    if (advance && typeof advance === 'object' && !Array.isArray(advance) && !('budget' in advance)) {
+      const periodKeys = Object.keys(advance).filter((k) => /^P\d+$/.test(k))
+      if (periodKeys.length) {
+        const latestKey = periodKeys.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))).pop()
+        const epoch = Date.UTC(2024, 0, 1)
+        setAdvance({
+          budget: advance[latestKey]?.budget || '',
+          updatedAt: epoch + Number(latestKey.slice(1)) * 14 * 86400000,
+        })
+      } else {
+        setAdvance({ budget: '', updatedAt: 0 })
+      }
+    }
+    localStorage.setItem('kitchenOS_advancePeriodsMigrated', 'true')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // One-time: receipts didn't previously track enteredAt (they only had the
+  // user-editable "date"), which the new ongoing-advance spent/remaining
+  // calculation needs to compare against advance.updatedAt — backfill from
+  // date so already-logged receipts keep counting correctly.
+  useEffect(() => {
+    if (localStorage.getItem('kitchenOS_receiptsEnteredAtMigrated')) return
+    setReceipts((prev) => prev.map((r) => {
+      if (r.enteredAt) return r
+      let enteredAt = 0
+      try { enteredAt = parseLocalDate(r.date).getTime() } catch { enteredAt = 0 }
+      return { ...r, enteredAt }
+    }))
+    localStorage.setItem('kitchenOS_receiptsEnteredAtMigrated', 'true')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -151,7 +195,11 @@ export default function App() {
       })
 
     const menuUrgent = menuDeadlineInfo(now).daysLeft <= 3
-    const financeUrgent = financeDeadlineInfo(now).daysLeft <= 3
+    const advanceBudget = Number(advance.budget) || 0
+    const advanceSpent = receipts
+      .filter((r) => (r.enteredAt || 0) >= (advance.updatedAt || 0))
+      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+    const financeOverspent = advanceBudget > 0 && advanceBudget - advanceSpent < 0
 
     const dailyState = dailyCleaning[today] || {}
     const dailyIncomplete = DAILY_CLEANING_ITEMS.some((_, idx) => !dailyState[idx])
@@ -171,11 +219,11 @@ export default function App() {
       inventory: expiringSoon,
       menu: menuUrgent,
       cleaning: dailyIncomplete,
-      finances: financeUrgent,
+      finances: financeOverspent,
       shopping: shoppingNeeded,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inventoryItems, dailyCleaning, shiftChecklist, today, recountCatalog, recounts, purchases, productions, recipes, plannedPurchases, catalogWaste])
+  }, [inventoryItems, dailyCleaning, shiftChecklist, today, recountCatalog, recounts, purchases, productions, recipes, plannedPurchases, catalogWaste, advance, receipts])
 
   // Best-effort reminders: GitHub Pages is static (no server), so there is no
   // real background push — this only fires while the app/tab is open.
@@ -201,9 +249,8 @@ export default function App() {
       if (menuInfo.daysLeft <= 1) {
         notifyOnce(`menu_${d}`, 'Kitchen OS — дедлайн меню', `Меню нужно сдать: ${menuInfo.label}`)
       }
-      const finInfo = financeDeadlineInfo(new Date())
-      if (finInfo.daysLeft <= 1) {
-        notifyOnce(`finance_${d}`, 'Kitchen OS — финансовый отчёт', `Отчёт нужно сдать: ${finInfo.label}`)
+      if (alerts.finances) {
+        notifyOnce(`finance_${d}`, 'Kitchen OS — аванс', 'Остаток аванса ушёл в минус')
       }
       if (alerts.shopping) {
         notifyOnce(`shopping_${d}`, 'Kitchen OS — мало на складе', 'Есть товары с низким остатком, ещё не добавленные в закупку')
@@ -214,7 +261,7 @@ export default function App() {
     const id = setInterval(check, 5 * 60 * 1000)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notificationsEnabled, alerts.shopping])
+  }, [notificationsEnabled, alerts.shopping, alerts.finances])
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
@@ -372,8 +419,8 @@ export default function App() {
           <>
             <UndoRedoBar {...financesHistory} />
             <Finances
-              advances={advances}
-              setAdvances={setAdvances}
+              advance={advance}
+              setAdvance={setAdvance}
               receipts={receipts}
               setReceipts={setReceipts}
               staffName={staffName}

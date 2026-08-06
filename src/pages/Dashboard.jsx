@@ -3,7 +3,7 @@ import { ClipboardList, AlertTriangle, UtensilsCrossed, Plus, CalendarClock, Sun
 import { Section, CheckRow, Badge, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { TASK_CATEGORIES } from '../utils/constants'
 import { todayKey, formatRu, monthKey, parseLocalDate } from '../utils/dateUtils'
-import { menuDeadlineInfo, financeDeadlineInfo, urgencyColor } from '../utils/deadlines'
+import { menuDeadlineInfo, urgencyColor } from '../utils/deadlines'
 import { downloadBackup, parseBackupFile, applyBackup } from '../utils/backup'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
@@ -69,7 +69,6 @@ export default function Dashboard({
   }, [menuData])
 
   const menuDl = menuDeadlineInfo(now)
-  const financeDl = financeDeadlineInfo(now)
 
   const [showHistory, setShowHistory] = useState(false)
   const historyDays = Object.keys(shiftChecklist)
@@ -246,7 +245,6 @@ export default function Dashboard({
       <Section title="Сроки и напоминания" icon={CalendarClock}>
         <div className="flex flex-col gap-2">
           <DeadlineRow label="Подача меню на след. месяц" date={menuDl.label} daysLeft={menuDl.daysLeft} />
-          <DeadlineRow label="Финансовый отчёт (аванс)" date={financeDl.label} daysLeft={financeDl.daysLeft} />
         </div>
       </Section>
 

@@ -47,16 +47,6 @@ export function isoWeekKey(d = new Date()) {
   return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`
 }
 
-// Bi-weekly period key: pairs of ISO weeks starting from an arbitrary epoch,
-// used for advance/finance report cycles.
-export function biweekKey(d = new Date()) {
-  const epoch = new Date(Date.UTC(2024, 0, 1))
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
-  const diffDays = Math.floor((date - epoch) / 86400000)
-  const period = Math.floor(diffDays / 14)
-  return `P${period}`
-}
-
 export function daysBetween(a, b) {
   const ms = startOfDay(b) - startOfDay(a)
   return Math.round(ms / 86400000)
