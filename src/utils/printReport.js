@@ -35,26 +35,31 @@ function buildTasksHtml(payload) {
 
 function buildMenuHtml(payload) {
   // Each day can have a different number of courses now (default 5, +Add),
-  // so a fixed-column table no longer fits — list each day's courses instead.
-  const days = payload.days.map((d) => {
+  // so a fixed-column table (one column per course slot) no longer fits —
+  // instead each (day, course) is its own row, with a bold/bordered "day
+  // header" row starting each day's block. Keeps it a single continuous
+  // table (clean grid, easy to scan) without assuming a fixed course count.
+  const rows = payload.days.map((d) => {
     const filled = d.courses.filter((c) => c.dish)
-    const rows = filled.length
-      ? filled.map((c) => {
-          const label = c.label ? `${escapeHtml(c.label)}: ` : ''
-          const qty = c.qty ? ` — ${escapeHtml(c.qty)}` : ''
-          return `<div>${label}${escapeHtml(c.dish)}${qty}${c.kosher ? ' ✡' : ''}</div>`
-        }).join('')
-      : '<div class="muted">—</div>'
-    return `
-      <div class="print-no-break" style="margin-bottom:10px;">
-        <b>${escapeHtml(d.day)}. ${escapeHtml(d.weekday)}</b>
-        ${rows}
-      </div>`
+    const dayLabel = `${escapeHtml(d.day)}, ${escapeHtml(d.weekday)}`
+    const dayHeaderRow = `<tr class="day-row"><td colspan="3">${dayLabel}</td></tr>`
+    const courseRows = filled.length
+      ? filled.map((c) => `
+          <tr>
+            <td>${escapeHtml(c.label || '—')}</td>
+            <td>${escapeHtml(c.dish)}${c.kosher ? ' ✡' : ''}</td>
+            <td class="nowrap">${escapeHtml(c.qty || '')}</td>
+          </tr>`).join('')
+      : '<tr><td colspan="3" class="muted">—</td></tr>'
+    return dayHeaderRow + courseRows
   }).join('')
 
   return `
     <h1>${escapeHtml(payload.title)}</h1>
-    ${days}
+    <table>
+      <thead><tr><th style="width:120px;">Приём пищи</th><th>Блюдо</th><th style="width:90px;">Кол-во</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
     <p class="muted" style="margin-top:8px;">✡ — кошерное блюдо (кашрут)</p>
   `
 }
@@ -191,6 +196,7 @@ export function printReport(payload) {
   .muted { color: #555; }
   .nowrap { white-space: nowrap; }
   .print-no-break { break-inside: avoid; page-break-inside: avoid; }
+  .day-row td { font-weight: bold; background: #eee; border-top: 2px solid #000; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 </style>
 </head>
 <body>
