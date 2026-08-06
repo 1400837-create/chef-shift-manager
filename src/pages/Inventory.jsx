@@ -497,6 +497,38 @@ export default function Inventory({
     setUnitAuditResult(null)
   }
 
+  // A handful of catalog items are recorded in "шт" but are actually liquids
+  // (растительное масло, лимонный сок, бульон, вода) — clear naming
+  // anomalies, not real count-based items like яйца or хлеб. Unlike кг→г/л→мл
+  // there is no reliable "1 шт = X мл" factor here, so this only relabels the
+  // unit going forward; it deliberately does NOT rescale any existing
+  // quantities, since guessing a factor could silently corrupt real data.
+  const LIQUID_UNIT_ANOMALIES = new Set([
+    'масло растительное', 'сок лимонный', 'бульон', 'бульон / вода', 'вода',
+  ])
+  function runLiquidAnomalyFix() {
+    const matches = recountCatalog.filter((item) => {
+      const unit = (item.unit || '').trim().toLowerCase()
+      if (unit === 'мл' || unit === 'л') return false
+      return LIQUID_UNIT_ANOMALIES.has((item.name || '').trim().toLowerCase())
+    })
+    if (matches.length === 0) {
+      alert('Явных аномалий (масло/сок/бульон/вода в «шт») не найдено.')
+      return
+    }
+    const proceed = window.confirm(
+      `Переименовать единицу в «мл» для ${matches.length} товар(ов): ${matches.map((m) => m.name).join(', ')}?\n\n` +
+      `Количества (мин. остаток, история) НЕ будут пересчитаны — надёжного коэффициента «шт → мл» нет. Проверьте и при необходимости поправьте эти значения вручную после.`
+    )
+    if (!proceed) return
+    const ids = new Set(matches.map((m) => String(m.id)))
+    setRecountCatalog((prev) => prev.map((item) => (
+      ids.has(String(item.id)) ? { ...item, unit: 'мл' } : item
+    )))
+    alert(`Готово: единица изменена на «мл» для ${matches.length} товар(ов).`)
+    setUnitAuditResult(null)
+  }
+
   function importCatalog() {
     const { items: parsed, skipped } = parseRecountCatalogImport(catalogImportText)
     const existingNames = new Set(recountCatalog.map((i) => (i.name || '').trim().toLowerCase()))
@@ -1523,6 +1555,14 @@ export default function Inventory({
                     className="mt-2 w-full min-h-[36px] rounded-lg bg-orange-600 text-white text-xs font-semibold"
                   >
                     Конвертировать кг→г и л→мл автоматически
+                  </button>
+                )}
+                {unitAuditResult.some(([, names]) => names.some((n) => LIQUID_UNIT_ANOMALIES.has((n || '').trim().toLowerCase()))) && (
+                  <button
+                    onClick={runLiquidAnomalyFix}
+                    className="mt-2 w-full min-h-[36px] rounded-lg bg-orange-500 text-white text-xs font-semibold"
+                  >
+                    Исправить аномалии (масло/сок/бульон/вода → мл)
                   </button>
                 )}
               </div>
