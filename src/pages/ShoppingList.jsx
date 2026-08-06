@@ -10,6 +10,7 @@ import { parsePlannedPurchaseImport } from '../utils/importParsers'
 import { uid } from '../utils/id'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
+import { computeDropdownRect } from '../utils/dropdownPosition'
 
 export default function ShoppingList({
   recountCatalog, setRecountCatalog, recounts, purchases, productions, catalogWaste, recipes,
@@ -49,19 +50,25 @@ export default function ShoppingList({
   function updateDropdownRect() {
     const el = productInputRef.current
     if (!el) return
-    const r = el.getBoundingClientRect()
-    setDropdownRect({ top: r.bottom, left: r.left, width: r.width })
+    setDropdownRect(computeDropdownRect(el))
   }
 
+  // A rect computed once at open time goes stale on scroll or when the
+  // on-screen keyboard opens/closes (mobile browsers resize the visual
+  // viewport) — keep it locked to the field for as long as it's open.
   useEffect(() => {
     if (!showProductSuggestions) return
     updateDropdownRect()
     const onScrollOrResize = () => updateDropdownRect()
     window.addEventListener('scroll', onScrollOrResize, true)
     window.addEventListener('resize', onScrollOrResize)
+    window.visualViewport?.addEventListener('resize', onScrollOrResize)
+    window.visualViewport?.addEventListener('scroll', onScrollOrResize)
     return () => {
       window.removeEventListener('scroll', onScrollOrResize, true)
       window.removeEventListener('resize', onScrollOrResize)
+      window.visualViewport?.removeEventListener('resize', onScrollOrResize)
+      window.visualViewport?.removeEventListener('scroll', onScrollOrResize)
     }
   }, [showProductSuggestions])
 
@@ -435,8 +442,14 @@ export default function ShoppingList({
             />
             {showProductSuggestions && productSuggestions.length > 0 && dropdownRect && createPortal(
               <div
-                style={{ position: 'fixed', top: dropdownRect.top + 4, left: dropdownRect.left, width: dropdownRect.width }}
-                className="z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-56 overflow-y-auto"
+                style={{
+                  position: 'fixed',
+                  top: dropdownRect.top,
+                  left: dropdownRect.left,
+                  width: dropdownRect.width,
+                  maxHeight: dropdownRect.maxHeight,
+                }}
+                className="z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-y-auto"
               >
                 {productSuggestions.map((p) => (
                   <button

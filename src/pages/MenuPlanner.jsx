@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus, Printer,
@@ -18,6 +18,7 @@ import { compressToDataUrl } from '../utils/imageCompress'
 import { sanitizeDecimal } from '../utils/number'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { uid } from '../utils/id'
+import { computeDropdownRect } from '../utils/dropdownPosition'
 
 export default function MenuPlanner({
   menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary,
@@ -681,14 +682,41 @@ export default function MenuPlanner({
   // overflow for its rounded corners.
   const [openDishDropdown, setOpenDishDropdown] = useState(null)
   const [dishDropdownRect, setDishDropdownRect] = useState(null)
+  const openDishWrapRef = useRef(null)
 
   function openDishSuggestions(e, courseId) {
     const wrap = e.currentTarget.closest('.dish-input-wrap')
     if (!wrap) return
-    const r = wrap.getBoundingClientRect()
-    setDishDropdownRect({ top: r.bottom, left: r.left, width: r.width })
-    setOpenDishDropdown(openDishDropdown === courseId ? null : courseId)
+    if (openDishDropdown === courseId) {
+      setOpenDishDropdown(null)
+      return
+    }
+    openDishWrapRef.current = wrap
+    setDishDropdownRect(computeDropdownRect(wrap))
+    setOpenDishDropdown(courseId)
   }
+
+  // A rect computed once at open time goes stale on scroll or when the
+  // on-screen keyboard opens/closes (mobile browsers resize the visual
+  // viewport) — reported as the dropdown drifting away from its field and
+  // ending up hidden under the keyboard. Keep it locked to the field for as
+  // long as it's open.
+  useEffect(() => {
+    if (!openDishDropdown) return
+    const update = () => {
+      if (openDishWrapRef.current) setDishDropdownRect(computeDropdownRect(openDishWrapRef.current))
+    }
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    window.visualViewport?.addEventListener('resize', update)
+    window.visualViewport?.addEventListener('scroll', update)
+    return () => {
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('scroll', update)
+    }
+  }, [openDishDropdown])
 
   return (
     <div className="pb-4">
@@ -934,8 +962,14 @@ export default function MenuPlanner({
                               if (options.length === 0) return null
                               return (
                                 <div
-                                  style={{ position: 'fixed', top: dishDropdownRect.top + 4, left: dishDropdownRect.left, width: dishDropdownRect.width }}
-                                  className="z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-56 overflow-y-auto"
+                                  style={{
+                                    position: 'fixed',
+                                    top: dishDropdownRect.top,
+                                    left: dishDropdownRect.left,
+                                    width: dishDropdownRect.width,
+                                    maxHeight: dishDropdownRect.maxHeight,
+                                  }}
+                                  className="z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-y-auto"
                                 >
                                   {options.map((dish) => (
                                     <button
