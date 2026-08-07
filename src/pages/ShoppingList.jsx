@@ -11,6 +11,7 @@ import { uid } from '../utils/id'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
 import { computeDropdownRect } from '../utils/dropdownPosition'
+import { formatQtyForDisplay } from '../utils/unitDisplay'
 
 export default function ShoppingList({
   recountCatalog, setRecountCatalog, recounts, purchases, productions, catalogWaste, recipes,
@@ -271,7 +272,13 @@ export default function ShoppingList({
       title: `Запланированная закупка — ${formatRu(now)}`,
       items: plannedPurchases.map((p) => {
         const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
-        return { name: product?.name || '?', unit: product?.unit || '', qty: p.qty }
+        const unit = product?.unit || ''
+        const big = ['г', 'мл'].includes(unit) && Math.abs(Number(p.qty)) >= 1000
+        return {
+          name: product?.name || '?',
+          unit: big ? (unit === 'г' ? 'кг' : 'л') : unit,
+          qty: big ? formatQtyForDisplay(p.qty, unit).split(' ')[0] : p.qty,
+        }
       }),
     })
   }
@@ -298,7 +305,7 @@ export default function ShoppingList({
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
-                  <p className="text-xs text-red-600 dark:text-red-400">Остаток: {row.balance} {row.product.unit}</p>
+                  <p className="text-xs text-red-600 dark:text-red-400">Остаток: {formatQtyForDisplay(row.balance, row.product.unit)}</p>
                 </div>
                 <button
                   onClick={() => addFromLowStock(row.product)}
@@ -506,7 +513,7 @@ export default function ShoppingList({
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{product?.name || '?'}</p>
                     <p className="text-xs text-slate-400">
                       {product?.unit}
-                      {balance !== null && ` · остаток: ${balance} ${product?.unit || ''}`}
+                      {balance !== null && ` · остаток: ${formatQtyForDisplay(balance, product?.unit)}`}
                     </p>
                   </div>
                   <div className="w-20 shrink-0">
@@ -517,6 +524,11 @@ export default function ShoppingList({
                       value={p.qty}
                       onChange={(e) => updateQty(p.id, sanitizeDecimal(e.target.value))}
                     />
+                    {['г', 'мл'].includes(product?.unit) && Math.abs(Number(p.qty)) >= 1000 && (
+                      <p className="text-[10px] text-slate-400 text-center mt-0.5">
+                        {formatQtyForDisplay(p.qty, product.unit)}
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={() => setOpenPlannedComment(commentOpen ? null : p.id)}
