@@ -49,12 +49,12 @@ export default function Inventory({
   const [form, setForm] = useState({ name: '', packDate: new Date().toISOString().slice(0, 10), shelfLifeDays: '' })
   const [disposalPromptId, setDisposalPromptId] = useState(null)
   // Pull already-recorded приход (закупка) entries straight into FIFO instead
-  // of retyping name/date by hand — pick a product plus a day or range, then
-  // choose which of its matching purchases become FIFO batches.
-  const [fifoImportProductName, setFifoImportProductName] = useState('')
+  // of retyping name/date by hand — pick a day or range, see every product
+  // purchased in it, then choose which become FIFO batches with their own
+  // shelf life each (products don't all keep the same number of days).
   const [fifoImportFrom, setFifoImportFrom] = useState(todayKey())
   const [fifoImportTo, setFifoImportTo] = useState(todayKey())
-  const [fifoImportShelfLifeDays, setFifoImportShelfLifeDays] = useState('')
+  const [fifoImportShelfLifeDays, setFifoImportShelfLifeDays] = useState(() => ({}))
   const [fifoImportExcluded, setFifoImportExcluded] = useState(() => new Set())
   const [fifoImportResult, setFifoImportResult] = useState(null)
   const [tab, setTab] = useState(() => initialTab || 'fifo')
@@ -185,19 +185,18 @@ export default function Inventory({
     setItems((prev) => prev.filter((i) => i.id !== id))
   }
 
-  // Purchases (приход) for the chosen product within the chosen day/period —
-  // От and До equal means "one day". Only meaningful once a product actually
-  // resolves in the catalog, otherwise there's nothing to match by productId.
+  // Every приход within the chosen day/period, across all products — От and
+  // До equal means "one day". Resolves each purchase's product name up front
+  // so the picker doesn't need a separate product filter at all.
   const fifoImportMatches = useMemo(() => {
-    const product = findProductByName(fifoImportProductName)
-    if (!product || !fifoImportFrom || !fifoImportTo) return []
+    if (!fifoImportFrom || !fifoImportTo) return []
     const from = fifoImportFrom
     const to = fifoImportTo > fifoImportFrom ? fifoImportTo : fifoImportFrom
     return purchases
-      .filter((p) => String(p.productId) === String(product.id) && p.date >= from && p.date <= to)
-      .sort((a, b) => (a.date < b.date ? 1 : -1))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fifoImportProductName, fifoImportFrom, fifoImportTo, purchases, recountCatalog])
+      .filter((p) => p.date >= from && p.date <= to)
+      .map((p) => ({ ...p, productName: recountCatalog.find((pr) => String(pr.id) === String(p.productId))?.name || '?' }))
+      .sort((a, b) => (a.date === b.date ? a.productName.localeCompare(b.productName) : (a.date < b.date ? 1 : -1)))
+  }, [fifoImportFrom, fifoImportTo, purchases, recountCatalog])
 
   function toggleFifoImportMatch(id) {
     setFifoImportExcluded((prev) => {
@@ -208,28 +207,32 @@ export default function Inventory({
     })
   }
 
+  function setFifoImportShelfLife(id, value) {
+    setFifoImportShelfLifeDays((prev) => ({ ...prev, [id]: value }))
+  }
+
   function importFifoFromPurchases() {
-    const product = findProductByName(fifoImportProductName)
-    if (!product) return
-    if (!fifoImportShelfLifeDays) {
-      setFifoImportResult('Укажите срок годности (дней) — без него партии не с чем сравнивать по свежести.')
-      return
-    }
     const selected = fifoImportMatches.filter((p) => !fifoImportExcluded.has(p.id))
     if (selected.length === 0) {
       setFifoImportResult('Нет выбранных записей прихода для добавления.')
       return
     }
+    const missingShelfLife = selected.filter((p) => !fifoImportShelfLifeDays[p.id])
+    if (missingShelfLife.length > 0) {
+      setFifoImportResult(`Укажите срок годности для всех выбранных — не хватает у: ${missingShelfLife.map((p) => p.productName).join(', ')}.`)
+      return
+    }
     const newItems = selected.map((p) => ({
       id: uid(),
-      name: product.name,
+      name: p.productName,
       packDate: p.date,
-      shelfLifeDays: fifoImportShelfLifeDays,
+      shelfLifeDays: fifoImportShelfLifeDays[p.id],
       status: 'active',
     }))
     setItems((prev) => [...newItems, ...prev])
     setFifoImportResult(`Добавлено в FIFO: ${newItems.length}`)
     setFifoImportExcluded(new Set())
+    setFifoImportShelfLifeDays({})
   }
 
   function wasteReasonLabel(key) {
@@ -1166,25 +1169,16 @@ export default function Inventory({
 
           <Section title="Импорт из прихода" icon={Calendar}>
             <p className="text-xs text-slate-500 mb-2">
-              Выберите товар и дату (или период) — покажутся записи прихода по нему,
-              которые можно добавить в FIFO как партии, не вводя название и дату вручную.
+              Выберите дату (или период) — покажутся все товары из прихода за него.
+              Отметьте, что идёт в FIFO, и укажите срок годности для каждого.
             </p>
-            <Field label="Товар">
-              <input
-                className={inputClass}
-                list="product-nomenclature"
-                placeholder="Например: Куриное филе"
-                value={fifoImportProductName}
-                onChange={(e) => { setFifoImportProductName(e.target.value); setFifoImportExcluded(new Set()) }}
-              />
-            </Field>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-3">
               <Field label="С">
                 <input
                   type="date"
                   className={inputClass}
                   value={fifoImportFrom}
-                  onChange={(e) => { setFifoImportFrom(e.target.value); setFifoImportExcluded(new Set()) }}
+                  onChange={(e) => { setFifoImportFrom(e.target.value); setFifoImportExcluded(new Set()); setFifoImportShelfLifeDays({}) }}
                 />
               </Field>
               <Field label="По">
@@ -1192,51 +1186,51 @@ export default function Inventory({
                   type="date"
                   className={inputClass}
                   value={fifoImportTo}
-                  onChange={(e) => { setFifoImportTo(e.target.value); setFifoImportExcluded(new Set()) }}
+                  onChange={(e) => { setFifoImportTo(e.target.value); setFifoImportExcluded(new Set()); setFifoImportShelfLifeDays({}) }}
                 />
               </Field>
             </div>
-            {fifoImportProductName.trim() && (
-              fifoImportMatches.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-3">Прихода по этому товару за выбранный период не найдено</p>
-              ) : (
-                <>
-                  <div className="flex flex-col gap-1.5 mb-3">
-                    {fifoImportMatches.map((p) => {
-                      const checked = !fifoImportExcluded.has(p.id)
-                      return (
-                        <label
-                          key={p.id}
-                          className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 ${
-                            checked ? 'border-slate-200 dark:border-slate-700' : 'border-slate-100 dark:border-slate-800 opacity-50'
-                          }`}
-                        >
+            {fifoImportMatches.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-3">Прихода за выбранный период не найдено</p>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2 mb-3">
+                  {fifoImportMatches.map((p) => {
+                    const checked = !fifoImportExcluded.has(p.id)
+                    return (
+                      <div
+                        key={p.id}
+                        className={`rounded-lg border px-2.5 py-2 ${
+                          checked ? 'border-slate-200 dark:border-slate-700' : 'border-slate-100 dark:border-slate-800 opacity-50'
+                        }`}
+                      >
+                        <label className="flex items-center gap-2 mb-1.5">
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => toggleFifoImportMatch(p.id)}
                             className="shrink-0 w-5 h-5 accent-orange-500"
                           />
-                          <p className="text-sm text-slate-700 dark:text-slate-200">
-                            {formatRu(parseLocalDate(p.date))} — {p.qty}
+                          <p className="text-sm text-slate-700 dark:text-slate-200 flex-1 min-w-0 truncate">
+                            {p.productName} · {formatRu(parseLocalDate(p.date))} — {p.qty}
                           </p>
                         </label>
-                      )
-                    })}
-                  </div>
-                  <Field label="Срок годности, дней (для всех выбранных)">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      className={inputClass}
-                      value={fifoImportShelfLifeDays}
-                      onChange={(e) => setFifoImportShelfLifeDays(e.target.value)}
-                      placeholder="3"
-                    />
-                  </Field>
-                  <BigButton onClick={importFifoFromPurchases} icon={Plus}>Добавить в FIFO</BigButton>
-                </>
-              )
+                        {checked && (
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            className={inputClass + ' ml-7 w-32'}
+                            placeholder="Срок годности, дн."
+                            value={fifoImportShelfLifeDays[p.id] || ''}
+                            onChange={(e) => setFifoImportShelfLife(p.id, e.target.value)}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                <BigButton onClick={importFifoFromPurchases} icon={Plus}>Добавить в FIFO</BigButton>
+              </>
             )}
             {fifoImportResult && (
               <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
