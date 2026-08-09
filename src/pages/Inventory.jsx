@@ -72,6 +72,7 @@ export default function Inventory({
   const [newCatalogItem, setNewCatalogItem] = useState({ name: '', unit: 'шт', zone: 'fridges', category: 'other' })
   const [catalogSort, setCatalogSort] = useState('alpha')
   const [catalogSelectMode, setCatalogSelectMode] = useState(false)
+  const [showArchivedCatalog, setShowArchivedCatalog] = useState(false)
   const [selectedCatalogIds, setSelectedCatalogIds] = useState(() => new Set())
   const [balanceSort, setBalanceSort] = useState('alpha')
   const [unitAuditResult, setUnitAuditResult] = useState(null)
@@ -385,6 +386,18 @@ export default function Inventory({
     setRecountCatalog((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
   }
 
+  // Archiving hides a product from Переучёт/Остатки/«Мало на складе» without
+  // deleting its history — purchases, production, waste and recipe
+  // ingredients that reference it stay exactly as they are, so past reports
+  // don't change. Restoring just flips the flag back.
+  function archiveCatalogItem(id) {
+    updateCatalogItem(id, { archived: true })
+  }
+
+  function restoreCatalogItem(id) {
+    updateCatalogItem(id, { archived: false })
+  }
+
   // Export mirrors exactly what the import above expects (Название, Ед.
   // изм., Зона, Рубрика, tab-separated) so the round trip works: export,
   // paste into a sheet, edit, copy, paste back into "Импорт из Google Таблиц".
@@ -638,7 +651,7 @@ export default function Inventory({
   // valid count, unlike blank) without touching anything already entered —
   // including a product someone already counted as genuinely 0.
   function fillActiveZeros() {
-    const missing = recountCatalog.filter((i) => recount.qty[i.id] === undefined || recount.qty[i.id] === '')
+    const missing = activeCatalog.filter((i) => recount.qty[i.id] === undefined || recount.qty[i.id] === '')
     if (missing.length === 0) {
       alert('Все товары уже заполнены — нечего дозаполнять нулями.')
       return
@@ -1003,16 +1016,18 @@ export default function Inventory({
     downloadCsv('Журнал_недостач.csv', rows)
   }
 
-  const catalogTotal = recountCatalog.length
-  const catalogFilled = recountCatalog.filter((i) => recount.qty[i.id] !== undefined && recount.qty[i.id] !== '').length
+  const activeCatalog = useMemo(() => recountCatalog.filter((i) => !i.archived), [recountCatalog])
+  const archivedCatalog = useMemo(() => recountCatalog.filter((i) => i.archived), [recountCatalog])
+  const catalogTotal = activeCatalog.length
+  const catalogFilled = activeCatalog.filter((i) => recount.qty[i.id] !== undefined && recount.qty[i.id] !== '').length
 
   const balances = useMemo(() => {
-    return recountCatalog.map((product) => ({
+    return activeCatalog.map((product) => ({
       product,
       ...computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now),
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recountCatalog, recounts, purchases, productions, recipes, catalogWaste])
+  }, [activeCatalog, recounts, purchases, productions, recipes, catalogWaste])
 
   function sortByKey(list, sortKey, getName) {
     // getName reads straight off stored items, which can predate a validation
@@ -1441,7 +1456,7 @@ export default function Inventory({
           )}
 
           {INVENTORY_AUDIT_ZONES.map((zone) => {
-            const zoneItems = recountCatalog.filter((i) => i.zone === zone.key && matchesSearch(i.name, recountSearch))
+            const zoneItems = recountCatalog.filter((i) => !i.archived && i.zone === zone.key && matchesSearch(i.name, recountSearch))
             if (zoneItems.length === 0) return null
             return (
               <Section key={zone.key} title={zone.label}>
@@ -1678,7 +1693,7 @@ export default function Inventory({
           </Section>
 
           <Section
-            title={`Каталог (${recountCatalog.length})`}
+            title={`Каталог (${activeCatalog.length})`}
             icon={PackageSearch}
             right={
               catalogSelectMode ? (
@@ -1710,7 +1725,7 @@ export default function Inventory({
             <div className="flex items-center justify-between -mt-2 mb-3 px-1">
               {catalogSearch.trim() ? (
                 <p className="text-[11px] text-slate-400">
-                  Найдено: {recountCatalog.filter((i) => matchesSearch(i.name, catalogSearch)).length}
+                  Найдено: {activeCatalog.filter((i) => matchesSearch(i.name, catalogSearch)).length}
                 </p>
               ) : <span />}
               <button onClick={runCatalogDiagnostics} className="text-[11px] text-slate-400 underline">
@@ -1772,14 +1787,14 @@ export default function Inventory({
                 </button>
               ))}
             </div>
-            {recountCatalog.length === 0 && (
+            {activeCatalog.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-3">Каталог пуст</p>
             )}
-            {recountCatalog.length > 0 && catalogSearch.trim() && !recountCatalog.some((i) => matchesSearch(i.name, catalogSearch)) && (
+            {activeCatalog.length > 0 && catalogSearch.trim() && !activeCatalog.some((i) => matchesSearch(i.name, catalogSearch)) && (
               <p className="text-sm text-slate-400 text-center py-3">Ничего не найдено</p>
             )}
             {(() => {
-              const visibleCatalog = sortedCatalog.filter((item) => matchesSearch(item.name, catalogSearch))
+              const visibleCatalog = sortedCatalog.filter((item) => !item.archived && matchesSearch(item.name, catalogSearch))
               return (
                 <>
                   {catalogSelectMode && visibleCatalog.length > 0 && (
@@ -1828,6 +1843,13 @@ export default function Inventory({
                         onChange={(e) => updateCatalogItem(item.id, { name: e.target.value })}
                       />
                     </div>
+                    <button
+                      onClick={() => archiveCatalogItem(item.id)}
+                      title="В архив"
+                      className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 dark:text-slate-500"
+                    >
+                      <Archive size={16} />
+                    </button>
                     <ConfirmDeleteButton onConfirm={() => removeCatalogItem(item.id)} />
                   </div>
                   <div className="flex items-center gap-1.5 mb-1.5">
@@ -1894,6 +1916,39 @@ export default function Inventory({
               )
             })()}
           </Section>
+
+          {archivedCatalog.length > 0 && (
+            <Section
+              title={`Архив (${archivedCatalog.length})`}
+              icon={Archive}
+              right={
+                <button onClick={() => setShowArchivedCatalog((v) => !v)} className="text-xs font-semibold text-orange-600">
+                  {showArchivedCatalog ? 'Скрыть' : 'Показать'}
+                </button>
+              }
+            >
+              {showArchivedCatalog && (
+                <p className="text-xs text-slate-500 mb-2">
+                  Эти товары не видны в Переучёте, Остатках и «Мало на складе», но вся их история сохранена.
+                </p>
+              )}
+              {showArchivedCatalog && (
+                <div className="flex flex-col gap-2">
+                  {archivedCatalog.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+                      <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{item.name}</p>
+                      <button
+                        onClick={() => restoreCatalogItem(item.id)}
+                        className="shrink-0 min-h-[32px] px-3 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+                      >
+                        Восстановить
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+          )}
         </>
       )}
 

@@ -207,6 +207,7 @@ export default function App() {
     const openingIncomplete = !shiftChecklist[today]?.kitchenClean || !shiftChecklist[today]?.tasksAssigned
 
     const shoppingNeeded = recountCatalog.some((product) => {
+      if (product.archived) return false
       const min = Number(product.minQty)
       if (!(min > 0)) return false
       const { balance } = computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now)
@@ -432,7 +433,7 @@ export default function App() {
       <BottomNav active={tab} onChange={setTab} alerts={alerts} />
 
       <datalist id="product-nomenclature">
-        {recountCatalog.map((item) => (
+        {recountCatalog.filter((item) => !item.archived).map((item) => (
           <option key={item.id} value={item.name} />
         ))}
       </datalist>

@@ -18,6 +18,7 @@ export default function ShoppingList({
   menuData, plannedPurchases, setPlannedPurchases, setPurchases,
 }) {
   const [form, setForm] = useState({ productName: '', qty: '' })
+  const [lowStockExpanded, setLowStockExpanded] = useState(false)
   // Which planned-purchase rows have been armed (tapped once, orange,
   // waiting for the confirming second tap) — persisted so it survives
   // leaving the tab or closing the app, not just component re-renders.
@@ -37,7 +38,7 @@ export default function ShoppingList({
   const productSuggestions = useMemo(() => {
     const q = form.productName.trim().toLowerCase()
     if (q.length < 2) return []
-    return recountCatalog.filter((p) => (p.name || '').toLowerCase().includes(q)).slice(0, 8)
+    return recountCatalog.filter((p) => !p.archived && (p.name || '').toLowerCase().includes(q)).slice(0, 8)
   }, [form.productName, recountCatalog])
 
   // The "Продукт" field lives inside a Section card, which clips overflow
@@ -285,6 +286,7 @@ export default function ShoppingList({
 
   const lowStockNotPlanned = useMemo(() => {
     return recountCatalog
+      .filter((product) => !product.archived)
       .map((product) => ({ product, ...computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now) }))
       .filter((row) => {
         const min = Number(row.product.minQty)
@@ -296,26 +298,36 @@ export default function ShoppingList({
   return (
     <div className="pb-4">
       {lowStockNotPlanned.length > 0 && (
-        <Section title="Мало на складе — добавить в закупку?" icon={AlertTriangle}>
-          <div className="flex flex-col gap-2">
-            {lowStockNotPlanned.map((row) => (
-              <div
-                key={row.product.id}
-                className="flex items-center justify-between gap-2 rounded-xl border-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
-                  <p className="text-xs text-red-600 dark:text-red-400">Остаток: {formatQtyForDisplay(row.balance, row.product.unit)}</p>
-                </div>
-                <button
-                  onClick={() => addFromLowStock(row.product)}
-                  className="shrink-0 min-h-[36px] px-3 flex items-center justify-center gap-1.5 rounded-lg bg-red-600 active:bg-red-700 text-white text-xs font-semibold"
+        <Section
+          title={`Мало на складе — добавить в закупку? (${lowStockNotPlanned.length})`}
+          icon={AlertTriangle}
+          right={
+            <button onClick={() => setLowStockExpanded((v) => !v)} className="text-xs font-semibold text-orange-600">
+              {lowStockExpanded ? 'Свернуть' : 'Показать'}
+            </button>
+          }
+        >
+          {lowStockExpanded && (
+            <div className="flex flex-col gap-2">
+              {lowStockNotPlanned.map((row) => (
+                <div
+                  key={row.product.id}
+                  className="flex items-center justify-between gap-2 rounded-xl border-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30 px-3 py-2"
                 >
-                  <Plus size={14} /> В закупку
-                </button>
-              </div>
-            ))}
-          </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">Остаток: {formatQtyForDisplay(row.balance, row.product.unit)}</p>
+                  </div>
+                  <button
+                    onClick={() => addFromLowStock(row.product)}
+                    className="shrink-0 min-h-[36px] px-3 flex items-center justify-center gap-1.5 rounded-lg bg-red-600 active:bg-red-700 text-white text-xs font-semibold"
+                  >
+                    <Plus size={14} /> В закупку
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </Section>
       )}
 

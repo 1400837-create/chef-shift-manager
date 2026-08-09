@@ -52,6 +52,7 @@ export default function Dashboard({
 
   const lowStockItems = useMemo(() => {
     return recountCatalog
+      .filter((product) => !product.archived)
       .map((product) => ({ product, ...computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now) }))
       .filter((row) => {
         const min = Number(row.product.minQty)
