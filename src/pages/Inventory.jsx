@@ -192,11 +192,12 @@ export default function Inventory({
     if (!fifoImportFrom || !fifoImportTo) return []
     const from = fifoImportFrom
     const to = fifoImportTo > fifoImportFrom ? fifoImportTo : fifoImportFrom
+    const alreadyImported = new Set(items.map((i) => i.sourcePurchaseId).filter(Boolean))
     return purchases
-      .filter((p) => p.date >= from && p.date <= to)
+      .filter((p) => p.date >= from && p.date <= to && !alreadyImported.has(p.id))
       .map((p) => ({ ...p, productName: recountCatalog.find((pr) => String(pr.id) === String(p.productId))?.name || '?' }))
       .sort((a, b) => (a.date === b.date ? a.productName.localeCompare(b.productName) : (a.date < b.date ? 1 : -1)))
-  }, [fifoImportFrom, fifoImportTo, purchases, recountCatalog])
+  }, [fifoImportFrom, fifoImportTo, purchases, recountCatalog, items])
 
   function toggleFifoImportMatch(id) {
     setFifoImportExcluded((prev) => {
@@ -205,6 +206,14 @@ export default function Inventory({
       else next.add(id)
       return next
     })
+  }
+
+  function selectAllFifoImports() {
+    setFifoImportExcluded(new Set())
+  }
+
+  function deselectAllFifoImports() {
+    setFifoImportExcluded(new Set(fifoImportMatches.map((p) => p.id)))
   }
 
   function setFifoImportShelfLife(id, value) {
@@ -228,6 +237,7 @@ export default function Inventory({
       packDate: p.date,
       shelfLifeDays: fifoImportShelfLifeDays[p.id],
       status: 'active',
+      sourcePurchaseId: p.id,
     }))
     setItems((prev) => [...newItems, ...prev])
     setFifoImportResult(`Добавлено в FIFO: ${newItems.length}`)
@@ -1194,6 +1204,20 @@ export default function Inventory({
               <p className="text-sm text-slate-400 text-center py-3">Прихода за выбранный период не найдено</p>
             ) : (
               <>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    onClick={selectAllFifoImports}
+                    className="flex-1 min-h-[36px] rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+                  >
+                    Отметить все
+                  </button>
+                  <button
+                    onClick={deselectAllFifoImports}
+                    className="flex-1 min-h-[36px] rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+                  >
+                    Снять все
+                  </button>
+                </div>
                 <div className="flex flex-col gap-2 mb-3">
                   {fifoImportMatches.map((p) => {
                     const checked = !fifoImportExcluded.has(p.id)
