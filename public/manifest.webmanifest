@@ -1,6 +1,6 @@
 {
-  "name": "Kitchen OS — Управление кухней",
-  "short_name": "Kitchen OS",
+  "name": "LA CHEF",
+  "short_name": "LA CHEF",
   "description": "Смена, меню, склад FIFO, уборка и финансы для шеф-повара",
   "start_url": "/chef-shift-manager/",
   "scope": "/chef-shift-manager/",
@@ -10,12 +10,6 @@
   "theme_color": "#1e293b",
   "lang": "ru",
   "icons": [
-    {
-      "src": "/chef-shift-manager/icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
     {
       "src": "/chef-shift-manager/icons/icon-192.png",
       "sizes": "192x192",

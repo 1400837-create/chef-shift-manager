@@ -183,7 +183,7 @@ export function printReport(payload) {
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Печать — Kitchen OS</title>
+<title>Печать — LA CHEF</title>
 <style>
   @page { size: A4; margin: 14mm; }
   body { font-family: Arial, Helvetica, sans-serif; color: #000; font-size: 13px; }

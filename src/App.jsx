@@ -179,7 +179,7 @@ export default function App() {
     Notification.requestPermission().then((perm) => {
       if (perm === 'granted') {
         setSettings((s) => ({ ...s, notificationsEnabled: true }))
-        new Notification('Kitchen OS', {
+        new Notification('LA CHEF', {
           body: 'Уведомления включены — напомним о дедлайнах меню/финансов и о низком остатке на складе, пока приложение открыто.',
         })
       }
@@ -248,13 +248,13 @@ export default function App() {
       const d = todayKey()
       const menuInfo = menuDeadlineInfo(new Date())
       if (menuInfo.daysLeft <= 1) {
-        notifyOnce(`menu_${d}`, 'Kitchen OS — дедлайн меню', `Меню нужно сдать: ${menuInfo.label}`)
+        notifyOnce(`menu_${d}`, 'LA CHEF — дедлайн меню', `Меню нужно сдать: ${menuInfo.label}`)
       }
       if (alerts.finances) {
-        notifyOnce(`finance_${d}`, 'Kitchen OS — аванс', 'Остаток аванса ушёл в минус')
+        notifyOnce(`finance_${d}`, 'LA CHEF — аванс', 'Остаток аванса ушёл в минус')
       }
       if (alerts.shopping) {
-        notifyOnce(`shopping_${d}`, 'Kitchen OS — мало на складе', 'Есть товары с низким остатком, ещё не добавленные в закупку')
+        notifyOnce(`shopping_${d}`, 'LA CHEF — мало на складе', 'Есть товары с низким остатком, ещё не добавленные в закупку')
       }
     }
 
@@ -269,7 +269,7 @@ export default function App() {
       <header className="safe-top sticky top-0 z-30 bg-slate-900 text-white px-3 py-3 flex items-center gap-1 shadow-md">
         <ChefHat size={20} className="text-orange-400 shrink-0 mr-1" />
         <div className="min-w-0 flex-1">
-          <p className="font-bold leading-tight truncate text-[15px]">Kitchen OS</p>
+          <p className="font-bold leading-tight truncate text-[15px]">LA CHEF</p>
           <p className="text-[10px] text-slate-400 leading-tight truncate">
             {now.toLocaleDateString('ru-RU', { weekday: 'long', day: '2-digit', month: 'long' })}
             {' · сборка '}

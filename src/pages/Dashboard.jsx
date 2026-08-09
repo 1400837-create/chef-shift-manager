@@ -91,7 +91,7 @@ export default function Dashboard({
         setImportMessage(null)
       } catch {
         setImportPreview(null)
-        setImportMessage('Не удалось прочитать файл — это не резервная копия Kitchen OS.')
+        setImportMessage('Не удалось прочитать файл — это не резервная копия LA CHEF.')
       }
     }
     reader.readAsText(file)
