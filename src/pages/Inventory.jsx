@@ -562,6 +562,37 @@ export default function Inventory({
     }))
   }
 
+  // computeBalance treats an unfilled qty (undefined/'') as "no baseline at
+  // all" — приход for that product then has nothing to add to and never
+  // shows up in Остатки, even with purchases logged. Filling every still-
+  // empty item with an explicit "0" gives each one a real baseline (0 is a
+  // valid count, unlike blank) without touching anything already entered —
+  // including a product someone already counted as genuinely 0.
+  function fillActiveZeros() {
+    const missing = recountCatalog.filter((i) => recount.qty[i.id] === undefined || recount.qty[i.id] === '')
+    if (missing.length === 0) {
+      alert('Все товары уже заполнены — нечего дозаполнять нулями.')
+      return
+    }
+    const proceed = window.confirm(
+      `Заполнить нулём ${missing.length} ещё не заполненных товар(ов) в переучёте за ${monthLabel}?\n\n` +
+      `Это создаст им точку отсчёта, от которой начнёт считаться приход/расход. Уже заполненные товары (в т.ч. настоящие нули) не тронутся.`
+    )
+    if (!proceed) return
+    const now2 = Date.now()
+    setRecounts((prev) => {
+      const monthData = prev[currentMonth] || { qty: {}, verifiedWithLead: false }
+      const nextQty = { ...monthData.qty }
+      const nextTimestamps = { ...(monthData.qtyTimestamps || {}) }
+      missing.forEach((i) => {
+        nextQty[i.id] = '0'
+        nextTimestamps[i.id] = now2
+      })
+      return { ...prev, [currentMonth]: { ...monthData, qty: nextQty, qtyTimestamps: nextTimestamps } }
+    })
+    alert(`Готово: ${missing.length} товар(ов) заполнено нулём.`)
+  }
+
   function setRecountComment(itemId, value) {
     setRecounts((prev) => ({
       ...prev,
@@ -1232,6 +1263,12 @@ export default function Inventory({
               className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
             >
               <Download size={15} /> Экспорт за месяц (CSV)
+            </button>
+            <button
+              onClick={fillActiveZeros}
+              className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 dark:bg-slate-700 active:bg-slate-200 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+            >
+              Заполнить пустые нулями
             </button>
           </div>
 
