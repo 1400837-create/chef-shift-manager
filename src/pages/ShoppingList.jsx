@@ -11,8 +11,7 @@ import { uid } from '../utils/id'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
 import { computeDropdownRect } from '../utils/dropdownPosition'
-import { formatQtyForDisplay } from '../utils/unitDisplay'
-import { formatApproxWeight } from '../utils/approxWeights'
+import { formatQtyForDisplay, formatReferenceQty } from '../utils/unitDisplay'
 
 export default function ShoppingList({
   recountCatalog, setRecountCatalog, recounts, purchases, productions, catalogWaste, recipes,
@@ -320,7 +319,7 @@ export default function ShoppingList({
                     <p className="text-xs text-red-600 dark:text-red-400">
                       Остаток: {formatQtyForDisplay(row.balance, row.product.unit)}
                       {(() => {
-                        const approx = formatApproxWeight(row.balance, row.product.name, row.product.unit)
+                        const approx = formatReferenceQty(row.balance, row.product)
                         return approx && <span className="text-red-400"> ({approx})</span>
                       })()}
                     </p>
@@ -534,7 +533,7 @@ export default function ShoppingList({
                       {product?.unit}
                       {balance !== null && ` · остаток: ${formatQtyForDisplay(balance, product?.unit)}`}
                       {balance !== null && (() => {
-                        const approx = formatApproxWeight(balance, product?.name, product?.unit)
+                        const approx = product ? formatReferenceQty(balance, product) : null
                         return approx ? ` (${approx})` : ''
                       })()}
                     </p>
@@ -552,9 +551,9 @@ export default function ShoppingList({
                         {formatQtyForDisplay(p.qty, product.unit)}
                       </p>
                     )}
-                    {formatApproxWeight(p.qty, product?.name, product?.unit) && (
+                    {product && formatReferenceQty(p.qty, product) && (
                       <p className="text-[10px] text-slate-400 text-center mt-0.5">
-                        {formatApproxWeight(p.qty, product?.name, product?.unit)}
+                        {formatReferenceQty(p.qty, product)}
                       </p>
                     )}
                   </div>

@@ -1,14 +1,12 @@
-import { formatQtyForDisplay } from './unitDisplay'
-
-// Rough average retail weight (grams) per count-based unit (шт/уп/банка/
-// пучок/бутылка/горшок) — display-only estimate, never stored and never
-// used in any real calculation. Real weight varies by supplier; this only
-// exists so a "≈ X кг" hint can still be shown next to a count, the same
-// way г/мл already gets a friendly кг/л hint above 1000. Keyed by a lowercase
-// prefix of the catalog name (catalog names are "Russian (German)" — the
-// prefix stops before the parenthetical so it still matches regardless of
-// the German translation's exact wording).
-const APPROX_WEIGHTS_G = {
+// Average retail weight (grams) per count-based unit (шт/уп/банка/пучок/
+// бутылка/горшок) — used once, to actually unify these catalog items into
+// г/мл (see runCountBasedUnitConversion in Inventory.jsx). Real weight
+// varies by supplier; these are deliberately conservative, real-world
+// estimates for a German retail market, not a guess pulled from nowhere.
+// Keyed by a lowercase prefix of the catalog name (catalog names are
+// "Russian (German)" — the prefix stops before the parenthetical so it
+// still matches regardless of the German translation's exact wording).
+export const APPROX_WEIGHTS_G = {
   'авокадо hass': 200,
   'ананас': 1500,
   'арбуз': 5000,
@@ -101,25 +99,13 @@ const APPROX_WEIGHTS_G = {
   'свежий базилик': 30,
 }
 
-const COUNT_UNITS = new Set(['шт', 'шт.', 'уп.', 'банка', 'пучок', 'бутылка', 'горшок'])
-
-function weightPerUnit(productName) {
+// Longest matching prefix wins, so a more specific entry (e.g. "яйца куриные
+// l") is preferred over a shorter one that happens to also match.
+export function estimateWeightPerUnit(productName) {
   const key = (productName || '').trim().toLowerCase()
   let best = null
   for (const prefix of Object.keys(APPROX_WEIGHTS_G)) {
     if (key.startsWith(prefix) && (!best || prefix.length > best.length)) best = prefix
   }
   return best ? APPROX_WEIGHTS_G[best] : null
-}
-
-// Returns "≈ 1.2 кг" for a count-based product with a known average weight,
-// or null if the unit isn't count-based or there's no estimate for it.
-export function formatApproxWeight(qty, productName, unit) {
-  const u = (unit || '').trim().toLowerCase()
-  if (!COUNT_UNITS.has(u)) return null
-  const perUnit = weightPerUnit(productName)
-  if (perUnit == null) return null
-  const n = Number(qty)
-  if (!Number.isFinite(n) || n <= 0) return null
-  return `≈ ${formatQtyForDisplay(String(Math.round(n * perUnit)), 'г')}`
 }

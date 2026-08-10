@@ -14,3 +14,19 @@ export function formatQtyForDisplay(qty, unit) {
   const bigUnit = u === 'г' ? 'кг' : 'л'
   return `${big} ${bigUnit}`
 }
+
+// Products that used to be count-based (шт/уп/банка/пучок/...) before the
+// г/мл unification keep their original unit + average weight stamped as
+// refUnit/refUnitWeight (see runCountBasedUnitConversion) — this converts
+// the now-real gram/ml quantity back into that natural buying unit for
+// display, e.g. "1890 г" → "≈ 30 шт" for eggs. Purely informational: no
+// refUnit means the product was always weight/volume-native, so there's
+// nothing useful to convert back to and this returns null (the plain кг/л
+// folding above already covers that case).
+export function formatReferenceQty(qty, product) {
+  const n = Number(qty)
+  const perUnit = Number(product?.refUnitWeight)
+  if (!Number.isFinite(n) || !product?.refUnit || !(perUnit > 0)) return null
+  const count = Math.round((n / perUnit) * 10) / 10
+  return `≈ ${count} ${product.refUnit}`
+}
