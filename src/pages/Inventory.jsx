@@ -76,11 +76,6 @@ export default function Inventory({
   const [selectedCatalogIds, setSelectedCatalogIds] = useState(() => new Set())
   const [balanceSort, setBalanceSort] = useState('alpha')
   const [unitAuditResult, setUnitAuditResult] = useState(null)
-  // Real per-unit weight for count-based items (шт/уп/банка/пучок/...) —
-  // unlike кг→г/л→мл there's no universal factor, only the user knows what
-  // "1 пучок" actually weighs for their supplier, so this stays blank until
-  // they fill it in rather than guessing.
-  const [countUnitWeights, setCountUnitWeights] = useState(() => ({}))
   const [catalogSearch, setCatalogSearch] = useState('')
   const [recountSearch, setRecountSearch] = useState('')
   const [balanceSearch, setBalanceSearch] = useState('')
@@ -493,19 +488,37 @@ export default function Inventory({
       const key = unit.toLowerCase()
       if (alreadyFine.has(key)) return
       if (!groups.has(unit)) groups.set(unit, [])
-      groups.get(unit).push(item)
+      groups.get(unit).push(item.name || '?')
     })
     const sorted = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)
     setUnitAuditResult(sorted)
   }
 
-  // Shared by every "convert this catalog item to a different unit" action —
-  // cascades a per-product {factor, newUnit} across every place a quantity
-  // for that product is stored: the catalog's own minQty/costPerUnit, every
-  // переучёт, приход, расход, списание, and every recipe ingredient that
-  // references it. A partial conversion (e.g. catalog only) would silently
-  // break every balance calculation downstream, so this always touches all six.
-  function applyUnitFactorMap(factorMap) {
+  // Automatic half of the г/мл unification — кг→г and л→мл are a pure,
+  // lossless ×1000 (no real-world weight/volume to guess, unlike
+  // шт/пучок/банка/etc.), but "pure" still means touching every place a
+  // quantity for that product is stored: the catalog's own minQty/costPerUnit,
+  // every переучёт, приход, расход, списание, and every recipe ingredient
+  // that references it — a partial conversion (e.g. catalog only) would
+  // silently break every balance calculation downstream.
+  function runAutoUnitConversion() {
+    const factorMap = new Map()
+    recountCatalog.forEach((item) => {
+      const u = (item.unit || '').trim().toLowerCase()
+      if (u === 'кг') factorMap.set(String(item.id), { factor: 1000, newUnit: 'г' })
+      else if (u === 'л') factorMap.set(String(item.id), { factor: 1000, newUnit: 'мл' })
+    })
+    if (factorMap.size === 0) {
+      alert('Товаров в «кг» или «л» не найдено — конвертировать нечего.')
+      return
+    }
+    const proceed = window.confirm(
+      `Конвертировать ${factorMap.size} товар(ов) из кг→г и л→мл?\n\n` +
+      `Пересчитается вся история по этим товарам — остатки, переучёты, приход, расход, списания и ингредиенты в рецептах: количества умножатся на 1000, а цена за единицу поделится на 1000.\n\n` +
+      `Рекомендую сначала сделать резервную копию (Дашборд → «Скачать копию (JSON)»).`
+    )
+    if (!proceed) return
+
     setRecountCatalog((prev) => prev.map((item) => {
       const conv = factorMap.get(String(item.id))
       if (!conv) return item
@@ -561,66 +574,8 @@ export default function Inventory({
         return { ...ing, qty: String((Number(ing.qty) || 0) * conv.factor) }
       }),
     })))
-  }
 
-  // Automatic half of the г/мл unification — кг→г and л→мл are a pure,
-  // lossless ×1000, no real-world weight/volume to guess (unlike шт/пучок/
-  // банка/etc., where only the user knows the real per-unit weight).
-  function runAutoUnitConversion() {
-    const factorMap = new Map()
-    recountCatalog.forEach((item) => {
-      const u = (item.unit || '').trim().toLowerCase()
-      if (u === 'кг') factorMap.set(String(item.id), { factor: 1000, newUnit: 'г' })
-      else if (u === 'л') factorMap.set(String(item.id), { factor: 1000, newUnit: 'мл' })
-    })
-    if (factorMap.size === 0) {
-      alert('Товаров в «кг» или «л» не найдено — конвертировать нечего.')
-      return
-    }
-    const proceed = window.confirm(
-      `Конвертировать ${factorMap.size} товар(ов) из кг→г и л→мл?\n\n` +
-      `Пересчитается вся история по этим товарам — остатки, переучёты, приход, расход, списания и ингредиенты в рецептах: количества умножатся на 1000, а цена за единицу поделится на 1000.\n\n` +
-      `Рекомендую сначала сделать резервную копию (Дашборд → «Скачать копию (JSON)»).`
-    )
-    if (!proceed) return
-    applyUnitFactorMap(factorMap)
     alert(`Готово: ${factorMap.size} товар(ов) переведено в г/мл вместе со всей историей и рецептами.`)
-    setUnitAuditResult(null)
-  }
-
-  function setCountUnitWeight(itemId, patch) {
-    setCountUnitWeights((prev) => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }))
-  }
-
-  // The user-driven counterpart to runAutoUnitConversion — same cascade, but
-  // the factor comes from countUnitWeights (real weight/volume per unit,
-  // typed in by the user for exactly the items they choose), never guessed.
-  // Items left blank are simply skipped, so this can be applied incrementally
-  // as the user fills in what they actually know.
-  function runCountUnitConversion() {
-    const factorMap = new Map()
-    Object.entries(countUnitWeights).forEach(([itemId, w]) => {
-      const factor = Number(w?.value)
-      if (!factor || factor <= 0) return
-      factorMap.set(String(itemId), { factor, newUnit: w.unit === 'мл' ? 'мл' : 'г' })
-    })
-    if (factorMap.size === 0) {
-      alert('Не заполнено ни одного веса — нечего конвертировать.')
-      return
-    }
-    const named = [...factorMap.entries()].map(([id, conv]) => {
-      const item = recountCatalog.find((i) => String(i.id) === id)
-      return `${item?.name || '?'} (1 ${item?.unit || 'ед.'} = ${conv.factor} ${conv.newUnit})`
-    })
-    const proceed = window.confirm(
-      `Конвертировать ${factorMap.size} товар(ов) по указанным весам?\n\n${named.join('\n')}\n\n` +
-      `Пересчитается вся история — остатки, переучёты, приход, расход, списания и ингредиенты в рецептах.\n\n` +
-      `Рекомендую сначала сделать резервную копию (Дашборд → «Скачать копию (JSON)»).`
-    )
-    if (!proceed) return
-    applyUnitFactorMap(factorMap)
-    alert(`Готово: ${factorMap.size} товар(ов) переведено в г/мл.`)
-    setCountUnitWeights({})
     setUnitAuditResult(null)
   }
 
@@ -1784,51 +1739,22 @@ export default function Inventory({
               <div className="mb-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 px-3 py-2">
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs font-semibold text-orange-800 dark:text-orange-200">
-                    Не в г/мл: {unitAuditResult.reduce((s, [, items]) => s + items.length, 0)} товар(ов)
+                    Не в г/мл: {unitAuditResult.reduce((s, [, names]) => s + names.length, 0)} товар(ов)
                   </p>
                   <button onClick={() => setUnitAuditResult(null)} className="text-xs text-orange-600">Скрыть</button>
                 </div>
                 {unitAuditResult.length === 0 && (
                   <p className="text-xs text-slate-500">Все товары уже в г/мл.</p>
                 )}
-                <div className="max-h-96 overflow-y-auto flex flex-col gap-3">
-                  {unitAuditResult.map(([unit, items]) => {
-                    const isAutoUnit = ['кг', 'л'].includes(unit.trim().toLowerCase())
-                    return (
-                      <div key={unit}>
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                          «{unit}» — {items.length} шт.
-                        </p>
-                        {isAutoUnit ? (
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{items.map((i) => i.name).join(', ')}</p>
-                        ) : (
-                          <div className="flex flex-col gap-1">
-                            {items.map((item) => (
-                              <div key={item.id} className="flex items-center gap-1.5">
-                                <p className="text-xs text-slate-600 dark:text-slate-300 flex-1 min-w-0 truncate">{item.name}</p>
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  placeholder="вес"
-                                  className={inputClass + ' w-16 text-xs text-center px-1'}
-                                  value={countUnitWeights[item.id]?.value || ''}
-                                  onChange={(e) => setCountUnitWeight(item.id, { value: sanitizeDecimal(e.target.value) })}
-                                />
-                                <select
-                                  className={inputClass + ' w-16 text-xs px-1'}
-                                  value={countUnitWeights[item.id]?.unit || 'г'}
-                                  onChange={(e) => setCountUnitWeight(item.id, { unit: e.target.value })}
-                                >
-                                  <option value="г">г</option>
-                                  <option value="мл">мл</option>
-                                </select>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                <div className="max-h-72 overflow-y-auto flex flex-col gap-2">
+                  {unitAuditResult.map(([unit, names]) => (
+                    <div key={unit}>
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        «{unit}» — {names.length} шт.
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{names.join(', ')}</p>
+                    </div>
+                  ))}
                 </div>
                 {unitAuditResult.some(([unit]) => ['кг', 'л'].includes(unit.trim().toLowerCase())) && (
                   <button
@@ -1838,20 +1764,12 @@ export default function Inventory({
                     Конвертировать кг→г и л→мл автоматически
                   </button>
                 )}
-                {unitAuditResult.some(([, items]) => items.some((i) => LIQUID_UNIT_ANOMALIES.has((i.name || '').trim().toLowerCase()))) && (
+                {unitAuditResult.some(([, names]) => names.some((n) => LIQUID_UNIT_ANOMALIES.has((n || '').trim().toLowerCase()))) && (
                   <button
                     onClick={runLiquidAnomalyFix}
                     className="mt-2 w-full min-h-[36px] rounded-lg bg-orange-500 text-white text-xs font-semibold"
                   >
                     Исправить аномалии (масло/сок/бульон/вода → мл)
-                  </button>
-                )}
-                {unitAuditResult.some(([unit]) => !['кг', 'л'].includes(unit.trim().toLowerCase())) && (
-                  <button
-                    onClick={runCountUnitConversion}
-                    className="mt-2 w-full min-h-[36px] rounded-lg bg-orange-400 text-white text-xs font-semibold"
-                  >
-                    Перевести штучные в г/мл по заполненным весам
                   </button>
                 )}
               </div>
