@@ -15,6 +15,8 @@ import { sanitizeDecimal } from '../utils/number'
 import { downloadCsv } from '../utils/csv'
 import { uid } from '../utils/id'
 import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
+import { formatQtyForDisplay } from '../utils/unitDisplay'
+import { formatApproxWeight } from '../utils/approxWeights'
 
 function matchesSearch(name, search) {
   const q = search.trim().toLowerCase()
@@ -2535,7 +2537,12 @@ export default function Inventory({
                       {balance === null ? (
                         <Badge color="slate">—</Badge>
                       ) : (
-                        <Badge color={low ? 'red' : balance <= 0 ? 'red' : 'green'}>{balance} {product.unit}</Badge>
+                        <div className="text-right shrink-0">
+                          <Badge color={low ? 'red' : balance <= 0 ? 'red' : 'green'}>{formatQtyForDisplay(balance, product.unit)}</Badge>
+                          {formatApproxWeight(balance, product.name, product.unit) && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">{formatApproxWeight(balance, product.name, product.unit)}</p>
+                          )}
+                        </div>
                       )}
                     </div>
                     {low && (

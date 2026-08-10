@@ -12,6 +12,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
 import { computeDropdownRect } from '../utils/dropdownPosition'
 import { formatQtyForDisplay } from '../utils/unitDisplay'
+import { formatApproxWeight } from '../utils/approxWeights'
 
 export default function ShoppingList({
   recountCatalog, setRecountCatalog, recounts, purchases, productions, catalogWaste, recipes,
@@ -316,7 +317,13 @@ export default function ShoppingList({
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
-                    <p className="text-xs text-red-600 dark:text-red-400">Остаток: {formatQtyForDisplay(row.balance, row.product.unit)}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      Остаток: {formatQtyForDisplay(row.balance, row.product.unit)}
+                      {(() => {
+                        const approx = formatApproxWeight(row.balance, row.product.name, row.product.unit)
+                        return approx && <span className="text-red-400"> ({approx})</span>
+                      })()}
+                    </p>
                   </div>
                   <button
                     onClick={() => addFromLowStock(row.product)}
@@ -526,6 +533,10 @@ export default function ShoppingList({
                     <p className="text-xs text-slate-400">
                       {product?.unit}
                       {balance !== null && ` · остаток: ${formatQtyForDisplay(balance, product?.unit)}`}
+                      {balance !== null && (() => {
+                        const approx = formatApproxWeight(balance, product?.name, product?.unit)
+                        return approx ? ` (${approx})` : ''
+                      })()}
                     </p>
                   </div>
                   <div className="w-20 shrink-0">
@@ -539,6 +550,11 @@ export default function ShoppingList({
                     {['г', 'мл'].includes(product?.unit) && Math.abs(Number(p.qty)) >= 1000 && (
                       <p className="text-[10px] text-slate-400 text-center mt-0.5">
                         {formatQtyForDisplay(p.qty, product.unit)}
+                      </p>
+                    )}
+                    {formatApproxWeight(p.qty, product?.name, product?.unit) && (
+                      <p className="text-[10px] text-slate-400 text-center mt-0.5">
+                        {formatApproxWeight(p.qty, product?.name, product?.unit)}
                       </p>
                     )}
                   </div>
