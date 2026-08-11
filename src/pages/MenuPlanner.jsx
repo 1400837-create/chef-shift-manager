@@ -12,7 +12,7 @@ import {
 } from '../utils/dateUtils'
 import { parseMenuImport, parseRecipesImport, parseRationalChefExport } from '../utils/importParsers'
 import { printReport } from '../utils/printReport'
-import { coursesForDay } from '../utils/menuCourses'
+import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
 import { computeRecipeCost } from '../utils/recipeCost'
 import { compressToDataUrl } from '../utils/imageCompress'
 import { sanitizeDecimal } from '../utils/number'
@@ -56,6 +56,12 @@ export default function MenuPlanner({
   const [missingProductPrompt, setMissingProductPrompt] = useState(null)
   const [showNewRecipeForm, setShowNewRecipeForm] = useLocalStorage('showNewRecipeFormDraft', false)
   const [expandedRecipeId, setExpandedRecipeId] = useLocalStorage('expandedRecipeIdDraft', null)
+  // Recipes are written for one base yield (e.g. 10 порций) but a given day's
+  // menu scales that by a coefficient (4 порции в меню = ×4 the base recipe)
+  // — this scales the displayed ingredient amounts to match without ever
+  // touching the stored recipe, so cooking at the actual scale needed
+  // doesn't require doing the multiplication by hand.
+  const [recipeCoefficient, setRecipeCoefficient] = useState('1')
   const [editingRecipeId, setEditingRecipeId] = useLocalStorage('editingRecipeIdDraft', null)
   const [recipePhotoProcessing, setRecipePhotoProcessing] = useState(false)
   const [recipePhotoError, setRecipePhotoError] = useState(null)
@@ -211,6 +217,29 @@ export default function MenuPlanner({
     setShowNewRecipeForm(false)
     setRecipeError(null)
     setMissingProductPrompt(null)
+    setRecipeCoefficient('1')
+  }
+
+  function findRecipeByName(name) {
+    const key = (name || '').trim().toLowerCase()
+    if (!key) return null
+    return recipes.find((r) => (r.name || '').trim().toLowerCase() === key) || null
+  }
+
+  // Jumps straight from a scheduled dish in Меню to its ТК in Рецепты,
+  // pre-scaled by that day's coefficient — no need to reopen the recipe and
+  // retype the multiplier by hand.
+  function openRecipeFromMenu(dishName, qtyStr) {
+    const recipe = findRecipeByName(dishName)
+    if (!recipe) {
+      alert(`Рецепт «${dishName}» не найден в Рецептах — сначала добавьте его туда.`)
+      return
+    }
+    setRecipeCoefficient(String(Number(extractQtyNumber(qtyStr)) || 1))
+    setExpandedRecipeId(recipe.id)
+    setEditingRecipeId(null)
+    setShowNewRecipeForm(false)
+    setMenuTab('recipes')
   }
 
   function startEditRecipe(recipe) {
@@ -1027,6 +1056,15 @@ export default function MenuPlanner({
                         >
                           <ShieldCheck size={18} />
                         </button>
+                        {course.dish.trim() && (
+                          <button
+                            onClick={() => openRecipeFromMenu(course.dish, course.qty)}
+                            className="shrink-0 w-11 h-11 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-slate-400 flex items-center justify-center"
+                            title="Открыть ТК (с коэффициентом этого дня)"
+                          >
+                            <BookOpen size={18} />
+                          </button>
+                        )}
                         <ConfirmDeleteButton onConfirm={() => removeCourse(day, course.id)} size="w-9 h-9" iconSize={14} />
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -1265,11 +1303,25 @@ export default function MenuPlanner({
                         {r.photo && (
                           <img src={r.photo} alt={r.name} className="w-full max-h-56 object-cover rounded-lg mb-2" />
                         )}
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Ингредиенты</p>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs text-slate-500">Коэффициент (рецепт указан как есть):</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            className={inputClass + ' w-16 text-xs text-center px-1'}
+                            value={recipeCoefficient}
+                            onChange={(e) => setRecipeCoefficient(sanitizeDecimal(e.target.value))}
+                          />
+                        </div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+                          Ингредиенты{Number(recipeCoefficient) !== 1 ? ` (×${recipeCoefficient})` : ''}
+                        </p>
                         <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
                           {r.ingredients.map((ing) => {
                             const product = recountCatalog.find((p) => String(p.id) === String(ing.productId))
-                            return `${product?.name || '?'} × ${ing.qty}${product?.unit ? ' ' + product.unit : ''}`
+                            const coef = Number(recipeCoefficient) || 1
+                            const scaledQty = Math.round((Number(ing.qty) || 0) * coef * 100) / 100
+                            return `${product?.name || '?'} × ${scaledQty}${product?.unit ? ' ' + product.unit : ''}`
                           }).join(', ')}
                         </p>
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Технология приготовления</p>
