@@ -12,6 +12,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
 import { computeDropdownRect } from '../utils/dropdownPosition'
 import { formatQtyForDisplay, formatReferenceQty } from '../utils/unitDisplay'
+import { PRODUCT_CATEGORIES } from '../utils/constants'
 
 export default function ShoppingList({
   recountCatalog, setRecountCatalog, recounts, purchases, productions, catalogWaste, recipes,
@@ -148,7 +149,7 @@ export default function ShoppingList({
   // already started editing.
   function importFromMenu() {
     const selected = menuImportDishes.filter((d) => !menuImportExcluded.has(d.key))
-    const neededByProduct = new Map()
+    const neededByProduct = new Map() // productId -> { qty, dishes: Set<string> }
     const missingDishes = new Set()
     selected.forEach((d) => {
       if (!d.recipe) {
@@ -158,19 +159,22 @@ export default function ShoppingList({
       const multiplier = Number(extractQtyNumber(d.qty)) || 1
       d.recipe.ingredients.forEach((ing) => {
         const need = (Number(ing.qty) || 0) * multiplier
-        neededByProduct.set(ing.productId, (neededByProduct.get(ing.productId) || 0) + need)
+        const entry = neededByProduct.get(ing.productId) || { qty: 0, dishes: new Set() }
+        entry.qty += need
+        entry.dishes.add(d.dish)
+        neededByProduct.set(ing.productId, entry)
       })
     })
 
     let added = 0
     let alreadyPlanned = 0
     const toAdd = []
-    neededByProduct.forEach((qty, productId) => {
+    neededByProduct.forEach((entry, productId) => {
       if (findPlannedByProduct(productId)) {
         alreadyPlanned += 1
         return
       }
-      toAdd.push({ id: uid(), productId, qty: String(Math.round(qty * 100) / 100) })
+      toAdd.push({ id: uid(), productId, qty: String(Math.round(entry.qty * 100) / 100), dishes: [...entry.dishes] })
       added += 1
     })
     if (toAdd.length) setPlannedPurchases((prev) => [...prev, ...toAdd])
@@ -267,16 +271,36 @@ export default function ShoppingList({
     setPlannedPurchases((prev) => [...prev, { id: Date.now(), productId: product.id, qty: product.minQty || '' }])
   }
 
+  // Grouped by отдел (category) — овощи, мясо, бакалея и т.д. — so shopping
+  // at an actual store follows the store's own layout instead of whatever
+  // order items happened to get added in. Category order matches
+  // PRODUCT_CATEGORIES (the same order Каталог already sorts by).
+  const CATEGORY_ORDER = PRODUCT_CATEGORIES.map((c) => c.key)
+  const sortedPlannedPurchases = useMemo(() => {
+    return [...plannedPurchases].sort((a, b) => {
+      const pa = recountCatalog.find((pr) => String(pr.id) === String(a.productId))
+      const pb = recountCatalog.find((pr) => String(pr.id) === String(b.productId))
+      const ia = CATEGORY_ORDER.indexOf(pa?.category)
+      const ib = CATEGORY_ORDER.indexOf(pb?.category)
+      const oa = ia === -1 ? CATEGORY_ORDER.length : ia
+      const ob = ib === -1 ? CATEGORY_ORDER.length : ib
+      if (oa !== ob) return oa - ob
+      return (pa?.name || '').localeCompare(pb?.name || '', 'ru')
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plannedPurchases, recountCatalog])
+
   function printList() {
     printReport({
       type: 'shopping-list',
       title: `Запланированная закупка — ${formatRu(now)}`,
-      items: plannedPurchases.map((p) => {
+      items: sortedPlannedPurchases.map((p) => {
         const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
         const unit = product?.unit || ''
         const big = ['г', 'мл'].includes(unit) && Math.abs(Number(p.qty)) >= 1000
+        const dishSuffix = p.dishes?.length ? ` (${p.dishes.join(', ')})` : ''
         return {
-          name: product?.name || '?',
+          name: (product?.name || '?') + dishSuffix,
           unit: big ? (unit === 'г' ? 'кг' : 'л') : unit,
           qty: big ? formatQtyForDisplay(p.qty, unit).split(' ')[0] : p.qty,
         }
@@ -517,7 +541,7 @@ export default function ShoppingList({
           <p className="text-sm text-slate-400 text-center py-3">Список закупки пуст</p>
         )}
         <div className="flex flex-col gap-2">
-          {plannedPurchases.map((p) => {
+          {sortedPlannedPurchases.map((p) => {
             const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
             const { balance } = product
               ? computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now)
@@ -528,7 +552,10 @@ export default function ShoppingList({
               <div key={p.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
                 <div className="flex items-center gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{product?.name || '?'}</p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                      {product?.name || '?'}
+                      {p.dishes?.length > 0 && <span className="text-slate-400 font-normal"> ({p.dishes.join(', ')})</span>}
+                    </p>
                     <p className="text-xs text-slate-400">
                       {product?.unit}
                       {balance !== null && ` · остаток: ${formatQtyForDisplay(balance, product?.unit)}`}
