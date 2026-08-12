@@ -554,7 +554,6 @@ export default function ShoppingList({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
                       {product?.name || '?'}
-                      {p.dishes?.length > 0 && <span className="text-slate-400 font-normal"> ({p.dishes.join(', ')})</span>}
                     </p>
                     <p className="text-xs text-slate-400">
                       {product?.unit}
@@ -564,6 +563,9 @@ export default function ShoppingList({
                         return approx ? ` (${approx})` : ''
                       })()}
                     </p>
+                    {p.dishes?.length > 0 && (
+                      <p className="text-xs text-slate-400">{p.dishes.join(', ')}</p>
+                    )}
                   </div>
                   <div className="w-20 shrink-0">
                     <input
