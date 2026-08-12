@@ -55,6 +55,7 @@ export default function MenuPlanner({
   const [rationalImportResult, setRationalImportResult] = useState(null)
   const [showPhotoImport, setShowPhotoImport] = useState(false)
   const [photoImportResult, setPhotoImportResult] = useState(null)
+  const [photoImportText, setPhotoImportText] = useState('')
   const [recipeForm, setRecipeForm] = useLocalStorage('recipeFormDraft', () => ({ name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null }))
   const [recipeError, setRecipeError] = useState(null)
   const [missingProductPrompt, setMissingProductPrompt] = useState(null)
@@ -545,10 +546,9 @@ export default function MenuPlanner({
     setRationalImportText('')
   }
 
-  async function importRecipePhotosFromJson(file) {
+  function applyPhotoImportJson(text) {
     setPhotoImportResult(null)
     try {
-      const text = await file.text()
       const map = JSON.parse(text)
       const usedKeys = new Set()
       const nextRecipes = recipes.map((r) => {
@@ -568,8 +568,18 @@ export default function MenuPlanner({
         (unusedKeys.length ? ` Не найден рецепт для ТК: ${unusedKeys.join(', ')}.` : '')
       )
     } catch {
-      setPhotoImportResult('Не удалось прочитать файл. Убедитесь, что это JSON-файл со сопоставлением фото по номеру ТК.')
+      setPhotoImportResult('Не удалось прочитать данные. Убедитесь, что это JSON со сопоставлением фото по номеру ТК.')
     }
+  }
+
+  async function importRecipePhotosFromJson(file) {
+    const text = await file.text()
+    applyPhotoImportJson(text)
+  }
+
+  function importRecipePhotosFromText() {
+    applyPhotoImportJson(photoImportText)
+    setPhotoImportText('')
   }
 
   function toggleSelectForPrint(id) {
@@ -1323,8 +1333,9 @@ export default function MenuPlanner({
             {showPhotoImport && (
               <>
                 <p className="text-xs text-slate-500 mb-2">
-                  Загрузите JSON-файл с фото, сопоставленными по номеру ТК (его готовит ассистент) —
-                  фото подставятся в рецепты автоматически по номеру в названии.
+                  Фото, сопоставленные по номеру ТК (готовит ассистент), подставятся в рецепты
+                  автоматически по номеру в названии. Загрузите файл или вставьте текст —
+                  что получится на вашем устройстве.
                 </p>
                 <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
                   <Upload size={18} />
@@ -1340,6 +1351,16 @@ export default function MenuPlanner({
                     }}
                   />
                 </label>
+                <p className="text-xs text-slate-400 text-center my-2">— или —</p>
+                <textarea
+                  className={inputClass + ' h-20 py-2'}
+                  placeholder='Вставьте сюда скопированный JSON: {"105":"data:image/...", ...}'
+                  value={photoImportText}
+                  onChange={(e) => setPhotoImportText(e.target.value)}
+                />
+                <BigButton onClick={importRecipePhotosFromText} icon={ImageIcon} disabled={!photoImportText.trim()}>
+                  Импортировать вставленные фото
+                </BigButton>
                 {photoImportResult && (
                   <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
                     {photoImportResult}
