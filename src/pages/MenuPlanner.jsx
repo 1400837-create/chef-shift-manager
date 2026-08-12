@@ -64,6 +64,7 @@ export default function MenuPlanner({
   // touching the stored recipe, so cooking at the actual scale needed
   // doesn't require doing the multiplication by hand.
   const [recipeCoefficient, setRecipeCoefficient] = useState('1')
+  const [zoomedRecipeThumbId, setZoomedRecipeThumbId] = useState(null)
   // Set by openRecipeFromMenu right before switching to Рецепты — the
   // recipe list can be long, so jumping here from Меню needs to actually
   // scroll to the opened card, not just land at the top of the tab.
@@ -1322,6 +1323,21 @@ export default function MenuPlanner({
                             {isSelected && <Check size={14} className="text-white" />}
                           </span>
                         )}
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setZoomedRecipeThumbId(zoomedRecipeThumbId === r.id ? null : r.id)
+                          }}
+                          className={`shrink-0 rounded-md overflow-hidden transition-all duration-200 ${
+                            zoomedRecipeThumbId === r.id ? 'w-[108px] h-[108px]' : 'w-9 h-9'
+                          }`}
+                        >
+                          {r.photo ? (
+                            <img src={r.photo} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="block w-full h-full bg-orange-100 dark:bg-orange-900/30" />
+                          )}
+                        </span>
                         <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{r.name}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
