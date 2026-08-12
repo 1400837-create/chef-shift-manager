@@ -11,6 +11,7 @@ import Finances from './pages/Finances'
 import { UndoRedoBar } from './components/UI'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { useTabHistory } from './hooks/useTabHistory'
+import { useBackableTab } from './hooks/useBackableTab'
 import { todayKey, addDays, daysBetween, startOfDay, parseLocalDate } from './utils/dateUtils'
 import { menuDeadlineInfo } from './utils/deadlines'
 import { DAILY_CLEANING_ITEMS } from './utils/constants'
@@ -18,6 +19,7 @@ import { computeBalance } from './utils/stockBalance'
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
+  useBackableTab('app', tab, setTab)
   const [searchOpen, setSearchOpen] = useState(false)
 
   // One-shot cross-page navigation request: MenuPlanner sets this when a

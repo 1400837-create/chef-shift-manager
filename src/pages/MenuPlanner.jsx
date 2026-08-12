@@ -17,6 +17,7 @@ import { computeRecipeCost } from '../utils/recipeCost'
 import { compressToDataUrl } from '../utils/imageCompress'
 import { sanitizeDecimal } from '../utils/number'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { useBackableTab } from '../hooks/useBackableTab'
 import { uid } from '../utils/id'
 import { computeDropdownRect } from '../utils/dropdownPosition'
 
@@ -30,6 +31,7 @@ export default function MenuPlanner({
   // Склад → Каталог to fill it in, which unmounts this page — persisting the
   // in-progress recipe means it's still there, untouched, when they come back.
   const [menuTab, setMenuTab] = useLocalStorage('menuTab', 'calendar')
+  useBackableTab('menuTab', menuTab, setMenuTab)
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }

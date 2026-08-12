@@ -17,6 +17,7 @@ import { uid } from '../utils/id'
 import { coursesForDay, extractQtyNumber } from '../utils/menuCourses'
 import { formatQtyForDisplay, formatReferenceQty } from '../utils/unitDisplay'
 import { estimateWeightPerUnit } from '../utils/approxWeights'
+import { useBackableTab } from '../hooks/useBackableTab'
 
 function matchesSearch(name, search) {
   const q = search.trim().toLowerCase()
@@ -60,6 +61,7 @@ export default function Inventory({
   const [fifoImportExcluded, setFifoImportExcluded] = useState(() => new Set())
   const [fifoImportResult, setFifoImportResult] = useState(null)
   const [tab, setTab] = useState(() => initialTab || 'fifo')
+  useBackableTab('inventoryTab', tab, setTab)
   const [highlightCatalogId, setHighlightCatalogId] = useState(initialHighlightId || null)
   const [monthOffset, setMonthOffset] = useState(0)
   const now = new Date()
