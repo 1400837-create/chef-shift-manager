@@ -68,6 +68,10 @@ export default function MenuPlanner({
   // recipe list can be long, so jumping here from Меню needs to actually
   // scroll to the opened card, not just land at the top of the tab.
   const pendingRecipeScrollRef = useRef(null)
+  // Set alongside it — which day's card to scroll back to when returning to
+  // Меню (via the "Меню" button or system back), so switching back and
+  // forth between a day's dishes and their ТК stays anchored on that day.
+  const pendingDayScrollRef = useRef(null)
   const [editingRecipeId, setEditingRecipeId] = useLocalStorage('editingRecipeIdDraft', null)
   const [recipePhotoProcessing, setRecipePhotoProcessing] = useState(false)
   const [recipePhotoError, setRecipePhotoError] = useState(null)
@@ -235,7 +239,7 @@ export default function MenuPlanner({
   // Jumps straight from a scheduled dish in Меню to its ТК in Рецепты,
   // pre-scaled by that day's coefficient — no need to reopen the recipe and
   // retype the multiplier by hand.
-  function openRecipeFromMenu(dishName, qtyStr) {
+  function openRecipeFromMenu(dishName, qtyStr, day) {
     const recipe = findRecipeByName(dishName)
     if (!recipe) {
       alert(`Рецепт «${dishName}» не найден в Рецептах — сначала добавьте его туда.`)
@@ -246,6 +250,13 @@ export default function MenuPlanner({
     setEditingRecipeId(null)
     setShowNewRecipeForm(false)
     pendingRecipeScrollRef.current = recipe.id
+    // Remember which day to snap back to when the user returns to Меню —
+    // openDay itself already survives the tab switch (MenuPlanner never
+    // unmounts), but the scroll position doesn't, so without this the
+    // calendar view lands wherever the browser's own scroll-restoration
+    // guesses (often the very bottom, since Рецепты was scrolled much
+    // further down than the calendar view is tall).
+    pendingDayScrollRef.current = day
     setMenuTab('recipes')
   }
 
@@ -792,6 +803,20 @@ export default function MenuPlanner({
     return () => clearTimeout(t)
   }, [menuTab, expandedRecipeId])
 
+  // Undoes the "jump to a specific recipe" scroll above when coming back —
+  // without this, returning to Меню lands the browser's own (wrong)
+  // scroll-restoration guess, often the very bottom of the calendar, since
+  // Рецепты was scrolled much further down than Меню is tall.
+  useEffect(() => {
+    if (menuTab !== 'calendar' || pendingDayScrollRef.current == null) return
+    const day = pendingDayScrollRef.current
+    pendingDayScrollRef.current = null
+    const t = setTimeout(() => {
+      document.getElementById(`menu-day-${day}`)?.scrollIntoView({ behavior: 'auto', block: 'start' })
+    }, 50)
+    return () => clearTimeout(t)
+  }, [menuTab])
+
   return (
     <div className="pb-4">
       <div
@@ -969,7 +994,7 @@ export default function MenuPlanner({
           const courses = isOpen || dayData ? coursesForDay(dayData) : []
           const anyKosher = courses.some((c) => c.kosher)
           return (
-            <div key={day} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div key={day} id={`menu-day-${day}`} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden scroll-mt-32">
               <button
                 onClick={() => setOpenDay(isOpen ? null : day)}
                 className="w-full flex items-center justify-between px-3 py-3 min-h-[56px] active:bg-slate-50"
@@ -1067,7 +1092,7 @@ export default function MenuPlanner({
                         </button>
                         {course.dish.trim() && (
                           <button
-                            onClick={() => openRecipeFromMenu(course.dish, course.qty)}
+                            onClick={() => openRecipeFromMenu(course.dish, course.qty, day)}
                             className="shrink-0 w-11 h-11 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-slate-400 flex items-center justify-center"
                             title="Открыть ТК (с коэффициентом этого дня)"
                           >

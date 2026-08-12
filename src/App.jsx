@@ -22,6 +22,16 @@ export default function App() {
   useBackableTab('app', tab, setTab)
   const [searchOpen, setSearchOpen] = useState(false)
 
+  // This is a single-page app — every tab/sub-tab switch goes through
+  // useBackableTab's pushState, never a real page navigation — so the
+  // browser's own scroll-restoration guess on popstate is working from
+  // stale assumptions (e.g. restoring a scroll position that belonged to a
+  // completely different, much taller view) and fights with any scroll
+  // position pages manage themselves (see MenuPlanner's recipe/day jumps).
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual'
+  }, [])
+
   // Exposes the sticky header's real rendered height (varies with the
   // safe-area inset on notched phones) as a CSS variable, so page-level sticky
   // bars — e.g. MenuPlanner's Меню/Рецепты toggle — can stick right below it
