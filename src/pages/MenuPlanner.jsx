@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Mail, Upload, X, Copy, Plus, Printer,
+  ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Upload, X, Copy, Plus, Printer,
   BookOpen, Pencil, Camera, Calendar, Check, ExternalLink,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow, PrintButton } from '../components/UI'
@@ -64,6 +64,10 @@ export default function MenuPlanner({
   // touching the stored recipe, so cooking at the actual scale needed
   // doesn't require doing the multiplication by hand.
   const [recipeCoefficient, setRecipeCoefficient] = useState('1')
+  // Set by openRecipeFromMenu right before switching to Рецепты — the
+  // recipe list can be long, so jumping here from Меню needs to actually
+  // scroll to the opened card, not just land at the top of the tab.
+  const pendingRecipeScrollRef = useRef(null)
   const [editingRecipeId, setEditingRecipeId] = useLocalStorage('editingRecipeIdDraft', null)
   const [recipePhotoProcessing, setRecipePhotoProcessing] = useState(false)
   const [recipePhotoError, setRecipePhotoError] = useState(null)
@@ -241,6 +245,7 @@ export default function MenuPlanner({
     setExpandedRecipeId(recipe.id)
     setEditingRecipeId(null)
     setShowNewRecipeForm(false)
+    pendingRecipeScrollRef.current = recipe.id
     setMenuTab('recipes')
   }
 
@@ -777,9 +782,22 @@ export default function MenuPlanner({
     }
   }, [openDishDropdown])
 
+  useEffect(() => {
+    if (menuTab !== 'recipes' || !pendingRecipeScrollRef.current) return
+    const id = pendingRecipeScrollRef.current
+    pendingRecipeScrollRef.current = null
+    const t = setTimeout(() => {
+      document.getElementById(`recipe-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+    return () => clearTimeout(t)
+  }, [menuTab, expandedRecipeId])
+
   return (
     <div className="pb-4">
-      <div className="flex gap-1.5 mb-4 overflow-x-auto -mx-3 px-3">
+      <div
+        className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100 dark:bg-slate-950 flex gap-1.5 overflow-x-auto"
+        style={{ top: 'var(--app-header-h, 64px)' }}
+      >
         <button
           onClick={() => setMenuTab('calendar')}
           className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
@@ -800,17 +818,6 @@ export default function MenuPlanner({
 
       {menuTab === 'calendar' && (
       <>
-      <Section title="Email Küchenleiterin" icon={Mail}>
-        <Field label="Куда отправлять меню">
-          <input
-            className={inputClass}
-            placeholder="kuechenleiterin@example.com"
-            value={settings.kuchenleiterinEmail || ''}
-            onChange={(e) => setSettings((s) => ({ ...s, kuchenleiterinEmail: e.target.value }))}
-          />
-        </Field>
-      </Section>
-
       <Section
         title="Импорт из Google Таблиц"
         icon={Upload}
@@ -1275,7 +1282,7 @@ export default function MenuPlanner({
                 const isSelected = selectedForPrint.has(r.id)
                 const cost = recipeCost(r)
                 return (
-                  <div key={r.id} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div key={r.id} id={`recipe-${r.id}`} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
                     <button
                       onClick={() => (recipePrintMode ? toggleSelectForPrint(r.id) : toggleExpandRecipe(r))}
                       className="w-full flex items-center justify-between gap-2 px-3 py-3 min-h-[52px] active:bg-slate-50 dark:active:bg-slate-700"

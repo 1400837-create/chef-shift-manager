@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kitchen-os-v6'
+const CACHE_NAME = 'kitchen-os-v7'
 const APP_SHELL = ['/chef-shift-manager/', '/chef-shift-manager/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
@@ -44,6 +44,18 @@ self.addEventListener('fetch', (event) => {
     // fresh deploy is picked up on the very next load, not up to 10 min later.
     event.respondWith(
       fetchWithRetry(new Request(request.url, { cache: 'no-store' }))
+        .then((response) => {
+          // The offline fallback below only ever gets refreshed on install
+          // (i.e. when sw.js itself changes) otherwise — someone who hasn't
+          // had a code update in days but opens the app online daily would
+          // still fall back to that old install-time snapshot the moment
+          // they lose signal. Overwrite it on every successful online load
+          // instead, so "offline" always means "whatever was last actually
+          // seen", not "whatever happened to be cached at install time".
+          const clone = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put('/chef-shift-manager/', clone))
+          return response
+        })
         .catch(() => caches.match('/chef-shift-manager/'))
     )
     return

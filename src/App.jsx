@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChefHat, User, Search, Bell, BellOff, Moon, Sun } from 'lucide-react'
 import BottomNav from './components/BottomNav'
 import GlobalSearch from './components/GlobalSearch'
@@ -21,6 +21,21 @@ export default function App() {
   const [tab, setTab] = useState('dashboard')
   useBackableTab('app', tab, setTab)
   const [searchOpen, setSearchOpen] = useState(false)
+
+  // Exposes the sticky header's real rendered height (varies with the
+  // safe-area inset on notched phones) as a CSS variable, so page-level sticky
+  // bars — e.g. MenuPlanner's Меню/Рецепты toggle — can stick right below it
+  // instead of guessing a fixed pixel value or overlapping it.
+  const headerRef = useRef(null)
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const setVar = () => document.documentElement.style.setProperty('--app-header-h', `${el.offsetHeight}px`)
+    setVar()
+    const ro = new ResizeObserver(setVar)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // One-shot cross-page navigation request: MenuPlanner sets this when a
   // recipe ingredient's product doesn't exist yet in the nomenclature and the
@@ -268,7 +283,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
-      <header className="safe-top sticky top-0 z-30 bg-slate-900 text-white px-3 py-3 flex items-center gap-1 shadow-md">
+      <header
+        ref={headerRef}
+        className="safe-top sticky top-0 z-30 bg-slate-900 text-white px-3 py-3 flex items-center gap-1 shadow-md"
+      >
         <ChefHat size={20} className="text-orange-400 shrink-0 mr-1" />
         <div className="min-w-0 flex-1">
           <p className="font-bold leading-tight truncate text-[15px]">LA CHEF</p>
