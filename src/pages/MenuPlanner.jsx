@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Upload, X, Copy, Plus, Printer,
-  BookOpen, Pencil, Camera, Calendar, Check, ExternalLink,
+  BookOpen, Pencil, Camera, Calendar, Check, ExternalLink, Image as ImageIcon,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow, PrintButton } from '../components/UI'
 import { DEFAULT_MENU_COURSES } from '../utils/constants'
@@ -1552,21 +1552,37 @@ function RecipeFormFields({
             </button>
           </div>
         ) : (
-          <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50">
-            <Camera size={20} />
-            <span className="text-sm">{recipePhotoProcessing ? 'Обработка фото…' : 'Сфотографировать / выбрать фото'}</span>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0] || null
-                e.target.value = ''
-                if (file) handleRecipePhoto(file)
-              }}
-            />
-          </label>
+          <div className="flex gap-2">
+            <label className="flex-1 flex items-center justify-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
+              <Camera size={20} />
+              <span className="text-sm">{recipePhotoProcessing ? 'Обработка…' : 'Камера'}</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null
+                  e.target.value = ''
+                  if (file) handleRecipePhoto(file)
+                }}
+              />
+            </label>
+            <label className="flex-1 flex items-center justify-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
+              <ImageIcon size={20} />
+              <span className="text-sm">{recipePhotoProcessing ? 'Обработка…' : 'Галерея'}</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null
+                  e.target.value = ''
+                  if (file) handleRecipePhoto(file)
+                }}
+              />
+            </label>
+          </div>
         )}
         {recipePhotoError && (
           <p className="text-xs text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mt-2">
