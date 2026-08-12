@@ -53,6 +53,8 @@ export default function MenuPlanner({
   const [rationalImportText, setRationalImportText] = useState('')
   const [rationalImportOverwrite, setRationalImportOverwrite] = useState(false)
   const [rationalImportResult, setRationalImportResult] = useState(null)
+  const [showPhotoImport, setShowPhotoImport] = useState(false)
+  const [photoImportResult, setPhotoImportResult] = useState(null)
   const [recipeForm, setRecipeForm] = useLocalStorage('recipeFormDraft', () => ({ name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null }))
   const [recipeError, setRecipeError] = useState(null)
   const [missingProductPrompt, setMissingProductPrompt] = useState(null)
@@ -541,6 +543,33 @@ export default function MenuPlanner({
     if (unitMismatches.length) parts.push(`несовпадение единиц, нужна проверка (${unitMismatches.length}): ${unitMismatches.join('; ')}`)
     setRationalImportResult(parts.join(', '))
     setRationalImportText('')
+  }
+
+  async function importRecipePhotosFromJson(file) {
+    setPhotoImportResult(null)
+    try {
+      const text = await file.text()
+      const map = JSON.parse(text)
+      const usedKeys = new Set()
+      const nextRecipes = recipes.map((r) => {
+        const m = (r.name || '').match(/(\d+)/)
+        if (!m) return r
+        const num = String(Number(m[1]))
+        const photo = map[num]
+        if (!photo) return r
+        usedKeys.add(num)
+        return { ...r, photo }
+      })
+      setRecipes(nextRecipes)
+      const allKeys = Object.keys(map)
+      const unusedKeys = allKeys.filter((k) => !usedKeys.has(String(Number(k))))
+      setPhotoImportResult(
+        `Фото добавлено: ${usedKeys.size} из ${allKeys.length}.` +
+        (unusedKeys.length ? ` Не найден рецепт для ТК: ${unusedKeys.join(', ')}.` : '')
+      )
+    } catch {
+      setPhotoImportResult('Не удалось прочитать файл. Убедитесь, что это JSON-файл со сопоставлением фото по номеру ТК.')
+    }
   }
 
   function toggleSelectForPrint(id) {
@@ -1276,6 +1305,44 @@ export default function MenuPlanner({
                 {rationalImportResult && (
                   <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
                     {rationalImportResult}
+                  </p>
+                )}
+              </>
+            )}
+          </Section>
+
+          <Section
+            title="Импорт фото рецептов"
+            icon={ImageIcon}
+            right={
+              <button onClick={() => setShowPhotoImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+                {showPhotoImport ? 'Скрыть' : 'Показать'}
+              </button>
+            }
+          >
+            {showPhotoImport && (
+              <>
+                <p className="text-xs text-slate-500 mb-2">
+                  Загрузите JSON-файл с фото, сопоставленными по номеру ТК (его готовит ассистент) —
+                  фото подставятся в рецепты автоматически по номеру в названии.
+                </p>
+                <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
+                  <Upload size={18} />
+                  <span className="text-sm">Выбрать JSON-файл</span>
+                  <input
+                    type="file"
+                    accept="application/json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null
+                      e.target.value = ''
+                      if (file) importRecipePhotosFromJson(file)
+                    }}
+                  />
+                </label>
+                {photoImportResult && (
+                  <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+                    {photoImportResult}
                   </p>
                 )}
               </>
