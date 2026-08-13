@@ -32,3 +32,20 @@ button, input, select, textarea, label {
   background: #94a3b8;
   border-radius: 3px;
 }
+
+/* Expanding a recipe/day card washes it with a soft tint top-to-bottom —
+   an explicit wipe reveal reads as one smooth motion, instead of the header
+   and body tints (which sit on separate elements sized independently)
+   visibly settling a frame or two apart. */
+@keyframes tint-wipe-down {
+  from { clip-path: inset(0 0 100% 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+.tint-wipe-down {
+  animation: tint-wipe-down 420ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tint-wipe-down {
+    animation-duration: 1ms;
+  }
+}

@@ -866,12 +866,15 @@ export default function MenuPlanner({
 
   // Опening Меню always lands on the current month (see cursor's initial
   // state above) but day 1 is still at the top of a long list — jump straight
-  // to today's card once per mount so it doesn't take a manual scroll every time.
+  // to the current week (Monday, so Mon–Sun is all in view together) once per
+  // mount so it doesn't take a manual scroll every time. If Monday falls in
+  // the previous month, day 1 is the closest we can land on.
   useEffect(() => {
     if (menuTab !== 'calendar') return
     const now = new Date()
     if (cursor.year !== now.getFullYear() || cursor.month !== now.getMonth()) return
-    const day = now.getDate()
+    const monday = now.getDate() - mondayIndex(now)
+    const day = monday >= 1 ? monday : 1
     const t = setTimeout(() => {
       document.getElementById(`menu-day-${day}`)?.scrollIntoView({ behavior: 'auto', block: 'start' })
     }, 50)
@@ -1057,12 +1060,18 @@ export default function MenuPlanner({
           const anyKosher = courses.some((c) => c.kosher)
           const summary = summaryText(day)
           return (
-            <div key={day} id={`menu-day-${day}`} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden scroll-mt-32">
+            <div
+              key={day}
+              id={`menu-day-${day}`}
+              className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden scroll-mt-32 ${
+                isOpen
+                  ? 'tint-wipe-down bg-gradient-to-b from-orange-100/80 via-orange-50/30 to-transparent dark:from-orange-950/50 dark:via-orange-950/15 dark:to-transparent'
+                  : ''
+              }`}
+            >
               <button
                 onClick={() => setOpenDay(isOpen ? null : day)}
-                className={`w-full flex items-center justify-between px-3 py-3 min-h-[56px] active:bg-slate-50 ${
-                  isOpen ? 'bg-orange-100/80 dark:bg-orange-950/50' : ''
-                }`}
+                className="w-full flex items-center justify-between px-3 py-3 min-h-[56px] active:bg-slate-50"
               >
                 <div className="flex items-center gap-3">
                   <div
@@ -1097,7 +1106,7 @@ export default function MenuPlanner({
               </button>
 
               {isOpen && (
-                <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700 bg-gradient-to-b from-orange-100/80 via-orange-50/30 to-transparent dark:from-orange-950/50 dark:via-orange-950/15 dark:to-transparent">
+                <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
                   <input
                     className={inputClass + ' mb-2'}
                     placeholder="Название дня (праздник, мероприятие) — необязательно"
@@ -1351,12 +1360,18 @@ export default function MenuPlanner({
                 const isSelected = selectedForPrint.has(r.id)
                 const cost = recipeCost(r)
                 return (
-                  <div key={r.id} id={`recipe-${r.id}`} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+                  <div
+                    key={r.id}
+                    id={`recipe-${r.id}`}
+                    className={`rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32 ${
+                      isExpanded && !recipePrintMode
+                        ? 'tint-wipe-down bg-gradient-to-b from-orange-100/80 via-orange-50/30 to-transparent dark:from-orange-950/50 dark:via-orange-950/15 dark:to-transparent'
+                        : ''
+                    }`}
+                  >
                     <button
                       onClick={() => (recipePrintMode ? toggleSelectForPrint(r.id) : toggleExpandRecipe(r))}
-                      className={`w-full flex items-center justify-between gap-2 px-3 py-3 min-h-[52px] active:bg-slate-50 dark:active:bg-slate-700 ${
-                        isExpanded && !recipePrintMode ? 'bg-orange-100/80 dark:bg-orange-950/50' : ''
-                      }`}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-3 min-h-[52px] active:bg-slate-50 dark:active:bg-slate-700"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         {recipePrintMode && (
@@ -1394,7 +1409,7 @@ export default function MenuPlanner({
                     </button>
 
                     {isExpanded && !recipePrintMode && !isEditing && (
-                      <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700 bg-gradient-to-b from-orange-100/80 via-orange-50/30 to-transparent dark:from-orange-950/50 dark:via-orange-950/15 dark:to-transparent">
+                      <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
                         {r.photo && (
                           <img src={r.photo} alt={r.name} className="w-full max-h-56 object-cover rounded-lg mb-2" />
                         )}
