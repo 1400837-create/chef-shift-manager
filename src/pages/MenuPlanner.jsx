@@ -621,10 +621,16 @@ export default function MenuPlanner({
     const id = pendingRecipeScrollRef.current
     pendingRecipeScrollRef.current = null
     const t = setTimeout(() => {
-      document.getElementById(`recipe-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      // behavior: 'smooth' silently no-ops here in split view — the target
+      // sits inside its own bounded pane (a nested scroll container) rather
+      // than the page itself, and smooth-scrolling that combination doesn't
+      // actually move the pane (confirmed: 'auto' on the same element works
+      // instantly, 'smooth' leaves scrollTop at 0). 'auto' loses the glide
+      // but always lands correctly, which matters more.
+      document.getElementById(`recipe-${id}`)?.scrollIntoView({ behavior: showBothPanes ? 'auto' : 'smooth', block: 'start' })
     }, 100)
     return () => clearTimeout(t)
-  }, [menuTab, expandedRecipeId])
+  }, [menuTab, expandedRecipeId, showBothPanes])
 
   // Landing here from Глобальный поиск (a recipe result tapped) — open
   // straight to Рецепты with that recipe expanded and scrolled into view,
