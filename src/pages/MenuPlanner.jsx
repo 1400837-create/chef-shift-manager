@@ -621,13 +621,25 @@ export default function MenuPlanner({
     const id = pendingRecipeScrollRef.current
     pendingRecipeScrollRef.current = null
     const t = setTimeout(() => {
-      // behavior: 'smooth' silently no-ops here in split view — the target
-      // sits inside its own bounded pane (a nested scroll container) rather
-      // than the page itself, and smooth-scrolling that combination doesn't
-      // actually move the pane (confirmed: 'auto' on the same element works
-      // instantly, 'smooth' leaves scrollTop at 0). 'auto' loses the glide
-      // but always lands correctly, which matters more.
-      document.getElementById(`recipe-${id}`)?.scrollIntoView({ behavior: showBothPanes ? 'auto' : 'smooth', block: 'start' })
+      const el = document.getElementById(`recipe-${id}`)
+      if (!el) return
+      if (!showBothPanes) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+      // scrollIntoView (both 'smooth' and, on some devices, even 'auto')
+      // proved unreliable for a target inside the split-pane's own bounded
+      // scroll container — it silently landed anywhere from 0 to partway
+      // there depending on timing. Computing the offset directly and
+      // setting scrollTop is deterministic: no animation, no browser
+      // scroll-into-view heuristics, nothing to interrupt.
+      let pane = el.parentElement
+      while (pane && getComputedStyle(pane).overflowY !== 'auto' && getComputedStyle(pane).overflowY !== 'scroll') {
+        pane = pane.parentElement
+      }
+      if (!pane) { el.scrollIntoView({ behavior: 'auto', block: 'start' }); return }
+      const targetTop = el.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop
+      pane.scrollTop = targetTop
     }, 100)
     return () => clearTimeout(t)
   }, [menuTab, expandedRecipeId, showBothPanes])
