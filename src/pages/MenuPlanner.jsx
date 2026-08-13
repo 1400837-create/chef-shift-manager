@@ -55,6 +55,24 @@ export default function MenuPlanner({
   const [splitView, setSplitView] = useLocalStorage('menuSplitView', false)
   const showBothPanes = splitView && isWideScreen
 
+  // Each pane needs its own bounded height to scroll independently instead
+  // of both just adding to the page's normal scroll — that height is
+  // "whatever's left of the viewport" below the sticky header and this
+  // tab bar (both variable: header height changes with the safe-area inset,
+  // this bar's own height only matters while it's actually mounted), and
+  // above the fixed bottom nav (min-h-[64px] + its own safe-area inset).
+  const tabBarRef = useRef(null)
+  const [tabBarH, setTabBarH] = useState(0)
+  useEffect(() => {
+    const el = tabBarRef.current
+    if (!el) return
+    const setH = () => setTabBarH(el.offsetHeight)
+    setH()
+    const ro = new ResizeObserver(setH)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -920,6 +938,7 @@ export default function MenuPlanner({
   return (
     <div className="pb-4">
       <div
+        ref={tabBarRef}
         className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100 dark:bg-slate-950 flex gap-1.5 overflow-x-auto"
         style={{ top: 'var(--app-header-h, 64px)' }}
       >
@@ -959,9 +978,14 @@ export default function MenuPlanner({
         </button>
       </div>
 
-      <div className={showBothPanes ? 'flex gap-3 items-start' : ''}>
+      <div
+        className={showBothPanes ? 'flex gap-3 items-start' : ''}
+        style={showBothPanes ? {
+          height: `calc(100vh - var(--app-header-h, 64px) - ${tabBarH}px - 64px - env(safe-area-inset-bottom, 0px))`,
+        } : undefined}
+      >
       {(menuTab === 'calendar' || showBothPanes) && (
-      <div className={showBothPanes ? 'md:w-1/2 md:min-w-0' : ''}>
+      <div className={showBothPanes ? 'md:w-1/2 md:min-w-0 md:h-full md:overflow-y-auto md:overscroll-contain md:pr-1' : ''}>
       <Section
         title="Импорт из Google Таблиц"
         icon={Upload}
@@ -1324,7 +1348,7 @@ export default function MenuPlanner({
       )}
 
       {(menuTab === 'recipes' || showBothPanes) && (
-        <div className={showBothPanes ? 'md:w-1/2 md:min-w-0' : ''}>
+        <div className={showBothPanes ? 'md:w-1/2 md:min-w-0 md:h-full md:overflow-y-auto md:overscroll-contain md:pl-1' : ''}>
           <a
             href="https://1400837-create.github.io/Chef/"
             target="_blank"
