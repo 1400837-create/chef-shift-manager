@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Upload, X, Copy, Plus, Printer,
-  BookOpen, Pencil, Camera, Calendar, Check, ExternalLink, Image as ImageIcon, Columns2,
+  BookOpen, Pencil, Camera, Calendar, Check, ExternalLink, Image as ImageIcon, Columns2, Undo2, Redo2,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow, PrintButton } from '../components/UI'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -25,7 +25,7 @@ import { computeDropdownRect } from '../utils/dropdownPosition'
 export default function MenuPlanner({
   menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary,
   recipes, setRecipes, recountCatalog, setRecountCatalog, onNavigateToCatalog,
-  initialOpenRecipeId, onInitialRecipeConsumed, forcedMenuTab,
+  initialOpenRecipeId, onInitialRecipeConsumed, forcedMenuTab, menuHistory,
 }) {
   // Рецепты draft state (menuTab + everything below down to editingRecipeId)
   // is persisted rather than plain useState: adding an ingredient whose
@@ -692,11 +692,36 @@ export default function MenuPlanner({
     <div className="pb-4">
       <div
         ref={tabBarRef}
-        className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100 dark:bg-slate-950 flex gap-1.5 overflow-x-auto"
+        className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100 dark:bg-slate-950"
         style={{ top: 'var(--app-header-h, 64px)' }}
       >
+        <div className="flex items-center gap-2">
+          <button
+            onClick={menuHistory.undo}
+            disabled={!menuHistory.canUndo}
+            className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:active:bg-slate-600 dark:text-slate-300 text-xs font-semibold disabled:opacity-40"
+          >
+            <Undo2 size={15} /> Отменить
+          </button>
+          <button
+            onClick={menuHistory.redo}
+            disabled={!menuHistory.canRedo}
+            className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-lg bg-slate-100 active:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:active:bg-slate-600 dark:text-slate-300 text-xs font-semibold disabled:opacity-40"
+          >
+            <Redo2 size={15} /> Повтор
+          </button>
+          <button
+            onClick={() => setSplitView((v) => !v)}
+            title={splitView ? 'Показывать по одной вкладке' : 'Показать меню и рецепты рядом'}
+            className={`hidden md:flex ml-auto shrink-0 min-h-[36px] px-3 rounded-lg font-semibold items-center justify-center gap-1.5 text-xs whitespace-nowrap ${
+              splitView ? 'bg-orange-500 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+            }`}
+          >
+            <Columns2 size={14} /> Рядом
+          </button>
+        </div>
         {!showBothPanes && (
-          <>
+          <div className="flex gap-1.5 overflow-x-auto mt-1.5">
             <button
               onClick={() => setMenuTab('calendar')}
               className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
@@ -713,22 +738,8 @@ export default function MenuPlanner({
             >
               <BookOpen size={16} /> Рецепты
             </button>
-          </>
+          </div>
         )}
-        {showBothPanes && (
-          <p className="flex-1 min-h-[48px] flex items-center px-1 font-semibold text-sm text-slate-600 dark:text-slate-300">
-            Меню и рецепты рядом
-          </p>
-        )}
-        <button
-          onClick={() => setSplitView((v) => !v)}
-          title={splitView ? 'Показывать по одной вкладке' : 'Показать меню и рецепты рядом'}
-          className={`hidden md:flex shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
-            splitView ? 'bg-orange-500 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-          }`}
-        >
-          <Columns2 size={16} /> Рядом
-        </button>
       </div>
 
       <div

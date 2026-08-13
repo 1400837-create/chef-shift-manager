@@ -413,25 +413,23 @@ export default function App() {
           />
         )}
         {(tab === 'menu' || tab === 'recipes') && (
-          <>
-            <UndoRedoBar {...menuHistory} />
-            <MenuPlanner
-              menuData={menuData}
-              setMenuData={setMenuData}
-              settings={settings}
-              setSettings={setSettings}
-              dishLibrary={dishLibrary}
-              setDishLibrary={setDishLibrary}
-              recipes={recipes}
-              setRecipes={setRecipes}
-              recountCatalog={recountCatalog}
-              setRecountCatalog={setRecountCatalog}
-              onNavigateToCatalog={goToCatalogProduct}
-              initialOpenRecipeId={pendingOpenRecipeId}
-              onInitialRecipeConsumed={() => setPendingOpenRecipeId(null)}
-              forcedMenuTab={tab === 'recipes' ? 'recipes' : 'calendar'}
-            />
-          </>
+          <MenuPlanner
+            menuData={menuData}
+            setMenuData={setMenuData}
+            settings={settings}
+            setSettings={setSettings}
+            dishLibrary={dishLibrary}
+            setDishLibrary={setDishLibrary}
+            recipes={recipes}
+            setRecipes={setRecipes}
+            recountCatalog={recountCatalog}
+            setRecountCatalog={setRecountCatalog}
+            onNavigateToCatalog={goToCatalogProduct}
+            initialOpenRecipeId={pendingOpenRecipeId}
+            onInitialRecipeConsumed={() => setPendingOpenRecipeId(null)}
+            forcedMenuTab={tab === 'recipes' ? 'recipes' : 'calendar'}
+            menuHistory={menuHistory}
+          />
         )}
         {tab === 'inventory' && (
           <>
