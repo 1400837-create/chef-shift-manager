@@ -111,7 +111,14 @@ export default function MenuPlanner({
   function setDayCourses(day, courses) {
     setMenuData((prev) => ({
       ...prev,
-      [monthKey]: { ...(prev[monthKey] || {}), [day]: { courses } },
+      [monthKey]: { ...(prev[monthKey] || {}), [day]: { ...(prev[monthKey]?.[day] || {}), courses } },
+    }))
+  }
+
+  function setDayEventName(day, eventName) {
+    setMenuData((prev) => ({
+      ...prev,
+      [monthKey]: { ...(prev[monthKey] || {}), [day]: { ...(prev[monthKey]?.[day] || {}), eventName } },
     }))
   }
 
@@ -1070,9 +1077,16 @@ export default function MenuPlanner({
                       {dayLabel(day)}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-300 text-left line-clamp-1 max-w-[45vw]">
-                    {summary || <span className="text-slate-300">Не заполнено</span>}
-                  </p>
+                  <div className="min-w-0 max-w-[45vw]">
+                    {dayData?.eventName && (
+                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 text-left truncate">
+                        {dayData.eventName}
+                      </p>
+                    )}
+                    <p className="text-sm text-slate-600 dark:text-slate-300 text-left line-clamp-1">
+                      {summary || <span className="text-slate-300">Не заполнено</span>}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {anyKosher && <Badge color="green">Кошер</Badge>}
@@ -1082,6 +1096,12 @@ export default function MenuPlanner({
 
               {isOpen && (
                 <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
+                  <input
+                    className={inputClass + ' mb-2'}
+                    placeholder="Название дня (праздник, мероприятие) — необязательно"
+                    value={dayData?.eventName || ''}
+                    onChange={(e) => setDayEventName(day, e.target.value)}
+                  />
                   {courses.map((course) => (
                     <div key={course.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-2 py-2 mb-2">
                       <div className="flex items-center gap-1.5 mb-1.5">
