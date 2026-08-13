@@ -49,13 +49,13 @@ export default function MenuPlanner({
   const [recipeImportDeclined, setRecipeImportDeclined] = useLocalStorage('recipeImportDeclinedDraft', [])
   const [recipeImportMissingPrompt, setRecipeImportMissingPrompt] = useState(null)
   const [recipeImportResult, setRecipeImportResult] = useState(null)
-  const [showRationalImport, setShowRationalImport] = useState(false)
   const [rationalImportText, setRationalImportText] = useState('')
   const [rationalImportOverwrite, setRationalImportOverwrite] = useState(false)
   const [rationalImportResult, setRationalImportResult] = useState(null)
-  const [showPhotoImport, setShowPhotoImport] = useState(false)
   const [photoImportResult, setPhotoImportResult] = useState(null)
   const [photoImportText, setPhotoImportText] = useState('')
+  const [showAdvancedImport, setShowAdvancedImport] = useState(false)
+  const [advancedImportTab, setAdvancedImportTab] = useState('rational')
   const [recipeForm, setRecipeForm] = useLocalStorage('recipeFormDraft', () => ({ name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null }))
   const [recipeError, setRecipeError] = useState(null)
   const [missingProductPrompt, setMissingProductPrompt] = useState(null)
@@ -1278,99 +1278,6 @@ export default function MenuPlanner({
           </Section>
 
           <Section
-            title="Импорт из Rational Chef OS"
-            icon={ExternalLink}
-            right={
-              <button onClick={() => setShowRationalImport((v) => !v)} className="text-xs font-semibold text-orange-600">
-                {showRationalImport ? 'Скрыть' : 'Показать'}
-              </button>
-            }
-          >
-            {showRationalImport && (
-              <>
-                <p className="text-xs text-slate-500 mb-2">
-                  В Rational Chef OS: «⋮» → «Экспорт для LA CHEF» — данные скопируются в буфер обмена.
-                  Вставьте их сюда. Ингредиенты, которых ещё нет в номенклатуре, будут созданы автоматически
-                  (с единицей измерения из экспорта); режим печи, влажность и кашрут попадут в
-                  «Технологию приготовления» текстом.
-                </p>
-                <textarea
-                  className={inputClass + ' h-28 py-2'}
-                  placeholder='[{"name":"Бульон","ingredients":[...],"description":"..."}]'
-                  value={rationalImportText}
-                  onChange={(e) => setRationalImportText(e.target.value)}
-                />
-                <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={rationalImportOverwrite}
-                    onChange={(e) => setRationalImportOverwrite(e.target.checked)}
-                    className="w-5 h-5"
-                  />
-                  Перезаписывать уже существующие рецепты (по названию)
-                </label>
-                <BigButton onClick={importFromRationalChef} icon={Upload} disabled={!rationalImportText.trim()}>
-                  Импортировать рецепты
-                </BigButton>
-                {rationalImportResult && (
-                  <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
-                    {rationalImportResult}
-                  </p>
-                )}
-              </>
-            )}
-          </Section>
-
-          <Section
-            title="Импорт фото рецептов"
-            icon={ImageIcon}
-            right={
-              <button onClick={() => setShowPhotoImport((v) => !v)} className="text-xs font-semibold text-orange-600">
-                {showPhotoImport ? 'Скрыть' : 'Показать'}
-              </button>
-            }
-          >
-            {showPhotoImport && (
-              <>
-                <p className="text-xs text-slate-500 mb-2">
-                  Фото, сопоставленные по номеру ТК (готовит ассистент), подставятся в рецепты
-                  автоматически по номеру в названии. Загрузите файл или вставьте текст —
-                  что получится на вашем устройстве.
-                </p>
-                <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
-                  <Upload size={18} />
-                  <span className="text-sm">Выбрать JSON-файл</span>
-                  <input
-                    type="file"
-                    accept="application/json"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null
-                      e.target.value = ''
-                      if (file) importRecipePhotosFromJson(file)
-                    }}
-                  />
-                </label>
-                <p className="text-xs text-slate-400 text-center my-2">— или —</p>
-                <textarea
-                  className={inputClass + ' h-20 py-2'}
-                  placeholder='Вставьте сюда скопированный JSON: {"105":"data:image/...", ...}'
-                  value={photoImportText}
-                  onChange={(e) => setPhotoImportText(e.target.value)}
-                />
-                <BigButton onClick={importRecipePhotosFromText} icon={ImageIcon} disabled={!photoImportText.trim()}>
-                  Импортировать вставленные фото
-                </BigButton>
-                {photoImportResult && (
-                  <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
-                    {photoImportResult}
-                  </p>
-                )}
-              </>
-            )}
-          </Section>
-
-          <Section
             title={`Рецепты (${recipes.length})`}
             icon={BookOpen}
             right={
@@ -1570,6 +1477,102 @@ export default function MenuPlanner({
                   </p>
                 )}
                 <BigButton onClick={saveRecipe} icon={Plus}>Сохранить рецепт</BigButton>
+              </>
+            )}
+          </Section>
+
+          <Section
+            title="Ещё способы импорта"
+            icon={Upload}
+            right={
+              <button onClick={() => setShowAdvancedImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+                {showAdvancedImport ? 'Скрыть' : 'Показать'}
+              </button>
+            }
+          >
+            {showAdvancedImport && (
+              <>
+                <select
+                  className={inputClass + ' mb-3'}
+                  value={advancedImportTab}
+                  onChange={(e) => setAdvancedImportTab(e.target.value)}
+                >
+                  <option value="rational">Импорт из Rational Chef OS</option>
+                  <option value="photo">Импорт фото рецептов</option>
+                </select>
+
+                {advancedImportTab === 'rational' && (
+                  <>
+                    <p className="text-xs text-slate-500 mb-2">
+                      В Rational Chef OS: «⋮» → «Экспорт для LA CHEF» — данные скопируются в буфер обмена.
+                      Вставьте их сюда. Ингредиенты, которых ещё нет в номенклатуре, будут созданы автоматически
+                      (с единицей измерения из экспорта); режим печи, влажность и кашрут попадут в
+                      «Технологию приготовления» текстом.
+                    </p>
+                    <textarea
+                      className={inputClass + ' h-28 py-2'}
+                      placeholder='[{"name":"Бульон","ingredients":[...],"description":"..."}]'
+                      value={rationalImportText}
+                      onChange={(e) => setRationalImportText(e.target.value)}
+                    />
+                    <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={rationalImportOverwrite}
+                        onChange={(e) => setRationalImportOverwrite(e.target.checked)}
+                        className="w-5 h-5"
+                      />
+                      Перезаписывать уже существующие рецепты (по названию)
+                    </label>
+                    <BigButton onClick={importFromRationalChef} icon={Upload} disabled={!rationalImportText.trim()}>
+                      Импортировать рецепты
+                    </BigButton>
+                    {rationalImportResult && (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+                        {rationalImportResult}
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {advancedImportTab === 'photo' && (
+                  <>
+                    <p className="text-xs text-slate-500 mb-2">
+                      Фото, сопоставленные по номеру ТК (готовит ассистент), подставятся в рецепты
+                      автоматически по номеру в названии. Загрузите файл или вставьте текст —
+                      что получится на вашем устройстве.
+                    </p>
+                    <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
+                      <Upload size={18} />
+                      <span className="text-sm">Выбрать JSON-файл</span>
+                      <input
+                        type="file"
+                        accept="application/json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null
+                          e.target.value = ''
+                          if (file) importRecipePhotosFromJson(file)
+                        }}
+                      />
+                    </label>
+                    <p className="text-xs text-slate-400 text-center my-2">— или —</p>
+                    <textarea
+                      className={inputClass + ' h-20 py-2'}
+                      placeholder='Вставьте сюда скопированный JSON: {"105":"data:image/...", ...}'
+                      value={photoImportText}
+                      onChange={(e) => setPhotoImportText(e.target.value)}
+                    />
+                    <BigButton onClick={importRecipePhotosFromText} icon={ImageIcon} disabled={!photoImportText.trim()}>
+                      Импортировать вставленные фото
+                    </BigButton>
+                    {photoImportResult && (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+                        {photoImportResult}
+                      </p>
+                    )}
+                  </>
+                )}
               </>
             )}
           </Section>
