@@ -1060,7 +1060,9 @@ export default function MenuPlanner({
             <div key={day} id={`menu-day-${day}`} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden scroll-mt-32">
               <button
                 onClick={() => setOpenDay(isOpen ? null : day)}
-                className="w-full flex items-center justify-between px-3 py-3 min-h-[56px] active:bg-slate-50"
+                className={`w-full flex items-center justify-between px-3 py-3 min-h-[56px] active:bg-slate-50 ${
+                  isOpen ? 'bg-orange-100/80 dark:bg-orange-950/50' : ''
+                }`}
               >
                 <div className="flex items-center gap-3">
                   <div
@@ -1095,7 +1097,7 @@ export default function MenuPlanner({
               </button>
 
               {isOpen && (
-                <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
+                <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700 bg-gradient-to-b from-orange-100/80 via-orange-50/30 to-transparent dark:from-orange-950/50 dark:via-orange-950/15 dark:to-transparent">
                   <input
                     className={inputClass + ' mb-2'}
                     placeholder="Название дня (праздник, мероприятие) — необязательно"
