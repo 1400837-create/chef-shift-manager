@@ -27,7 +27,11 @@ export function useLocalStorage(key, initialValue) {
     try {
       window.localStorage.setItem(PREFIX + key, JSON.stringify(value))
     } catch {
-      // storage full or unavailable — fail silently, data stays in memory
+      // Storage full or unavailable — the change stays in memory (visible,
+      // usable) but won't survive a reload. That's a silent data-loss trap
+      // if nothing tells the user, so a single app-wide event does — App.jsx
+      // turns it into a persistent banner instead of failing invisibly.
+      window.dispatchEvent(new CustomEvent('kitchenos-storage-error', { detail: { key } }))
     }
   }, [key, value])
 

@@ -55,7 +55,7 @@ export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleani
   return (
     <div className="pb-4">
       <div className="flex items-center justify-between mb-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
-        <button onClick={() => setDayOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
+        <button onClick={() => setDayOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 dark:active:bg-slate-700">
           <ChevronLeft size={20} />
         </button>
         <div className="text-center">
@@ -67,7 +67,7 @@ export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleani
         <button
           onClick={() => setDayOffset((o) => Math.min(o + 1, 0))}
           disabled={isToday}
-          className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 disabled:opacity-30"
+          className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 dark:active:bg-slate-700 disabled:opacity-30"
         >
           <ChevronRight size={20} />
         </button>
@@ -90,7 +90,7 @@ export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleani
       </Section>
 
       <div className="flex items-center justify-between mb-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
-        <button onClick={() => setWeekOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
+        <button onClick={() => setWeekOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 dark:active:bg-slate-700">
           <ChevronLeft size={20} />
         </button>
         <div className="text-center">
@@ -102,7 +102,7 @@ export default function Cleaning({ dailyCleaning, setDailyCleaning, weeklyCleani
         <button
           onClick={() => setWeekOffset((o) => Math.min(o + 1, 0))}
           disabled={isThisWeek}
-          className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 disabled:opacity-30"
+          className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 dark:active:bg-slate-700 disabled:opacity-30"
         >
           <ChevronRight size={20} />
         </button>

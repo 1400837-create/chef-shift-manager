@@ -1140,7 +1140,10 @@ export default function Inventory({
 
   return (
     <div className="pb-4">
-      <div className="flex gap-1.5 mb-4 overflow-x-auto -mx-3 px-3">
+      <div
+        className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100 dark:bg-slate-950 flex gap-1.5 overflow-x-auto"
+        style={{ top: 'var(--app-header-h, 64px)' }}
+      >
         <button
           onClick={() => setTab('fifo')}
           className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
@@ -1193,7 +1196,7 @@ export default function Inventory({
 
       {(tab === 'audit' || tab === 'recount' || tab === 'movements') && (
         <div className="flex items-center justify-between mb-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
-          <button onClick={() => setMonthOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
+          <button onClick={() => setMonthOffset((o) => o - 1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 dark:active:bg-slate-700">
             <ChevronLeft size={20} />
           </button>
           <div className="text-center">
@@ -1203,7 +1206,7 @@ export default function Inventory({
           <button
             onClick={() => setMonthOffset((o) => Math.min(o + 1, 0))}
             disabled={isThisMonth}
-            className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 disabled:opacity-30"
+            className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 dark:active:bg-slate-700 disabled:opacity-30"
           >
             <ChevronRight size={20} />
           </button>

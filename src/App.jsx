@@ -47,19 +47,30 @@ export default function App() {
     return () => ro.disconnect()
   }, [])
 
-  // One-shot cross-page navigation request: MenuPlanner sets this when a
-  // recipe ingredient's product doesn't exist yet in the nomenclature and the
-  // user confirms adding it — Inventory reads it once on mount (to land on
-  // Каталог with the new item scrolled into view) and immediately hands back
-  // control via onInitialConsumed so a later, unrelated visit to Склад doesn't
-  // get stuck reopening on Каталог.
+  // One-shot cross-page navigation request — two callers: MenuPlanner sets
+  // this when a recipe ingredient's product doesn't exist yet in the
+  // nomenclature and the user confirms adding it, and Глобальный поиск sets
+  // it when a product result is tapped. Either way Inventory reads it once
+  // on mount (to land on Каталог with that item scrolled into view) and
+  // immediately hands back control via onInitialConsumed so a later,
+  // unrelated visit to Склад doesn't get stuck reopening on Каталог.
   const [pendingInventoryTab, setPendingInventoryTab] = useState(null)
   const [pendingCatalogHighlight, setPendingCatalogHighlight] = useState(null)
 
-  function goToCatalogForNewProduct(productId) {
+  function goToCatalogProduct(productId) {
     setPendingInventoryTab('catalog')
     setPendingCatalogHighlight(productId)
     setTab('inventory')
+  }
+
+  // Same one-shot pattern, for Глобальный поиск's recipe results — jumps to
+  // Меню → Рецепты with that recipe opened and scrolled into view instead of
+  // just showing it in the search results with nowhere to go.
+  const [pendingOpenRecipeId, setPendingOpenRecipeId] = useState(null)
+
+  function goToRecipe(recipeId) {
+    setPendingOpenRecipeId(recipeId)
+    setTab('menu')
   }
 
   const [shiftChecklist, setShiftChecklist] = useLocalStorage('shiftChecklist', {})
@@ -103,11 +114,14 @@ export default function App() {
     kuchenhilfeTasks: [kuchenhilfeTasks, setKuchenhilfeTasks],
     settings: [settings, setSettings],
   })
+  // recipes can carry embedded photo data URLs — a lower cap here than the
+  // other groups keeps a long editing session from holding many near-full
+  // copies of that array alive in memory at once (see useTabHistory).
   const menuHistory = useTabHistory({
     menuData: [menuData, setMenuData],
     dishLibrary: [dishLibrary, setDishLibrary],
     recipes: [recipes, setRecipes],
-  })
+  }, 12)
   const inventoryHistory = useTabHistory({
     inventoryItems: [inventoryItems, setInventoryItems],
     audits: [audits, setAudits],
@@ -130,6 +144,17 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
   }, [darkMode])
+
+  // useLocalStorage fires this when a write fails (storage full/unavailable)
+  // instead of failing silently — the change is still visible on screen
+  // (it's in memory) but won't survive a reload, which is exactly the kind
+  // of thing that must not go unnoticed on the app's only persistence layer.
+  const [storageError, setStorageError] = useState(false)
+  useEffect(() => {
+    function onStorageError() { setStorageError(true) }
+    window.addEventListener('kitchenos-storage-error', onStorageError)
+    return () => window.removeEventListener('kitchenos-storage-error', onStorageError)
+  }, [])
 
   // One-time default: catalog items without a "мин. остаток" get 1, so the
   // low-stock/shopping-needed features have something to work with out of
@@ -336,6 +361,18 @@ export default function App() {
         </div>
       </header>
 
+      {storageError && (
+        <div className="sticky z-30 bg-red-600 text-white px-3 py-2 flex items-center gap-2 text-sm" style={{ top: 'var(--app-header-h, 64px)' }}>
+          <span className="flex-1">
+            Не удалось сохранить последнее изменение — на устройстве не хватает места. Освободите память
+            (например, удалите крупные фото у старых рецептов) или скачайте резервную копию на Дашборде.
+          </span>
+          <button onClick={() => setStorageError(false)} className="shrink-0 font-semibold underline">
+            Скрыть
+          </button>
+        </div>
+      )}
+
       <GlobalSearch
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
@@ -345,6 +382,8 @@ export default function App() {
         purchases={purchases}
         productions={productions}
         catalogWaste={catalogWaste}
+        onSelectProduct={(id) => { goToCatalogProduct(id); setSearchOpen(false) }}
+        onSelectRecipe={(id) => { goToRecipe(id); setSearchOpen(false) }}
       />
 
       <main className="max-w-lg md:max-w-none mx-auto px-3 md:px-6 lg:px-10 pt-3 pb-24">
@@ -382,7 +421,9 @@ export default function App() {
               setRecipes={setRecipes}
               recountCatalog={recountCatalog}
               setRecountCatalog={setRecountCatalog}
-              onNavigateToCatalog={goToCatalogForNewProduct}
+              onNavigateToCatalog={goToCatalogProduct}
+              initialOpenRecipeId={pendingOpenRecipeId}
+              onInitialRecipeConsumed={() => setPendingOpenRecipeId(null)}
             />
           </>
         )}

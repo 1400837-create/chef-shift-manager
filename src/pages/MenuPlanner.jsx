@@ -24,6 +24,7 @@ import { computeDropdownRect } from '../utils/dropdownPosition'
 export default function MenuPlanner({
   menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary,
   recipes, setRecipes, recountCatalog, setRecountCatalog, onNavigateToCatalog,
+  initialOpenRecipeId, onInitialRecipeConsumed,
 }) {
   // Рецепты draft state (menuTab + everything below down to editingRecipeId)
   // is persisted rather than plain useState: adding an ingredient whose
@@ -850,6 +851,18 @@ export default function MenuPlanner({
     return () => clearTimeout(t)
   }, [menuTab, expandedRecipeId])
 
+  // Landing here from Глобальный поиск (a recipe result tapped) — open
+  // straight to Рецепты with that recipe expanded and scrolled into view,
+  // same as jumping from a scheduled Меню dish.
+  useEffect(() => {
+    if (!initialOpenRecipeId) return
+    setMenuTab('recipes')
+    setExpandedRecipeId(initialOpenRecipeId)
+    pendingRecipeScrollRef.current = initialOpenRecipeId
+    onInitialRecipeConsumed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpenRecipeId])
+
   // Undoes the "jump to a specific recipe" scroll above when coming back —
   // without this, returning to Меню lands the browser's own (wrong)
   // scroll-restoration guess, often the very bottom of the calendar, since
@@ -963,11 +976,11 @@ export default function MenuPlanner({
       </Section>
 
       <div className="flex items-center justify-between mb-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
-        <button onClick={() => changeMonth(-1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
+        <button onClick={() => changeMonth(-1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 dark:active:bg-slate-700">
           <ChevronLeft size={22} />
         </button>
         <p className="font-bold text-slate-800 dark:text-slate-100">{MONTHS_RU[cursor.month]} {cursor.year}</p>
-        <button onClick={() => changeMonth(1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100">
+        <button onClick={() => changeMonth(1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 dark:active:bg-slate-700">
           <ChevronRight size={22} />
         </button>
       </div>

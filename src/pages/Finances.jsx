@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Wallet, Receipt, Plus, Camera, Send, Copy, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Wallet, Receipt, Plus, Camera, Send, Copy, Image as ImageIcon, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
 import { RECEIPT_CATEGORIES } from '../utils/constants'
 import { formatRu, parseLocalDate, monthKey, MONTHS_RU } from '../utils/dateUtils'
@@ -18,6 +18,7 @@ export default function Finances({ advance, setAdvance, receipts, setReceipts, s
   const [photoProcessing, setPhotoProcessing] = useState(false)
   const [photoError, setPhotoError] = useState(null)
   const [monthOffset, setMonthOffset] = useState(0)
+  const [viewingPhoto, setViewingPhoto] = useState(null)
 
   // Receipts entered since the advance amount was last set count against it —
   // entering a new amount is what starts a fresh count, there's no fixed
@@ -92,11 +93,12 @@ export default function Finances({ advance, setAdvance, receipts, setReceipts, s
     setReceipts((prev) => prev.filter((r) => r.id !== id))
   }
 
+  // An inline overlay instead of window.open(): opening a new tab from JS is
+  // unreliable in some mobile browsers/embedded webviews (silently blocked,
+  // or opens blank), and this stays consistent with how every other photo
+  // view in the app works (no separate window to manage).
   function viewPhoto(dataUrl) {
-    const win = window.open('', '_blank')
-    if (!win) return
-    win.document.write(`<!doctype html><title>Чек</title><body style="margin:0;background:#111;display:flex;justify-content:center;"><img src="${dataUrl}" style="max-width:100%;height:auto;"></body>`)
-    win.document.close()
+    setViewingPhoto(dataUrl)
   }
 
   function buildReportText() {
@@ -304,6 +306,21 @@ export default function Finances({ advance, setAdvance, receipts, setReceipts, s
         Если кнопка «Отправить» не открывает почту (бывает в некоторых мобильных браузерах),
         используйте «Копировать» и вставьте текст вручную в письмо или мессенджер.
       </p>
+
+      {viewingPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setViewingPhoto(null)}
+        >
+          <button
+            onClick={() => setViewingPhoto(null)}
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white active:bg-white/20"
+          >
+            <X size={20} />
+          </button>
+          <img src={viewingPhoto} alt="Чек" className="max-w-full max-h-full rounded-lg object-contain" />
+        </div>
+      )}
     </div>
   )
 }

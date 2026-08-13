@@ -12,7 +12,7 @@ function categoryLabel(key) {
   return PRODUCT_CATEGORIES.find((c) => c.key === key)?.label || 'Другое'
 }
 
-export default function GlobalSearch({ open, onClose, recountCatalog, recipes, recounts, purchases, productions, catalogWaste }) {
+export default function GlobalSearch({ open, onClose, recountCatalog, recipes, recounts, purchases, productions, catalogWaste, onSelectProduct, onSelectRecipe }) {
   const [query, setQuery] = useState('')
   const now = new Date()
 
@@ -63,7 +63,11 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Продукты</p>
             <div className="flex flex-col gap-2">
               {products.map((row) => (
-                <div key={row.product.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+                <button
+                  key={row.product.id}
+                  onClick={() => onSelectProduct?.(row.product.id)}
+                  className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 active:bg-slate-50 dark:active:bg-slate-700"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
                     {row.balance !== null ? (
@@ -76,7 +80,7 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
                     {zoneLabel(row.product.zone)} · {categoryLabel(row.product.category)}
                     {row.product.costPerUnit ? ` · ${row.product.costPerUnit}/${row.product.unit}` : ''}
                   </p>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -89,7 +93,11 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
               {matchedRecipes.map((r) => {
                 const cost = computeRecipeCost(r, recountCatalog)
                 return (
-                  <div key={r.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+                  <button
+                    key={r.id}
+                    onClick={() => onSelectRecipe?.(r.id)}
+                    className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 active:bg-slate-50 dark:active:bg-slate-700"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{r.name}</p>
                       {cost !== null && <span className="shrink-0 text-xs font-semibold text-green-700 dark:text-green-300">≈ {cost.toFixed(2)}</span>}
@@ -100,7 +108,7 @@ export default function GlobalSearch({ open, onClose, recountCatalog, recipes, r
                         return `${product?.name || '?'} × ${ing.qty}${product?.unit ? ' ' + product.unit : ''}`
                       }).join(', ')}
                     </p>
-                  </div>
+                  </button>
                 )
               })}
             </div>

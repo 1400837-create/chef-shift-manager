@@ -6,7 +6,7 @@
 // everything else in the app, which is already proven reliable there).
 // Receipt photos are for "can I read the total/date on this", not archival
 // quality, so an aggressive size cap is the right trade-off.
-export async function compressToDataUrl(file, maxDim = 1100, quality = 0.6) {
+export async function compressToDataUrl(file, maxDim = 900, quality = 0.55) {
   if (!file || !file.type || !file.type.startsWith('image/')) return null
 
   try {
