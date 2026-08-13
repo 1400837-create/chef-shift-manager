@@ -80,23 +80,6 @@ export default function MenuPlanner({
   const [openDay, setOpenDay] = useState(null)
 
   // Рецепты tab state
-  const [showRecipeImport, setShowRecipeImport] = useLocalStorage('showRecipeImportDraft', false)
-  // Persisted (not plain useState): confirming a missing ingredient sends the
-  // user to Склад → Каталог and back, same as the manual recipe form — the
-  // pasted text, overwrite choice and already-declined ingredients need to
-  // survive that round trip so the import can resume where it left off.
-  const [recipeImportText, setRecipeImportText] = useLocalStorage('recipeImportTextDraft', '')
-  const [recipeImportOverwrite, setRecipeImportOverwrite] = useLocalStorage('recipeImportOverwriteDraft', false)
-  const [recipeImportDeclined, setRecipeImportDeclined] = useLocalStorage('recipeImportDeclinedDraft', [])
-  const [recipeImportMissingPrompt, setRecipeImportMissingPrompt] = useState(null)
-  const [recipeImportResult, setRecipeImportResult] = useState(null)
-  const [rationalImportText, setRationalImportText] = useState('')
-  const [rationalImportOverwrite, setRationalImportOverwrite] = useState(false)
-  const [rationalImportResult, setRationalImportResult] = useState(null)
-  const [photoImportResult, setPhotoImportResult] = useState(null)
-  const [photoImportText, setPhotoImportText] = useState('')
-  const [showAdvancedImport, setShowAdvancedImport] = useState(false)
-  const [advancedImportTab, setAdvancedImportTab] = useState('rational')
   const [recipeForm, setRecipeForm] = useLocalStorage('recipeFormDraft', () => ({ name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null }))
   const [recipeError, setRecipeError] = useState(null)
   const [missingProductPrompt, setMissingProductPrompt] = useState(null)
@@ -123,10 +106,6 @@ export default function MenuPlanner({
   const [recipePrintMode, setRecipePrintMode] = useState(false)
   const [selectedForPrint, setSelectedForPrint] = useState(() => new Set())
 
-  const [showImport, setShowImport] = useState(false)
-  const [importText, setImportText] = useState('')
-  const [overwriteExisting, setOverwriteExisting] = useState(false)
-  const [importResult, setImportResult] = useState(null)
   const [sendMessage, setSendMessage] = useState(null)
   const [dayPasteText, setDayPasteText] = useState('')
   const [showDayPaste, setShowDayPaste] = useState(false)
@@ -420,216 +399,6 @@ export default function MenuPlanner({
     if (editingRecipeId === id) setEditingRecipeId(null)
   }
 
-  // Same missing-ingredient confirmation as the manual recipe form (see
-  // saveRecipe/confirmAddMissingProduct below), but scanning across every
-  // recipe in the pasted sheet: stop at the first ingredient not yet in the
-  // nomenclature and not already declined this run, ask once, then either
-  // create it (and hand off to Каталог) or mark it declined and keep scanning.
-  function runRecipeImport() {
-    const { recipes: parsed } = parseRecipesImport(recipeImportText)
-    const declinedSet = new Set(recipeImportDeclined.map((n) => n.toLowerCase()))
-
-    for (const parsedRecipe of parsed) {
-      for (const { ingredientName } of parsedRecipe.ingredients) {
-        const key = ingredientName.trim().toLowerCase()
-        if (!key || declinedSet.has(key)) continue
-        if (!findProductByName(ingredientName)) {
-          setRecipeImportMissingPrompt(ingredientName.trim())
-          return
-        }
-      }
-    }
-
-    finalizeRecipeImport(parsed)
-  }
-
-  function finalizeRecipeImport(parsed) {
-    const { skipped } = parseRecipesImport(recipeImportText)
-    const existingByName = new Map(recipes.map((r) => [(r.name || '').trim().toLowerCase(), r]))
-    let imported = 0
-    let skippedExisting = 0
-    let unresolvedIngredients = 0
-    const nextRecipes = [...recipes]
-
-    parsed.forEach((parsedRecipe) => {
-      const key = parsedRecipe.name.toLowerCase()
-      const existing = existingByName.get(key)
-      if (existing && !recipeImportOverwrite) {
-        skippedExisting += 1
-        return
-      }
-
-      const ingredients = []
-      parsedRecipe.ingredients.forEach(({ ingredientName, qty }) => {
-        const product = findProductByName(ingredientName)
-        if (!product) {
-          unresolvedIngredients += 1
-          return
-        }
-        ingredients.push({ productId: product.id, qty })
-      })
-      if (ingredients.length === 0) return
-
-      if (existing) {
-        const idx = nextRecipes.findIndex((r) => r.id === existing.id)
-        nextRecipes[idx] = { ...existing, ingredients }
-      } else {
-        nextRecipes.push({ id: uid(), name: parsedRecipe.name, ingredients })
-      }
-      imported += 1
-    })
-
-    setRecipes(nextRecipes)
-    const parts = [`Импортировано рецептов: ${imported}`]
-    if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
-    if (unresolvedIngredients) parts.push(`пропущено ингредиентов (отказано в добавлении): ${unresolvedIngredients}`)
-    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
-    setRecipeImportResult(parts.join(', '))
-    setRecipeImportText('')
-    setRecipeImportDeclined([])
-    setRecipeImportMissingPrompt(null)
-  }
-
-  function confirmAddImportIngredient() {
-    const name = recipeImportMissingPrompt
-    if (!name) return
-    const newId = Date.now()
-    setRecountCatalog((prev) => [...prev, { id: newId, name, unit: 'шт', zone: 'fridges', category: 'other' }])
-    setRecipeImportMissingPrompt(null)
-    onNavigateToCatalog?.(newId)
-  }
-
-  function declineImportIngredient() {
-    const name = recipeImportMissingPrompt
-    if (!name) return
-    setRecipeImportDeclined((prev) => [...prev, name])
-    setRecipeImportMissingPrompt(null)
-  }
-
-  // Rational Chef OS's export already flattens its oven-mode/kashrut fields
-  // into a "comment" string (see parseRationalChefExport) — this only needs
-  // to resolve ingredient names against the nomenclature, creating any that
-  // don't exist yet (with the unit the export already provides) rather than
-  // stopping at the first one, since a full import can easily touch 50+
-  // distinct ingredients in one paste.
-  function importFromRationalChef() {
-    const { recipes: parsed, error } = parseRationalChefExport(rationalImportText)
-    if (error) {
-      setRationalImportResult(error)
-      return
-    }
-    const existingByName = new Map(recipes.map((r) => [(r.name || '').trim().toLowerCase(), r]))
-    const nextRecipes = [...recipes]
-    const workingCatalog = [...recountCatalog]
-    const newProducts = []
-    const unitMismatches = []
-    let imported = 0
-    let skippedExisting = 0
-
-    function resolveProduct(name, unit) {
-      const key = name.trim().toLowerCase()
-      let product = workingCatalog.find((p) => (p.name || '').trim().toLowerCase() === key)
-      if (!product) {
-        product = { id: uid(), name: name.trim(), unit: unit || 'шт', zone: 'fridges', category: 'other' }
-        workingCatalog.push(product)
-        newProducts.push(product)
-      }
-      return product
-    }
-
-    // Rational Chef OS's export carries its own per-ingredient unit, which
-    // can silently disagree with the catalog product's unit (e.g. the export
-    // says "0.21 л" but the existing nomenclature item is tracked in "г") —
-    // without reconciling them, the qty gets stored against the wrong scale
-    // (0.21 "г" instead of 210 г), which is exactly the class of bug behind
-    // the tiny/fractional ingredient amounts seen in already-imported ТК.
-    // Only кг↔г and л↔мл are auto-reconciled (an exact ×1000); anything else
-    // (e.g. import says "шт", catalog says "г") can't be resolved without a
-    // real per-item weight, so it's left as-is and flagged for manual review.
-    function reconcileQty(rawQty, importUnit, product) {
-      const iu = (importUnit || '').trim().toLowerCase()
-      const cu = (product.unit || '').trim().toLowerCase()
-      const qtyNum = Number(rawQty) || 0
-      if (!iu || iu === cu) return { qty: rawQty, mismatch: false }
-      const massFactor = { 'кг': 1000, 'г': 1 }
-      const volFactor = { 'л': 1000, 'мл': 1 }
-      for (const fam of [massFactor, volFactor]) {
-        if (iu in fam && cu in fam) {
-          return { qty: String(qtyNum * (fam[iu] / fam[cu])), mismatch: false }
-        }
-      }
-      unitMismatches.push(`${product.name} (импорт «${importUnit}» ≠ каталог «${product.unit}»)`)
-      return { qty: rawQty, mismatch: true }
-    }
-
-    parsed.forEach((parsedRecipe) => {
-      const key = parsedRecipe.name.toLowerCase()
-      const existing = existingByName.get(key)
-      if (existing && !rationalImportOverwrite) {
-        skippedExisting += 1
-        return
-      }
-      const ingredients = parsedRecipe.ingredients.map(({ ingredientName, qty, unit }) => {
-        const product = resolveProduct(ingredientName, unit)
-        const { qty: reconciledQty } = reconcileQty(String(qty ?? ''), unit, product)
-        return { productId: product.id, qty: reconciledQty }
-      })
-      const payload = { name: parsedRecipe.name, ingredients, comment: parsedRecipe.comment || '', photo: null }
-      if (existing) {
-        const idx = nextRecipes.findIndex((r) => r.id === existing.id)
-        nextRecipes[idx] = { ...existing, ...payload }
-      } else {
-        nextRecipes.push({ id: uid(), ...payload })
-      }
-      imported += 1
-    })
-
-    if (newProducts.length) setRecountCatalog((prev) => [...prev, ...newProducts])
-    setRecipes(nextRecipes)
-    const parts = [`Импортировано рецептов: ${imported}`]
-    if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
-    if (newProducts.length) parts.push(`создано новых позиций в номенклатуре: ${newProducts.length}`)
-    if (unitMismatches.length) parts.push(`несовпадение единиц, нужна проверка (${unitMismatches.length}): ${unitMismatches.join('; ')}`)
-    setRationalImportResult(parts.join(', '))
-    setRationalImportText('')
-  }
-
-  function applyPhotoImportJson(text) {
-    setPhotoImportResult(null)
-    try {
-      const map = JSON.parse(text)
-      const usedKeys = new Set()
-      const nextRecipes = recipes.map((r) => {
-        const m = (r.name || '').match(/(\d+)/)
-        if (!m) return r
-        const num = String(Number(m[1]))
-        const photo = map[num]
-        if (!photo) return r
-        usedKeys.add(num)
-        return { ...r, photo }
-      })
-      setRecipes(nextRecipes)
-      const allKeys = Object.keys(map)
-      const unusedKeys = allKeys.filter((k) => !usedKeys.has(String(Number(k))))
-      setPhotoImportResult(
-        `Фото добавлено: ${usedKeys.size} из ${allKeys.length}.` +
-        (unusedKeys.length ? ` Не найден рецепт для ТК: ${unusedKeys.join(', ')}.` : '')
-      )
-    } catch {
-      setPhotoImportResult('Не удалось прочитать данные. Убедитесь, что это JSON со сопоставлением фото по номеру ТК.')
-    }
-  }
-
-  async function importRecipePhotosFromJson(file) {
-    const text = await file.text()
-    applyPhotoImportJson(text)
-  }
-
-  function importRecipePhotosFromText() {
-    applyPhotoImportJson(photoImportText)
-    setPhotoImportText('')
-  }
-
   function toggleSelectForPrint(id) {
     setSelectedForPrint((prev) => {
       const next = new Set(prev)
@@ -786,40 +555,6 @@ export default function MenuPlanner({
         courses: d.courses,
       })),
     })
-  }
-
-  function runImport() {
-    const { rows, skipped } = parseMenuImport(importText)
-    let imported = 0
-    let skippedExisting = 0
-
-    setMenuData((prev) => {
-      const cur = { ...(prev[monthKey] || {}) }
-      rows.forEach(({ day, dishes, kosher }) => {
-        if (day > totalDays) return
-        const existing = cur[day]
-        const hasExisting = existing && coursesForDay(existing).some((c) => c.dish)
-        if (hasExisting && !overwriteExisting) {
-          skippedExisting += 1
-          return
-        }
-        imported += 1
-        cur[day] = {
-          courses: dishes.map((dish, i) => {
-            const label = DEFAULT_MENU_COURSES[i] || `Блюдо ${i + 1}`
-            commitDish(label, dish)
-            return { id: `c-${Date.now()}-${i}`, label, dish, kosher: dish ? kosher : false }
-          }),
-        }
-      })
-      return { ...prev, [monthKey]: cur }
-    })
-
-    const parts = [`Импортировано дней: ${imported}`]
-    if (skippedExisting) parts.push(`пропущено (уже заполнено): ${skippedExisting}`)
-    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
-    setImportResult(parts.join(', '))
-    setImportText('')
   }
 
   const recipeNames = useMemo(() => (recipes || []).map((r) => r.name), [recipes])
@@ -986,59 +721,13 @@ export default function MenuPlanner({
       >
       {(menuTab === 'calendar' || showBothPanes) && (
       <div className={showBothPanes ? 'md:w-1/2 md:min-w-0 md:h-full md:overflow-y-auto md:overscroll-contain md:pr-1' : ''}>
-      <Section
-        title="Импорт из Google Таблиц"
-        icon={Upload}
-        right={
-          <button
-            onClick={() => setShowImport((v) => !v)}
-            className="text-xs font-semibold text-orange-600"
-          >
-            {showImport ? 'Скрыть' : 'Показать'}
-          </button>
-        }
-      >
-        {showImport && (
-          <>
-            <p className="text-xs text-slate-500 mb-2">
-              В Google Таблице выделите столбцы <b>День</b> и сколько угодно столбцов с блюдами
-              (первые 5 подставятся как «{DEFAULT_MENU_COURSES.join(', ')}», дальше — «Блюдо 6», «Блюдо 7»…),
-              последний столбец можно оставить под «Кошер» (да/нет) → Ctrl+C → вставьте сюда → «Импортировать».
-            </p>
-            <textarea
-              className={inputClass + ' h-28 py-2'}
-              placeholder={'1\tБорщ\tКурица\tРис\tОвощи\tКомпот\tда\n2\tСуп овощной\tРыба\tКартофель\tСалат\tМорс'}
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-            />
-            <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
-              <input
-                type="checkbox"
-                checked={overwriteExisting}
-                onChange={(e) => setOverwriteExisting(e.target.checked)}
-                className="w-5 h-5"
-              />
-              Перезаписывать уже заполненные дни
-            </label>
-            <div className="flex gap-2">
-              <BigButton onClick={runImport} icon={Upload} disabled={!importText.trim()}>
-                Импортировать в {MONTHS_RU[cursor.month]}
-              </BigButton>
-              <button
-                onClick={() => { setShowImport(false); setImportText(''); setImportResult(null) }}
-                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            {importResult && (
-              <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
-                {importResult}
-              </p>
-            )}
-          </>
-        )}
-      </Section>
+      <MenuSheetImport
+        monthKey={monthKey}
+        monthName={MONTHS_RU[cursor.month]}
+        totalDays={totalDays}
+        setMenuData={setMenuData}
+        commitDish={commitDish}
+      />
 
       <div className="flex items-center justify-between mb-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 px-2 py-2 shadow-sm">
         <button onClick={() => changeMonth(-1)} className="w-11 h-11 flex items-center justify-center rounded-xl active:bg-slate-100 dark:active:bg-slate-700">
@@ -1358,59 +1047,13 @@ export default function MenuPlanner({
             <ExternalLink size={15} /> Открыть Rational Chef OS (параметры печи)
           </a>
 
-          <Section
-            title="Импорт из Google Таблиц"
-            icon={Upload}
-            right={
-              <button onClick={() => setShowRecipeImport((v) => !v)} className="text-xs font-semibold text-orange-600">
-                {showRecipeImport ? 'Скрыть' : 'Показать'}
-              </button>
-            }
-          >
-            {showRecipeImport && (
-              <>
-                <p className="text-xs text-slate-500 mb-2">
-                  Столбцы: <b>Блюдо, Ингредиент, Кол-во</b> — по одной строке на ингредиент.
-                  Несколько строк с одинаковым названием блюда объединятся в один рецепт.
-                  Выделите в Google Таблице → Ctrl+C → вставьте сюда.
-                </p>
-                <textarea
-                  className={inputClass + ' h-28 py-2'}
-                  placeholder={'Бульон\tКуриное крыло\t0.5\nБульон\tЛавровый лист\t1\nБорщ\tСвёкла\t1'}
-                  value={recipeImportText}
-                  onChange={(e) => setRecipeImportText(e.target.value)}
-                />
-                <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={recipeImportOverwrite}
-                    onChange={(e) => setRecipeImportOverwrite(e.target.checked)}
-                    className="w-5 h-5"
-                  />
-                  Перезаписывать уже существующие рецепты (по названию)
-                </label>
-                {recipeImportMissingPrompt && (
-                  <div className="text-sm bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-3 mb-2">
-                    <p className="text-orange-800 dark:text-orange-200 mb-2">
-                      Продукт «{recipeImportMissingPrompt}» не найден в номенклатуре. Добавить его в каталог?
-                    </p>
-                    <div className="flex gap-2">
-                      <BigButton onClick={confirmAddImportIngredient} full={false}>Да, добавить</BigButton>
-                      <BigButton onClick={declineImportIngredient} color="outline" full={false}>Нет</BigButton>
-                    </div>
-                  </div>
-                )}
-                <BigButton onClick={runRecipeImport} icon={Upload} disabled={!recipeImportText.trim()}>
-                  Импортировать рецепты
-                </BigButton>
-                {recipeImportResult && (
-                  <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
-                    {recipeImportResult}
-                  </p>
-                )}
-              </>
-            )}
-          </Section>
+          <RecipeSheetImport
+            recipes={recipes}
+            setRecipes={setRecipes}
+            recountCatalog={recountCatalog}
+            setRecountCatalog={setRecountCatalog}
+            onNavigateToCatalog={onNavigateToCatalog}
+          />
 
           <Section
             title={`Рецепты (${recipes.length})`}
@@ -1624,106 +1267,522 @@ export default function MenuPlanner({
             )}
           </Section>
 
-          <Section
-            title="Ещё способы импорта"
-            icon={Upload}
-            right={
-              <button onClick={() => setShowAdvancedImport((v) => !v)} className="text-xs font-semibold text-orange-600">
-                {showAdvancedImport ? 'Скрыть' : 'Показать'}
-              </button>
-            }
-          >
-            {showAdvancedImport && (
-              <>
-                <select
-                  className={inputClass + ' mb-3'}
-                  value={advancedImportTab}
-                  onChange={(e) => setAdvancedImportTab(e.target.value)}
-                >
-                  <option value="rational">Импорт из Rational Chef OS</option>
-                  <option value="photo">Импорт фото рецептов</option>
-                </select>
-
-                {advancedImportTab === 'rational' && (
-                  <>
-                    <p className="text-xs text-slate-500 mb-2">
-                      В Rational Chef OS: «⋮» → «Экспорт для LA CHEF» — данные скопируются в буфер обмена.
-                      Вставьте их сюда. Ингредиенты, которых ещё нет в номенклатуре, будут созданы автоматически
-                      (с единицей измерения из экспорта); режим печи, влажность и кашрут попадут в
-                      «Технологию приготовления» текстом.
-                    </p>
-                    <textarea
-                      className={inputClass + ' h-28 py-2'}
-                      placeholder='[{"name":"Бульон","ingredients":[...],"description":"..."}]'
-                      value={rationalImportText}
-                      onChange={(e) => setRationalImportText(e.target.value)}
-                    />
-                    <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={rationalImportOverwrite}
-                        onChange={(e) => setRationalImportOverwrite(e.target.checked)}
-                        className="w-5 h-5"
-                      />
-                      Перезаписывать уже существующие рецепты (по названию)
-                    </label>
-                    <BigButton onClick={importFromRationalChef} icon={Upload} disabled={!rationalImportText.trim()}>
-                      Импортировать рецепты
-                    </BigButton>
-                    {rationalImportResult && (
-                      <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
-                        {rationalImportResult}
-                      </p>
-                    )}
-                  </>
-                )}
-
-                {advancedImportTab === 'photo' && (
-                  <>
-                    <p className="text-xs text-slate-500 mb-2">
-                      Фото, сопоставленные по номеру ТК (готовит ассистент), подставятся в рецепты
-                      автоматически по номеру в названии. Загрузите файл или вставьте текст —
-                      что получится на вашем устройстве.
-                    </p>
-                    <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
-                      <Upload size={18} />
-                      <span className="text-sm">Выбрать JSON-файл</span>
-                      <input
-                        type="file"
-                        accept="application/json"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] || null
-                          e.target.value = ''
-                          if (file) importRecipePhotosFromJson(file)
-                        }}
-                      />
-                    </label>
-                    <p className="text-xs text-slate-400 text-center my-2">— или —</p>
-                    <textarea
-                      className={inputClass + ' h-20 py-2'}
-                      placeholder='Вставьте сюда скопированный JSON: {"105":"data:image/...", ...}'
-                      value={photoImportText}
-                      onChange={(e) => setPhotoImportText(e.target.value)}
-                    />
-                    <BigButton onClick={importRecipePhotosFromText} icon={ImageIcon} disabled={!photoImportText.trim()}>
-                      Импортировать вставленные фото
-                    </BigButton>
-                    {photoImportResult && (
-                      <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
-                        {photoImportResult}
-                      </p>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-          </Section>
+          <RecipeAdvancedImport
+            recipes={recipes}
+            setRecipes={setRecipes}
+            recountCatalog={recountCatalog}
+            setRecountCatalog={setRecountCatalog}
+          />
         </div>
       )}
       </div>
 
     </div>
+  )
+}
+
+// Same reason as RecipeFormFields below: a real top-level component instead
+// of one defined inline inside MenuPlanner, so it keeps a stable identity
+// across renders (an inline definition would remount on every parent
+// render, dropping whatever's mid-typed in its textarea). Its import state
+// (showImport, importText, …) is entirely local — nothing outside this
+// panel ever reads it — so it owns that state itself instead of threading
+// it through MenuPlanner's props.
+function MenuSheetImport({ monthKey, monthName, totalDays, setMenuData, commitDish }) {
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [overwriteExisting, setOverwriteExisting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
+
+  function runImport() {
+    const { rows, skipped } = parseMenuImport(importText)
+    let imported = 0
+    let skippedExisting = 0
+
+    setMenuData((prev) => {
+      const cur = { ...(prev[monthKey] || {}) }
+      rows.forEach(({ day, dishes, kosher }) => {
+        if (day > totalDays) return
+        const existing = cur[day]
+        const hasExisting = existing && coursesForDay(existing).some((c) => c.dish)
+        if (hasExisting && !overwriteExisting) {
+          skippedExisting += 1
+          return
+        }
+        imported += 1
+        cur[day] = {
+          courses: dishes.map((dish, i) => {
+            const label = DEFAULT_MENU_COURSES[i] || `Блюдо ${i + 1}`
+            commitDish(label, dish)
+            return { id: `c-${Date.now()}-${i}`, label, dish, kosher: dish ? kosher : false }
+          }),
+        }
+      })
+      return { ...prev, [monthKey]: cur }
+    })
+
+    const parts = [`Импортировано дней: ${imported}`]
+    if (skippedExisting) parts.push(`пропущено (уже заполнено): ${skippedExisting}`)
+    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
+    setImportResult(parts.join(', '))
+    setImportText('')
+  }
+
+  return (
+    <Section
+      title="Импорт из Google Таблиц"
+      icon={Upload}
+      right={
+        <button
+          onClick={() => setShowImport((v) => !v)}
+          className="text-xs font-semibold text-orange-600"
+        >
+          {showImport ? 'Скрыть' : 'Показать'}
+        </button>
+      }
+    >
+      {showImport && (
+        <>
+          <p className="text-xs text-slate-500 mb-2">
+            В Google Таблице выделите столбцы <b>День</b> и сколько угодно столбцов с блюдами
+            (первые 5 подставятся как «{DEFAULT_MENU_COURSES.join(', ')}», дальше — «Блюдо 6», «Блюдо 7»…),
+            последний столбец можно оставить под «Кошер» (да/нет) → Ctrl+C → вставьте сюда → «Импортировать».
+          </p>
+          <textarea
+            className={inputClass + ' h-28 py-2'}
+            placeholder={'1\tБорщ\tКурица\tРис\tОвощи\tКомпот\tда\n2\tСуп овощной\tРыба\tКартофель\tСалат\tМорс'}
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+          />
+          <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={overwriteExisting}
+              onChange={(e) => setOverwriteExisting(e.target.checked)}
+              className="w-5 h-5"
+            />
+            Перезаписывать уже заполненные дни
+          </label>
+          <div className="flex gap-2">
+            <BigButton onClick={runImport} icon={Upload} disabled={!importText.trim()}>
+              Импортировать в {monthName}
+            </BigButton>
+            <button
+              onClick={() => { setShowImport(false); setImportText(''); setImportResult(null) }}
+              className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          {importResult && (
+            <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+              {importResult}
+            </p>
+          )}
+        </>
+      )}
+    </Section>
+  )
+}
+
+// Same rationale as MenuSheetImport above — fully self-contained state,
+// extracted so a keystroke here doesn't re-render all of MenuPlanner.
+function RecipeSheetImport({ recipes, setRecipes, recountCatalog, setRecountCatalog, onNavigateToCatalog }) {
+  const [showRecipeImport, setShowRecipeImport] = useLocalStorage('showRecipeImportDraft', false)
+  // Persisted (not plain useState): confirming a missing ingredient sends the
+  // user to Склад → Каталог and back — the pasted text, overwrite choice and
+  // already-declined ingredients need to survive that round trip so the
+  // import can resume where it left off.
+  const [recipeImportText, setRecipeImportText] = useLocalStorage('recipeImportTextDraft', '')
+  const [recipeImportOverwrite, setRecipeImportOverwrite] = useLocalStorage('recipeImportOverwriteDraft', false)
+  const [recipeImportDeclined, setRecipeImportDeclined] = useLocalStorage('recipeImportDeclinedDraft', [])
+  const [recipeImportMissingPrompt, setRecipeImportMissingPrompt] = useState(null)
+  const [recipeImportResult, setRecipeImportResult] = useState(null)
+
+  function findProductByName(name) {
+    const key = (name || '').trim().toLowerCase()
+    if (!key) return null
+    return recountCatalog.find((p) => (p.name || '').trim().toLowerCase() === key) || null
+  }
+
+  // Same missing-ingredient confirmation as the manual recipe form (see
+  // MenuPlanner's saveRecipe/confirmAddMissingProduct), but scanning across
+  // every recipe in the pasted sheet: stop at the first ingredient not yet
+  // in the nomenclature and not already declined this run, ask once, then
+  // either create it (and hand off to Каталог) or mark it declined and keep
+  // scanning.
+  function runRecipeImport() {
+    const { recipes: parsed } = parseRecipesImport(recipeImportText)
+    const declinedSet = new Set(recipeImportDeclined.map((n) => n.toLowerCase()))
+
+    for (const parsedRecipe of parsed) {
+      for (const { ingredientName } of parsedRecipe.ingredients) {
+        const key = ingredientName.trim().toLowerCase()
+        if (!key || declinedSet.has(key)) continue
+        if (!findProductByName(ingredientName)) {
+          setRecipeImportMissingPrompt(ingredientName.trim())
+          return
+        }
+      }
+    }
+
+    finalizeRecipeImport(parsed)
+  }
+
+  function finalizeRecipeImport(parsed) {
+    const { skipped } = parseRecipesImport(recipeImportText)
+    const existingByName = new Map(recipes.map((r) => [(r.name || '').trim().toLowerCase(), r]))
+    let imported = 0
+    let skippedExisting = 0
+    let unresolvedIngredients = 0
+    const nextRecipes = [...recipes]
+
+    parsed.forEach((parsedRecipe) => {
+      const key = parsedRecipe.name.toLowerCase()
+      const existing = existingByName.get(key)
+      if (existing && !recipeImportOverwrite) {
+        skippedExisting += 1
+        return
+      }
+
+      const ingredients = []
+      parsedRecipe.ingredients.forEach(({ ingredientName, qty }) => {
+        const product = findProductByName(ingredientName)
+        if (!product) {
+          unresolvedIngredients += 1
+          return
+        }
+        ingredients.push({ productId: product.id, qty })
+      })
+      if (ingredients.length === 0) return
+
+      if (existing) {
+        const idx = nextRecipes.findIndex((r) => r.id === existing.id)
+        nextRecipes[idx] = { ...existing, ingredients }
+      } else {
+        nextRecipes.push({ id: uid(), name: parsedRecipe.name, ingredients })
+      }
+      imported += 1
+    })
+
+    setRecipes(nextRecipes)
+    const parts = [`Импортировано рецептов: ${imported}`]
+    if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
+    if (unresolvedIngredients) parts.push(`пропущено ингредиентов (отказано в добавлении): ${unresolvedIngredients}`)
+    if (skipped.length) parts.push(`не распознано строк: ${skipped.length}`)
+    setRecipeImportResult(parts.join(', '))
+    setRecipeImportText('')
+    setRecipeImportDeclined([])
+    setRecipeImportMissingPrompt(null)
+  }
+
+  function confirmAddImportIngredient() {
+    const name = recipeImportMissingPrompt
+    if (!name) return
+    const newId = Date.now()
+    setRecountCatalog((prev) => [...prev, { id: newId, name, unit: 'шт', zone: 'fridges', category: 'other' }])
+    setRecipeImportMissingPrompt(null)
+    onNavigateToCatalog?.(newId)
+  }
+
+  function declineImportIngredient() {
+    const name = recipeImportMissingPrompt
+    if (!name) return
+    setRecipeImportDeclined((prev) => [...prev, name])
+    setRecipeImportMissingPrompt(null)
+  }
+
+  return (
+    <Section
+      title="Импорт из Google Таблиц"
+      icon={Upload}
+      right={
+        <button onClick={() => setShowRecipeImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+          {showRecipeImport ? 'Скрыть' : 'Показать'}
+        </button>
+      }
+    >
+      {showRecipeImport && (
+        <>
+          <p className="text-xs text-slate-500 mb-2">
+            Столбцы: <b>Блюдо, Ингредиент, Кол-во</b> — по одной строке на ингредиент.
+            Несколько строк с одинаковым названием блюда объединятся в один рецепт.
+            Выделите в Google Таблице → Ctrl+C → вставьте сюда.
+          </p>
+          <textarea
+            className={inputClass + ' h-28 py-2'}
+            placeholder={'Бульон\tКуриное крыло\t0.5\nБульон\tЛавровый лист\t1\nБорщ\tСвёкла\t1'}
+            value={recipeImportText}
+            onChange={(e) => setRecipeImportText(e.target.value)}
+          />
+          <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={recipeImportOverwrite}
+              onChange={(e) => setRecipeImportOverwrite(e.target.checked)}
+              className="w-5 h-5"
+            />
+            Перезаписывать уже существующие рецепты (по названию)
+          </label>
+          {recipeImportMissingPrompt && (
+            <div className="text-sm bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-3 mb-2">
+              <p className="text-orange-800 dark:text-orange-200 mb-2">
+                Продукт «{recipeImportMissingPrompt}» не найден в номенклатуре. Добавить его в каталог?
+              </p>
+              <div className="flex gap-2">
+                <BigButton onClick={confirmAddImportIngredient} full={false}>Да, добавить</BigButton>
+                <BigButton onClick={declineImportIngredient} color="outline" full={false}>Нет</BigButton>
+              </div>
+            </div>
+          )}
+          <BigButton onClick={runRecipeImport} icon={Upload} disabled={!recipeImportText.trim()}>
+            Импортировать рецепты
+          </BigButton>
+          {recipeImportResult && (
+            <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+              {recipeImportResult}
+            </p>
+          )}
+        </>
+      )}
+    </Section>
+  )
+}
+
+// Same rationale again — Rational Chef OS export and the assistant-prepared
+// photo-mapping import are two different tools sharing one collapsible
+// panel (a <select> instead of two more top-level Section cards, see the
+// "делаем меньше места" ask this came from), but neither reads or writes
+// anything outside this panel either.
+function RecipeAdvancedImport({ recipes, setRecipes, recountCatalog, setRecountCatalog }) {
+  const [showAdvancedImport, setShowAdvancedImport] = useState(false)
+  const [advancedImportTab, setAdvancedImportTab] = useState('rational')
+  const [rationalImportText, setRationalImportText] = useState('')
+  const [rationalImportOverwrite, setRationalImportOverwrite] = useState(false)
+  const [rationalImportResult, setRationalImportResult] = useState(null)
+  const [photoImportText, setPhotoImportText] = useState('')
+  const [photoImportResult, setPhotoImportResult] = useState(null)
+
+  // Rational Chef OS's export already flattens its oven-mode/kashrut fields
+  // into a "comment" string (see parseRationalChefExport) — this only needs
+  // to resolve ingredient names against the nomenclature, creating any that
+  // don't exist yet (with the unit the export already provides) rather than
+  // stopping at the first one, since a full import can easily touch 50+
+  // distinct ingredients in one paste.
+  function importFromRationalChef() {
+    const { recipes: parsed, error } = parseRationalChefExport(rationalImportText)
+    if (error) {
+      setRationalImportResult(error)
+      return
+    }
+    const existingByName = new Map(recipes.map((r) => [(r.name || '').trim().toLowerCase(), r]))
+    const nextRecipes = [...recipes]
+    const workingCatalog = [...recountCatalog]
+    const newProducts = []
+    const unitMismatches = []
+    let imported = 0
+    let skippedExisting = 0
+
+    function resolveProduct(name, unit) {
+      const key = name.trim().toLowerCase()
+      let product = workingCatalog.find((p) => (p.name || '').trim().toLowerCase() === key)
+      if (!product) {
+        product = { id: uid(), name: name.trim(), unit: unit || 'шт', zone: 'fridges', category: 'other' }
+        workingCatalog.push(product)
+        newProducts.push(product)
+      }
+      return product
+    }
+
+    // Rational Chef OS's export carries its own per-ingredient unit, which
+    // can silently disagree with the catalog product's unit (e.g. the export
+    // says "0.21 л" but the existing nomenclature item is tracked in "г") —
+    // without reconciling them, the qty gets stored against the wrong scale
+    // (0.21 "г" instead of 210 г), which is exactly the class of bug behind
+    // the tiny/fractional ingredient amounts seen in already-imported ТК.
+    // Only кг↔г and л↔мл are auto-reconciled (an exact ×1000); anything else
+    // (e.g. import says "шт", catalog says "г") can't be resolved without a
+    // real per-item weight, so it's left as-is and flagged for manual review.
+    function reconcileQty(rawQty, importUnit, product) {
+      const iu = (importUnit || '').trim().toLowerCase()
+      const cu = (product.unit || '').trim().toLowerCase()
+      const qtyNum = Number(rawQty) || 0
+      if (!iu || iu === cu) return { qty: rawQty, mismatch: false }
+      const massFactor = { 'кг': 1000, 'г': 1 }
+      const volFactor = { 'л': 1000, 'мл': 1 }
+      for (const fam of [massFactor, volFactor]) {
+        if (iu in fam && cu in fam) {
+          return { qty: String(qtyNum * (fam[iu] / fam[cu])), mismatch: false }
+        }
+      }
+      unitMismatches.push(`${product.name} (импорт «${importUnit}» ≠ каталог «${product.unit}»)`)
+      return { qty: rawQty, mismatch: true }
+    }
+
+    parsed.forEach((parsedRecipe) => {
+      const key = parsedRecipe.name.toLowerCase()
+      const existing = existingByName.get(key)
+      if (existing && !rationalImportOverwrite) {
+        skippedExisting += 1
+        return
+      }
+      const ingredients = parsedRecipe.ingredients.map(({ ingredientName, qty, unit }) => {
+        const product = resolveProduct(ingredientName, unit)
+        const { qty: reconciledQty } = reconcileQty(String(qty ?? ''), unit, product)
+        return { productId: product.id, qty: reconciledQty }
+      })
+      const payload = { name: parsedRecipe.name, ingredients, comment: parsedRecipe.comment || '', photo: null }
+      if (existing) {
+        const idx = nextRecipes.findIndex((r) => r.id === existing.id)
+        nextRecipes[idx] = { ...existing, ...payload }
+      } else {
+        nextRecipes.push({ id: uid(), ...payload })
+      }
+      imported += 1
+    })
+
+    if (newProducts.length) setRecountCatalog((prev) => [...prev, ...newProducts])
+    setRecipes(nextRecipes)
+    const parts = [`Импортировано рецептов: ${imported}`]
+    if (skippedExisting) parts.push(`пропущено (уже есть): ${skippedExisting}`)
+    if (newProducts.length) parts.push(`создано новых позиций в номенклатуре: ${newProducts.length}`)
+    if (unitMismatches.length) parts.push(`несовпадение единиц, нужна проверка (${unitMismatches.length}): ${unitMismatches.join('; ')}`)
+    setRationalImportResult(parts.join(', '))
+    setRationalImportText('')
+  }
+
+  function applyPhotoImportJson(text) {
+    setPhotoImportResult(null)
+    try {
+      const map = JSON.parse(text)
+      const usedKeys = new Set()
+      const nextRecipes = recipes.map((r) => {
+        const m = (r.name || '').match(/(\d+)/)
+        if (!m) return r
+        const num = String(Number(m[1]))
+        const photo = map[num]
+        if (!photo) return r
+        usedKeys.add(num)
+        return { ...r, photo }
+      })
+      setRecipes(nextRecipes)
+      const allKeys = Object.keys(map)
+      const unusedKeys = allKeys.filter((k) => !usedKeys.has(String(Number(k))))
+      setPhotoImportResult(
+        `Фото добавлено: ${usedKeys.size} из ${allKeys.length}.` +
+        (unusedKeys.length ? ` Не найден рецепт для ТК: ${unusedKeys.join(', ')}.` : '')
+      )
+    } catch {
+      setPhotoImportResult('Не удалось прочитать данные. Убедитесь, что это JSON со сопоставлением фото по номеру ТК.')
+    }
+  }
+
+  async function importRecipePhotosFromJson(file) {
+    const text = await file.text()
+    applyPhotoImportJson(text)
+  }
+
+  function importRecipePhotosFromText() {
+    applyPhotoImportJson(photoImportText)
+    setPhotoImportText('')
+  }
+
+  return (
+    <Section
+      title="Ещё способы импорта"
+      icon={Upload}
+      right={
+        <button onClick={() => setShowAdvancedImport((v) => !v)} className="text-xs font-semibold text-orange-600">
+          {showAdvancedImport ? 'Скрыть' : 'Показать'}
+        </button>
+      }
+    >
+      {showAdvancedImport && (
+        <>
+          <select
+            className={inputClass + ' mb-3'}
+            value={advancedImportTab}
+            onChange={(e) => setAdvancedImportTab(e.target.value)}
+          >
+            <option value="rational">Импорт из Rational Chef OS</option>
+            <option value="photo">Импорт фото рецептов</option>
+          </select>
+
+          {advancedImportTab === 'rational' && (
+            <>
+              <p className="text-xs text-slate-500 mb-2">
+                В Rational Chef OS: «⋮» → «Экспорт для LA CHEF» — данные скопируются в буфер обмена.
+                Вставьте их сюда. Ингредиенты, которых ещё нет в номенклатуре, будут созданы автоматически
+                (с единицей измерения из экспорта); режим печи, влажность и кашрут попадут в
+                «Технологию приготовления» текстом.
+              </p>
+              <textarea
+                className={inputClass + ' h-28 py-2'}
+                placeholder='[{"name":"Бульон","ingredients":[...],"description":"..."}]'
+                value={rationalImportText}
+                onChange={(e) => setRationalImportText(e.target.value)}
+              />
+              <label className="flex items-center gap-2 mt-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={rationalImportOverwrite}
+                  onChange={(e) => setRationalImportOverwrite(e.target.checked)}
+                  className="w-5 h-5"
+                />
+                Перезаписывать уже существующие рецепты (по названию)
+              </label>
+              <BigButton onClick={importFromRationalChef} icon={Upload} disabled={!rationalImportText.trim()}>
+                Импортировать рецепты
+              </BigButton>
+              {rationalImportResult && (
+                <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+                  {rationalImportResult}
+                </p>
+              )}
+            </>
+          )}
+
+          {advancedImportTab === 'photo' && (
+            <>
+              <p className="text-xs text-slate-500 mb-2">
+                Фото, сопоставленные по номеру ТК (готовит ассистент), подставятся в рецепты
+                автоматически по номеру в названии. Загрузите файл или вставьте текст —
+                что получится на вашем устройстве.
+              </p>
+              <label className="flex items-center gap-2 min-h-[48px] px-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 cursor-pointer active:bg-slate-50 dark:active:bg-slate-800">
+                <Upload size={18} />
+                <span className="text-sm">Выбрать JSON-файл</span>
+                <input
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null
+                    e.target.value = ''
+                    if (file) importRecipePhotosFromJson(file)
+                  }}
+                />
+              </label>
+              <p className="text-xs text-slate-400 text-center my-2">— или —</p>
+              <textarea
+                className={inputClass + ' h-20 py-2'}
+                placeholder='Вставьте сюда скопированный JSON: {"105":"data:image/...", ...}'
+                value={photoImportText}
+                onChange={(e) => setPhotoImportText(e.target.value)}
+              />
+              <BigButton onClick={importRecipePhotosFromText} icon={ImageIcon} disabled={!photoImportText.trim()}>
+                Импортировать вставленные фото
+              </BigButton>
+              {photoImportResult && (
+                <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 mt-2">
+                  {photoImportResult}
+                </p>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </Section>
   )
 }
 
