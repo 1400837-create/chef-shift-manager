@@ -1349,7 +1349,15 @@ export default function MenuPlanner({
                 const isSelected = selectedForPrint.has(r.id)
                 const cost = recipeCost(r)
                 return (
-                  <div key={r.id} id={`recipe-${r.id}`} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32">
+                  <div
+                    key={r.id}
+                    id={`recipe-${r.id}`}
+                    className={`rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-32 ${
+                      isExpanded && !recipePrintMode
+                        ? 'bg-gradient-to-b from-orange-100/80 via-orange-50/30 to-transparent dark:from-orange-950/50 dark:via-orange-950/15 dark:to-transparent'
+                        : ''
+                    }`}
+                  >
                     <button
                       onClick={() => (recipePrintMode ? toggleSelectForPrint(r.id) : toggleExpandRecipe(r))}
                       className="w-full flex items-center justify-between gap-2 px-3 py-3 min-h-[52px] active:bg-slate-50 dark:active:bg-slate-700"
@@ -1390,7 +1398,7 @@ export default function MenuPlanner({
                     </button>
 
                     {isExpanded && !recipePrintMode && !isEditing && (
-                      <div className="px-3 pb-3 pt-3 border-t border-slate-100 dark:border-slate-700 bg-gradient-to-b from-orange-100/80 via-orange-50/30 to-transparent dark:from-orange-950/50 dark:via-orange-950/15 dark:to-transparent">
+                      <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
                         {r.photo && (
                           <img src={r.photo} alt={r.name} className="w-full max-h-56 object-cover rounded-lg mb-2" />
                         )}
