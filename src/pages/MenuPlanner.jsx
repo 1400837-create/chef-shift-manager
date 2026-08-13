@@ -1390,7 +1390,7 @@ export default function MenuPlanner({
                     </button>
 
                     {isExpanded && !recipePrintMode && !isEditing && (
-                      <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
+                      <div className="px-3 pb-3 pt-3 border-t border-slate-100 dark:border-slate-700 bg-gradient-to-b from-orange-100/80 via-orange-50/30 to-transparent dark:from-orange-950/50 dark:via-orange-950/15 dark:to-transparent">
                         {r.photo && (
                           <img src={r.photo} alt={r.name} className="w-full max-h-56 object-cover rounded-lg mb-2" />
                         )}
