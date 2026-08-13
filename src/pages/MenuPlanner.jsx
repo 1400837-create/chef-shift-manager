@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Upload, X, Copy, Plus, Printer,
-  BookOpen, Pencil, Camera, Calendar, Check, ExternalLink, Image as ImageIcon,
+  BookOpen, Pencil, Camera, Calendar, Check, ExternalLink, Image as ImageIcon, Columns2,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow, PrintButton } from '../components/UI'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { DEFAULT_MENU_COURSES } from '../utils/constants'
 import {
   MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex, formatRu,
@@ -44,6 +45,16 @@ export default function MenuPlanner({
     if (forcedMenuTab) setMenuTab(forcedMenuTab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forcedMenuTab])
+
+  // Side-by-side view is only offered from tablet width up (also covers a
+  // landscape phone, which crosses this same width) — a phone in portrait
+  // doesn't have room for two useful panes, so isWideScreen gates both the
+  // toggle button's visibility and whether split mode actually applies, in
+  // case the stored preference was turned on from a wider screen earlier.
+  const isWideScreen = useMediaQuery('(min-width: 768px)')
+  const [splitView, setSplitView] = useLocalStorage('menuSplitView', false)
+  const showBothPanes = splitView && isWideScreen
+
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
@@ -912,26 +923,45 @@ export default function MenuPlanner({
         className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100 dark:bg-slate-950 flex gap-1.5 overflow-x-auto"
         style={{ top: 'var(--app-header-h, 64px)' }}
       >
+        {!showBothPanes && (
+          <>
+            <button
+              onClick={() => setMenuTab('calendar')}
+              className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
+                menuTab === 'calendar' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+              }`}
+            >
+              <Calendar size={16} /> Меню
+            </button>
+            <button
+              onClick={() => setMenuTab('recipes')}
+              className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
+                menuTab === 'recipes' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+              }`}
+            >
+              <BookOpen size={16} /> Рецепты
+            </button>
+          </>
+        )}
+        {showBothPanes && (
+          <p className="flex-1 min-h-[48px] flex items-center px-1 font-semibold text-sm text-slate-600 dark:text-slate-300">
+            Меню и рецепты рядом
+          </p>
+        )}
         <button
-          onClick={() => setMenuTab('calendar')}
-          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
-            menuTab === 'calendar' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+          onClick={() => setSplitView((v) => !v)}
+          title={splitView ? 'Показывать по одной вкладке' : 'Показать меню и рецепты рядом'}
+          className={`hidden md:flex shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
+            splitView ? 'bg-orange-500 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
           }`}
         >
-          <Calendar size={16} /> Меню
-        </button>
-        <button
-          onClick={() => setMenuTab('recipes')}
-          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
-            menuTab === 'recipes' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-          }`}
-        >
-          <BookOpen size={16} /> Рецепты
+          <Columns2 size={16} /> Рядом
         </button>
       </div>
 
-      {menuTab === 'calendar' && (
-      <>
+      <div className={showBothPanes ? 'flex gap-3 items-start' : ''}>
+      {(menuTab === 'calendar' || showBothPanes) && (
+      <div className={showBothPanes ? 'md:w-1/2 md:min-w-0' : ''}>
       <Section
         title="Импорт из Google Таблиц"
         icon={Upload}
@@ -1290,11 +1320,11 @@ export default function MenuPlanner({
       <p className="text-xs text-slate-400 mt-2">
         Если кнопка «Отправить» не открывает почту, используйте «Копировать» и вставьте текст вручную.
       </p>
-      </>
+      </div>
       )}
 
-      {menuTab === 'recipes' && (
-        <>
+      {(menuTab === 'recipes' || showBothPanes) && (
+        <div className={showBothPanes ? 'md:w-1/2 md:min-w-0' : ''}>
           <a
             href="https://1400837-create.github.io/Chef/"
             target="_blank"
@@ -1665,8 +1695,9 @@ export default function MenuPlanner({
               </>
             )}
           </Section>
-        </>
+        </div>
       )}
+      </div>
 
     </div>
   )
