@@ -1,11 +1,11 @@
-import { LayoutDashboard, UtensilsCrossed, Warehouse, SprayCan, Wallet, ShoppingBasket } from 'lucide-react'
+import { LayoutDashboard, UtensilsCrossed, BookOpen, Warehouse, Wallet, ShoppingBasket } from 'lucide-react'
 
 const TABS = [
   { key: 'dashboard', label: 'Дашборд', icon: LayoutDashboard },
   { key: 'menu', label: 'Меню', icon: UtensilsCrossed },
+  { key: 'recipes', label: 'Рецепты', icon: BookOpen },
   { key: 'inventory', label: 'Склад', icon: Warehouse },
   { key: 'shopping', label: 'Закупка', icon: ShoppingBasket },
-  { key: 'cleaning', label: 'Уборка', icon: SprayCan },
   { key: 'finances', label: 'Финансы', icon: Wallet },
 ]
 

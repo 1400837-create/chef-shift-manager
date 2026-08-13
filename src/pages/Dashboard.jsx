@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, AlertTriangle, UtensilsCrossed, Plus, CalendarClock, Sunrise, Sunset, History, Download, Upload } from 'lucide-react'
-import { Section, CheckRow, Badge, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton } from '../components/UI'
+import { ClipboardList, AlertTriangle, UtensilsCrossed, Plus, CalendarClock, Sunrise, Sunset, History, Download, Upload, LayoutDashboard, SprayCan } from 'lucide-react'
+import { Section, CheckRow, Badge, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton, UndoRedoBar } from '../components/UI'
 import { TASK_CATEGORIES } from '../utils/constants'
 import { todayKey, formatRu, monthKey, parseLocalDate } from '../utils/dateUtils'
 import { menuDeadlineInfo, urgencyColor } from '../utils/deadlines'
@@ -8,13 +8,21 @@ import { downloadBackup, parseBackupFile, applyBackup } from '../utils/backup'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { coursesForDay } from '../utils/menuCourses'
+import Cleaning from './Cleaning'
 
 export default function Dashboard({
   shiftChecklist, setShiftChecklist,
   kuchenhilfeTasks, setKuchenhilfeTasks,
   recountCatalog, recounts, purchases, productions, catalogWaste, recipes, plannedPurchases,
   menuData, onNavigate,
+  dailyCleaning, setDailyCleaning, weeklyCleaning, setWeeklyCleaning, staffName,
+  dashboardHistory, cleaningHistory,
 }) {
+  // Not persisted — Уборка used to be its own top-level tab (which always
+  // reset to "today"/"this week" on every visit anyway, since Cleaning's own
+  // offsets are plain useState too), so landing back on Обзор each time
+  // Дашборд is revisited isn't a behavior change from before.
+  const [dashTab, setDashTab] = useState('overview')
   const today = todayKey()
   const now = new Date()
   const day = shiftChecklist[today] || {
@@ -118,6 +126,42 @@ export default function Dashboard({
 
   return (
     <div className="pb-4">
+      <div
+        className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100 dark:bg-slate-950 flex gap-1.5 overflow-x-auto"
+        style={{ top: 'var(--app-header-h, 64px)' }}
+      >
+        <button
+          onClick={() => setDashTab('overview')}
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
+            dashTab === 'overview' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+          }`}
+        >
+          <LayoutDashboard size={16} /> Обзор
+        </button>
+        <button
+          onClick={() => setDashTab('cleaning')}
+          className={`shrink-0 min-h-[48px] px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 text-sm whitespace-nowrap ${
+            dashTab === 'cleaning' ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+          }`}
+        >
+          <SprayCan size={16} /> Уборка
+        </button>
+      </div>
+
+      <UndoRedoBar {...(dashTab === 'cleaning' ? cleaningHistory : dashboardHistory)} />
+
+      {dashTab === 'cleaning' && (
+        <Cleaning
+          dailyCleaning={dailyCleaning}
+          setDailyCleaning={setDailyCleaning}
+          weeklyCleaning={weeklyCleaning}
+          setWeeklyCleaning={setWeeklyCleaning}
+          staffName={staffName}
+        />
+      )}
+
+      {dashTab === 'overview' && (
+      <>
       <Section
         title="Мало на складе"
         icon={AlertTriangle}
@@ -331,6 +375,8 @@ export default function Dashboard({
           </p>
         )}
       </Section>
+      </>
+      )}
     </div>
   )
 }

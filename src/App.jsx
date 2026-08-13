@@ -6,7 +6,6 @@ import Dashboard from './pages/Dashboard'
 import MenuPlanner from './pages/MenuPlanner'
 import Inventory from './pages/Inventory'
 import ShoppingList from './pages/ShoppingList'
-import Cleaning from './pages/Cleaning'
 import Finances from './pages/Finances'
 import { UndoRedoBar } from './components/UI'
 import { useLocalStorage } from './hooks/useLocalStorage'
@@ -70,7 +69,7 @@ export default function App() {
 
   function goToRecipe(recipeId) {
     setPendingOpenRecipeId(recipeId)
-    setTab('menu')
+    setTab('recipes')
   }
 
   const [shiftChecklist, setShiftChecklist] = useLocalStorage('shiftChecklist', {})
@@ -268,10 +267,12 @@ export default function App() {
     })
 
     return {
-      dashboard: openingIncomplete,
+      // Уборка moved inside Дашборд (its own sub-tab there) rather than a
+      // top-level nav entry — an incomplete daily checklist still needs to
+      // surface somewhere, so it rolls into the same dot as opening tasks.
+      dashboard: openingIncomplete || dailyIncomplete,
       inventory: expiringSoon,
       menu: menuUrgent,
-      cleaning: dailyIncomplete,
       finances: financeOverspent,
       shopping: shoppingNeeded,
     }
@@ -388,26 +389,30 @@ export default function App() {
 
       <main className="max-w-lg md:max-w-none mx-auto px-3 md:px-6 lg:px-10 pt-3 pb-24">
         {tab === 'dashboard' && (
-          <>
-            <UndoRedoBar {...dashboardHistory} />
-            <Dashboard
-              shiftChecklist={shiftChecklist}
-              setShiftChecklist={setShiftChecklist}
-              kuchenhilfeTasks={kuchenhilfeTasks}
-              setKuchenhilfeTasks={setKuchenhilfeTasks}
-              recountCatalog={recountCatalog}
-              recounts={recounts}
-              purchases={purchases}
-              productions={productions}
-              catalogWaste={catalogWaste}
-              recipes={recipes}
-              plannedPurchases={plannedPurchases}
-              menuData={menuData}
-              onNavigate={setTab}
-            />
-          </>
+          <Dashboard
+            shiftChecklist={shiftChecklist}
+            setShiftChecklist={setShiftChecklist}
+            kuchenhilfeTasks={kuchenhilfeTasks}
+            setKuchenhilfeTasks={setKuchenhilfeTasks}
+            recountCatalog={recountCatalog}
+            recounts={recounts}
+            purchases={purchases}
+            productions={productions}
+            catalogWaste={catalogWaste}
+            recipes={recipes}
+            plannedPurchases={plannedPurchases}
+            menuData={menuData}
+            onNavigate={setTab}
+            dailyCleaning={dailyCleaning}
+            setDailyCleaning={setDailyCleaning}
+            weeklyCleaning={weeklyCleaning}
+            setWeeklyCleaning={setWeeklyCleaning}
+            staffName={staffName}
+            dashboardHistory={dashboardHistory}
+            cleaningHistory={cleaningHistory}
+          />
         )}
-        {tab === 'menu' && (
+        {(tab === 'menu' || tab === 'recipes') && (
           <>
             <UndoRedoBar {...menuHistory} />
             <MenuPlanner
@@ -424,6 +429,7 @@ export default function App() {
               onNavigateToCatalog={goToCatalogProduct}
               initialOpenRecipeId={pendingOpenRecipeId}
               onInitialRecipeConsumed={() => setPendingOpenRecipeId(null)}
+              forcedMenuTab={tab === 'recipes' ? 'recipes' : 'calendar'}
             />
           </>
         )}
@@ -472,18 +478,6 @@ export default function App() {
               plannedPurchases={plannedPurchases}
               setPlannedPurchases={setPlannedPurchases}
               setPurchases={setPurchases}
-            />
-          </>
-        )}
-        {tab === 'cleaning' && (
-          <>
-            <UndoRedoBar {...cleaningHistory} />
-            <Cleaning
-              dailyCleaning={dailyCleaning}
-              setDailyCleaning={setDailyCleaning}
-              weeklyCleaning={weeklyCleaning}
-              setWeeklyCleaning={setWeeklyCleaning}
-              staffName={staffName}
             />
           </>
         )}

@@ -24,7 +24,7 @@ import { computeDropdownRect } from '../utils/dropdownPosition'
 export default function MenuPlanner({
   menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary,
   recipes, setRecipes, recountCatalog, setRecountCatalog, onNavigateToCatalog,
-  initialOpenRecipeId, onInitialRecipeConsumed,
+  initialOpenRecipeId, onInitialRecipeConsumed, forcedMenuTab,
 }) {
   // Рецепты draft state (menuTab + everything below down to editingRecipeId)
   // is persisted rather than plain useState: adding an ingredient whose
@@ -33,6 +33,17 @@ export default function MenuPlanner({
   // in-progress recipe means it's still there, untouched, when they come back.
   const [menuTab, setMenuTab] = useLocalStorage('menuTab', 'calendar')
   useBackableTab('menuTab', menuTab, setMenuTab)
+
+  // Меню and Рецепты are separate entries on the bottom nav now (both render
+  // this same component) — arriving via one of them should always land on
+  // that specific sub-tab, not whichever was open last. Only reacts to
+  // forcedMenuTab actually changing (i.e. tapping between those two nav
+  // entries), so switching sub-tabs by hand with the pill below, without
+  // leaving the page, is left alone.
+  useEffect(() => {
+    if (forcedMenuTab) setMenuTab(forcedMenuTab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forcedMenuTab])
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return { year: d.getFullYear(), month: d.getMonth() }
