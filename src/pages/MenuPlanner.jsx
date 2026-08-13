@@ -857,6 +857,21 @@ export default function MenuPlanner({
     return () => clearTimeout(t)
   }, [menuTab])
 
+  // Опening Меню always lands on the current month (see cursor's initial
+  // state above) but day 1 is still at the top of a long list — jump straight
+  // to today's card once per mount so it doesn't take a manual scroll every time.
+  useEffect(() => {
+    if (menuTab !== 'calendar') return
+    const now = new Date()
+    if (cursor.year !== now.getFullYear() || cursor.month !== now.getMonth()) return
+    const day = now.getDate()
+    const t = setTimeout(() => {
+      document.getElementById(`menu-day-${day}`)?.scrollIntoView({ behavior: 'auto', block: 'start' })
+    }, 50)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <div className="pb-4">
       <div
@@ -1033,6 +1048,7 @@ export default function MenuPlanner({
           const isOpen = openDay === day
           const courses = isOpen || dayData ? coursesForDay(dayData) : []
           const anyKosher = courses.some((c) => c.kosher)
+          const summary = summaryText(day)
           return (
             <div key={day} id={`menu-day-${day}`} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden scroll-mt-32">
               <button
@@ -1040,12 +1056,22 @@ export default function MenuPlanner({
                 className="w-full flex items-center justify-between px-3 py-3 min-h-[56px] active:bg-slate-50"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-700 flex flex-col items-center justify-center leading-none">
-                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{day}</span>
-                    <span className="text-[10px] text-slate-500">{dayLabel(day)}</span>
+                  <div
+                    className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center leading-none ${
+                      summary
+                        ? 'bg-orange-100 dark:bg-orange-900/40'
+                        : 'bg-slate-100 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span className={`font-bold text-sm ${summary ? 'text-orange-700 dark:text-orange-300' : 'text-slate-800 dark:text-slate-100'}`}>
+                      {day}
+                    </span>
+                    <span className={`text-[10px] ${summary ? 'text-orange-600/80 dark:text-orange-300/70' : 'text-slate-500'}`}>
+                      {dayLabel(day)}
+                    </span>
                   </div>
                   <p className="text-sm text-slate-600 dark:text-slate-300 text-left line-clamp-1 max-w-[45vw]">
-                    {summaryText(day) || <span className="text-slate-300">Не заполнено</span>}
+                    {summary || <span className="text-slate-300">Не заполнено</span>}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
