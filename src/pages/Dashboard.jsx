@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, ListChecks, AlertTriangle, UtensilsCrossed, Plus, Check, CalendarClock, Download, Upload, LayoutDashboard, SprayCan } from 'lucide-react'
+import { ClipboardList, ListChecks, AlertTriangle, UtensilsCrossed, Plus, Check, CalendarClock, Download, Upload, LayoutDashboard, SprayCan, RefreshCw, Copy } from 'lucide-react'
 import { Section, CheckRow, Badge, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton, UndoRedoBar } from '../components/UI'
 import { TASK_CATEGORIES, MY_TASK_CATEGORIES } from '../utils/constants'
 import { todayKey, formatRu, monthKey, parseLocalDate, daysBetween, startOfDay } from '../utils/dateUtils'
 import { menuDeadlineInfo, urgencyColor } from '../utils/deadlines'
 import { downloadBackup, parseBackupFile, applyBackup } from '../utils/backup'
+import { getSyncConfig, enableSync, disableSync, generateSyncCode } from '../utils/sync'
 import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { coursesForDay } from '../utils/menuCourses'
@@ -124,6 +125,42 @@ export default function Dashboard({
     setImportPreview(null)
     setImportMessage(`Восстановлено разделов: ${count}. Обновляю приложение…`)
     setTimeout(() => window.location.reload(), 800)
+  }
+
+  const [syncConfig, setSyncConfigState] = useState(getSyncConfig)
+  const [syncCodeDraft, setSyncCodeDraft] = useState(() => getSyncConfig().code || generateSyncCode())
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [syncError, setSyncError] = useState(null)
+  const [syncCopied, setSyncCopied] = useState(false)
+
+  async function handleEnableSync() {
+    const code = syncCodeDraft.trim()
+    if (!code) return
+    setSyncBusy(true)
+    setSyncError(null)
+    try {
+      await enableSync(code)
+      setSyncConfigState(getSyncConfig())
+    } catch {
+      setSyncError('Не удалось подключиться к облаку. Проверьте интернет и настройки Firebase.')
+    } finally {
+      setSyncBusy(false)
+    }
+  }
+
+  function handleDisableSync() {
+    disableSync()
+    setSyncConfigState(getSyncConfig())
+  }
+
+  async function copySyncCode() {
+    try {
+      await navigator.clipboard.writeText(syncConfig.code)
+      setSyncCopied(true)
+      setTimeout(() => setSyncCopied(false), 2000)
+    } catch {
+      // clipboard API unavailable — the code is already shown on screen to copy by hand
+    }
   }
 
   function printTasks() {
@@ -340,6 +377,50 @@ export default function Dashboard({
         )}
         {lowStockItems.length > 0 && (
           <BigButton onClick={() => onNavigate('shopping')} color="red">Перейти в закупку</BigButton>
+        )}
+      </Section>
+
+      <Section title="Синхронизация между устройствами" icon={RefreshCw}>
+        {!syncConfig.enabled ? (
+          <>
+            <p className="text-xs text-slate-500 mb-3">
+              Введите один и тот же код на всех своих устройствах — данные будут
+              обновляться сами, без ручного экспорта/импорта. Код придуман заранее,
+              но можно вписать свой (например, если уже включали синхронизацию раньше).
+            </p>
+            <Field label="Код синхронизации">
+              <input
+                className={inputClass}
+                value={syncCodeDraft}
+                onChange={(e) => setSyncCodeDraft(e.target.value.trim())}
+              />
+            </Field>
+            <BigButton onClick={handleEnableSync} icon={RefreshCw} disabled={!syncCodeDraft.trim() || syncBusy}>
+              {syncBusy ? 'Подключение…' : 'Включить синхронизацию'}
+            </BigButton>
+            {syncError && (
+              <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mt-2">
+                {syncError}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500 mb-2">Синхронизация включена. Код для других устройств:</p>
+            <div className="flex items-center gap-2 mb-3">
+              <p className="flex-1 min-h-[48px] flex items-center px-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/60 font-mono text-base text-slate-800 dark:text-slate-100 tracking-wide">
+                {syncConfig.code}
+              </p>
+              <button
+                onClick={copySyncCode}
+                className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+              >
+                <Copy size={18} />
+              </button>
+            </div>
+            {syncCopied && <p className="text-xs text-green-700 dark:text-green-400 mb-2">Скопировано</p>}
+            <BigButton onClick={handleDisableSync} color="outline">Выключить синхронизацию</BigButton>
+          </>
         )}
       </Section>
 
