@@ -141,8 +141,8 @@ export default function Dashboard({
     try {
       await enableSync(code)
       setSyncConfigState(getSyncConfig())
-    } catch {
-      setSyncError('Не удалось подключиться к облаку. Проверьте интернет и настройки Firebase.')
+    } catch (err) {
+      setSyncError(`Не удалось подключиться к облаку: ${err?.message || err}`)
     } finally {
       setSyncBusy(false)
     }
