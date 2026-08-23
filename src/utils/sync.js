@@ -38,6 +38,51 @@ export function generateSyncCode() {
   return code
 }
 
+// Firebase Realtime Database forbids ".", "#", "$", "/", "[", "]" in keys.
+// Most data here uses crypto.randomUUID() ids (safe), but some items still
+// carry legacy numeric ids from an older `Date.now() + Math.random()` scheme
+// (see utils/id.js) that can render as e.g. "1785118603951.4883" — a plain
+// object key with a dot in it. Rather than migrate all existing local data,
+// escape/unescape these characters transparently at the sync boundary so
+// sync works regardless of what ids happen to already exist locally.
+const KEY_ESCAPES = [
+  ['%', '%25'], // must stay first so escaping/unescaping is unambiguous
+  ['.', '%2E'],
+  ['#', '%23'],
+  ['$', '%24'],
+  ['/', '%2F'],
+  ['[', '%5B'],
+  [']', '%5D'],
+]
+
+function escapeKey(key) {
+  return KEY_ESCAPES.reduce((acc, [ch, esc]) => acc.split(ch).join(esc), key)
+}
+
+function unescapeKey(key) {
+  return KEY_ESCAPES.reduceRight((acc, [ch, esc]) => acc.split(esc).join(ch), key)
+}
+
+function sanitizeForFirebase(value) {
+  if (Array.isArray(value)) return value.map(sanitizeForFirebase)
+  if (value && typeof value === 'object') {
+    const out = {}
+    for (const [k, v] of Object.entries(value)) out[escapeKey(k)] = sanitizeForFirebase(v)
+    return out
+  }
+  return value
+}
+
+function restoreFromFirebase(value) {
+  if (Array.isArray(value)) return value.map(restoreFromFirebase)
+  if (value && typeof value === 'object') {
+    const out = {}
+    for (const [k, v] of Object.entries(value)) out[unescapeKey(k)] = restoreFromFirebase(v)
+    return out
+  }
+  return value
+}
+
 function roomKeyRef(key) {
   if (!db) return null // Firebase failed to initialize — see firebase.js
   const { enabled, code } = getSyncConfig()
@@ -49,7 +94,7 @@ function roomKeyRef(key) {
 export function pushToCloud(key, value) {
   const r = roomKeyRef(key)
   if (!r) return
-  set(r, value).catch(() => {
+  set(r, sanitizeForFirebase(value)).catch(() => {
     // Best-effort — offline, or the room is unreachable. The local write
     // already succeeded, so nothing is lost; it'll catch up once connected.
   })
@@ -67,7 +112,7 @@ export function subscribeToCloud(key, onRemoteChange) {
     if (!r) return
     detachValue = onValue(r, (snapshot) => {
       if (!snapshot.exists()) return
-      onRemoteChange(snapshot.val())
+      onRemoteChange(restoreFromFirebase(snapshot.val()))
     })
   }
 
@@ -90,7 +135,7 @@ export async function enableSync(code) {
   const snapshot = await get(roomRef)
   if (!snapshot.exists()) {
     const { data } = buildBackup()
-    await set(roomRef, data)
+    await set(roomRef, sanitizeForFirebase(data))
   }
   setSyncConfig({ enabled: true, code })
 }
