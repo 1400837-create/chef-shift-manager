@@ -108,6 +108,13 @@ export default function MenuPlanner({
   const [recipeSearch, setRecipeSearch] = useState('')
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
   const [recipeSortMode, setRecipeSortMode] = useState('newest')
+  // Lets the user tag many existing recipes at once (checkbox-select, then
+  // one category applies to all) instead of opening each one to edit it —
+  // added specifically to retag the 70+ recipes that predate the category
+  // field, which would otherwise mean editing each individually.
+  const [bulkCategoryMode, setBulkCategoryMode] = useState(false)
+  const [selectedForBulkCategory, setSelectedForBulkCategory] = useState(() => new Set())
+  const [bulkCategoryValue, setBulkCategoryValue] = useState(RECIPE_CATEGORIES[0].key)
 
   const [sendMessage, setSendMessage] = useState(null)
   const [dayPasteText, setDayPasteText] = useState('')
@@ -416,6 +423,32 @@ export default function MenuPlanner({
       else next.add(id)
       return next
     })
+  }
+
+  function toggleBulkCategoryMode() {
+    setBulkCategoryMode((v) => !v)
+    setSelectedForBulkCategory(new Set())
+    setRecipePrintMode(false)
+    setSelectedForPrint(new Set())
+  }
+
+  function toggleSelectForBulkCategory(id) {
+    setSelectedForBulkCategory((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAllVisibleForBulkCategory() {
+    setSelectedForBulkCategory(new Set(visibleRecipes.map((r) => r.id)))
+  }
+
+  function applyBulkCategory() {
+    if (selectedForBulkCategory.size === 0) return
+    setRecipes((prev) => prev.map((r) => (selectedForBulkCategory.has(r.id) ? { ...r, category: bulkCategoryValue } : r)))
+    setSelectedForBulkCategory(new Set())
   }
 
   function buildTtkPayload(recipeList) {
@@ -1119,10 +1152,19 @@ export default function MenuPlanner({
                 >
                   Отмена
                 </button>
-              ) : (
-                <button onClick={() => setRecipePrintMode(true)} className="text-xs font-semibold text-orange-600">
-                  Печать ТТК
+              ) : bulkCategoryMode ? (
+                <button onClick={toggleBulkCategoryMode} className="text-xs font-semibold text-slate-500">
+                  Готово
                 </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <button onClick={toggleBulkCategoryMode} className="text-xs font-semibold text-orange-600 whitespace-nowrap">
+                    Назначить тип
+                  </button>
+                  <button onClick={() => setRecipePrintMode(true)} className="text-xs font-semibold text-orange-600 whitespace-nowrap">
+                    Печать ТТК
+                  </button>
+                </div>
               )
             }
           >
@@ -1180,6 +1222,39 @@ export default function MenuPlanner({
                 </div>
               </div>
             )}
+            {bulkCategoryMode && (
+              <div className="rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 p-2.5 mb-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    Выбрано: {selectedForBulkCategory.size}
+                  </p>
+                  <button
+                    onClick={selectAllVisibleForBulkCategory}
+                    className="text-xs font-semibold text-orange-600 whitespace-nowrap"
+                  >
+                    Выбрать все видимые ({visibleRecipes.length})
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    className={inputClass + ' flex-1'}
+                    value={bulkCategoryValue}
+                    onChange={(e) => setBulkCategoryValue(e.target.value)}
+                  >
+                    {RECIPE_CATEGORIES.map((c) => (
+                      <option key={c.key} value={c.key}>{c.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={applyBulkCategory}
+                    disabled={selectedForBulkCategory.size === 0}
+                    className="shrink-0 min-h-[40px] px-4 rounded-xl bg-orange-500 text-white text-sm font-semibold disabled:opacity-40"
+                  >
+                    Применить
+                  </button>
+                </div>
+              </div>
+            )}
             {recipes.length > 0 && visibleRecipes.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-2">Ничего не найдено</p>
             )}
@@ -1188,29 +1263,30 @@ export default function MenuPlanner({
                 const isExpanded = expandedRecipeId === r.id
                 const isEditing = editingRecipeId === r.id
                 const isSelected = selectedForPrint.has(r.id)
+                const isBulkSelected = selectedForBulkCategory.has(r.id)
                 const cost = recipeCost(r)
                 return (
                   <div
                     key={r.id}
                     id={`recipe-${r.id}`}
                     className={`rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden ${showBothPanes ? '' : 'scroll-mt-32'} ${
-                      isExpanded && !recipePrintMode
+                      isExpanded && !recipePrintMode && !bulkCategoryMode
                         ? 'tint-wipe-down bg-gradient-to-b from-orange-100/80 via-orange-50/30 to-transparent dark:from-orange-950/50 dark:via-orange-950/15 dark:to-transparent'
                         : ''
                     }`}
                   >
                     <button
-                      onClick={() => (recipePrintMode ? toggleSelectForPrint(r.id) : toggleExpandRecipe(r))}
+                      onClick={() => (recipePrintMode ? toggleSelectForPrint(r.id) : bulkCategoryMode ? toggleSelectForBulkCategory(r.id) : toggleExpandRecipe(r))}
                       className="w-full flex items-center justify-between gap-2 px-3 py-3 min-h-[52px] active:bg-slate-50 dark:active:bg-slate-700"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        {recipePrintMode && (
+                        {(recipePrintMode || bulkCategoryMode) && (
                           <span
                             className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center ${
-                              isSelected ? 'bg-orange-500 border-orange-500' : 'border-slate-300 dark:border-slate-600'
+                              (recipePrintMode ? isSelected : isBulkSelected) ? 'bg-orange-500 border-orange-500' : 'border-slate-300 dark:border-slate-600'
                             }`}
                           >
-                            {isSelected && <Check size={14} className="text-white" />}
+                            {(recipePrintMode ? isSelected : isBulkSelected) && <Check size={14} className="text-white" />}
                           </span>
                         )}
                         <span
@@ -1232,13 +1308,13 @@ export default function MenuPlanner({
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {cost !== null && <Badge color="green">≈ {cost.toFixed(2)}</Badge>}
-                        {!recipePrintMode && (
+                        {!recipePrintMode && !bulkCategoryMode && (
                           <ChevronDown size={18} className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         )}
                       </div>
                     </button>
 
-                    {isExpanded && !recipePrintMode && !isEditing && (
+                    {isExpanded && !recipePrintMode && !bulkCategoryMode && !isEditing && (
                       <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
                         {r.photo && (
                           <img src={r.photo} alt={r.name} className="w-full max-h-56 object-cover rounded-lg mb-2" />
@@ -1278,7 +1354,7 @@ export default function MenuPlanner({
                       </div>
                     )}
 
-                    {isExpanded && !recipePrintMode && isEditing && (
+                    {isExpanded && !recipePrintMode && !bulkCategoryMode && isEditing && (
                       <div className="px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-700">
                         <RecipeFormFields
                           recipeForm={recipeForm}
