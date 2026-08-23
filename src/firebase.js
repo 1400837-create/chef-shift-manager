@@ -9,7 +9,7 @@ import { getDatabase } from 'firebase/database'
 const firebaseConfig = {
   apiKey: 'AIzaSyDVgHC3auFYtkRDLsb84gpvzzkgDs30CJ4',
   authDomain: 'la-chef-bbb7e.firebaseapp.com',
-  databaseURL: 'REPLACE_WITH_YOUR_DATABASE_URL',
+  databaseURL: 'https://la-chef-bbb7e-default-rtdb.europe-west1.firebasedatabase.app',
   projectId: 'la-chef-bbb7e',
   storageBucket: 'la-chef-bbb7e.firebasestorage.app',
   messagingSenderId: '451942712255',
