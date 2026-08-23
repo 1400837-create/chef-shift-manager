@@ -1332,14 +1332,26 @@ export default function MenuPlanner({
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
                           Ингредиенты{Number(recipeCoefficient) !== 1 ? ` (×${recipeCoefficient})` : ''}
                         </p>
-                        <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">
-                          {r.ingredients.map((ing) => {
+                        <div className="mb-2 rounded-lg border border-slate-100 dark:border-slate-700 overflow-hidden">
+                          {r.ingredients.map((ing, idx) => {
                             const product = recountCatalog.find((p) => String(p.id) === String(ing.productId))
                             const coef = Number(recipeCoefficient) || 1
                             const scaledQty = Math.round((Number(ing.qty) || 0) * coef * 100) / 100
-                            return `${product?.name || '?'} × ${scaledQty}${product?.unit ? ' ' + product.unit : ''}`
-                          }).join(', ')}
-                        </p>
+                            return (
+                              <div
+                                key={idx}
+                                className={`flex items-baseline justify-between gap-3 px-2.5 py-1.5 ${
+                                  idx % 2 === 1 ? 'bg-slate-50 dark:bg-slate-800/60' : ''
+                                }`}
+                              >
+                                <span className="text-sm text-slate-700 dark:text-slate-200">{product?.name || '?'}</span>
+                                <span className="shrink-0 text-sm font-semibold text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
+                                  {scaledQty}{product?.unit ? ` ${product.unit}` : ''}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Технология приготовления</p>
                         <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap mb-3">
                           {r.comment || <span className="text-slate-400">Не описано</span>}
