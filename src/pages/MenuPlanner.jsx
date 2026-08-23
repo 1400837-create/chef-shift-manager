@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronLeft, ChevronRight, Send, ShieldCheck, ChevronDown, Upload, X, Copy, Plus, Printer,
-  BookOpen, Pencil, Camera, Calendar, Check, ExternalLink, Image as ImageIcon, Columns2, Undo2, Redo2,
+  BookOpen, Pencil, Camera, Calendar, Check, ExternalLink, Image as ImageIcon, Columns2, Undo2, Redo2, Search,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton, CheckRow, PrintButton } from '../components/UI'
 import { useMediaQuery } from '../hooks/useMediaQuery'
-import { DEFAULT_MENU_COURSES } from '../utils/constants'
+import { DEFAULT_MENU_COURSES, RECIPE_CATEGORIES } from '../utils/constants'
 import {
   MONTHS_RU, WEEKDAYS_RU, daysInMonth, mondayIndex, formatRu,
   todayKey, toKey, parseLocalDate, addDays, monthKey as monthKeyOf,
@@ -105,6 +105,9 @@ export default function MenuPlanner({
   const [recipePhotoError, setRecipePhotoError] = useState(null)
   const [recipePrintMode, setRecipePrintMode] = useState(false)
   const [selectedForPrint, setSelectedForPrint] = useState(() => new Set())
+  const [recipeSearch, setRecipeSearch] = useState('')
+  const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
+  const [recipeSortMode, setRecipeSortMode] = useState('newest')
 
   const [sendMessage, setSendMessage] = useState(null)
   const [dayPasteText, setDayPasteText] = useState('')
@@ -228,7 +231,7 @@ export default function MenuPlanner({
   }
 
   function blankRecipeForm() {
-    return { name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null }
+    return { name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null, category: 'other' }
   }
 
   function openNewRecipeForm() {
@@ -297,6 +300,7 @@ export default function MenuPlanner({
       ingredients: recipe.ingredients.map((ing) => ({ productName: productNameById(ing.productId), qty: ing.qty })),
       comment: recipe.comment || '',
       photo: recipe.photo || null,
+      category: recipe.category || 'other',
     })
     setEditingRecipeId(recipe.id)
     setRecipeError(null)
@@ -369,7 +373,13 @@ export default function MenuPlanner({
       return
     }
     setRecipeError(null)
-    const payload = { name: recipeForm.name.trim(), ingredients, comment: recipeForm.comment.trim(), photo: recipeForm.photo || null }
+    const payload = {
+      name: recipeForm.name.trim(),
+      ingredients,
+      comment: recipeForm.comment.trim(),
+      photo: recipeForm.photo || null,
+      category: recipeForm.category || 'other',
+    }
     if (editingRecipeId) {
       setRecipes((prev) => prev.map((r) => (r.id === editingRecipeId ? { ...r, ...payload } : r)))
       setEditingRecipeId(null)
@@ -558,6 +568,20 @@ export default function MenuPlanner({
   }
 
   const recipeNames = useMemo(() => (recipes || []).map((r) => r.name), [recipes])
+
+  const visibleRecipes = useMemo(() => {
+    const q = recipeSearch.trim().toLowerCase()
+    let list = recipes
+    if (q) list = list.filter((r) => (r.name || '').toLowerCase().includes(q))
+    if (recipeCategoryFilter !== 'all') {
+      list = list.filter((r) => (r.category || 'other') === recipeCategoryFilter)
+    }
+    list = [...list]
+    if (recipeSortMode === 'newest') list.sort((a, b) => b.id - a.id)
+    else if (recipeSortMode === 'oldest') list.sort((a, b) => a.id - b.id)
+    else if (recipeSortMode === 'alpha') list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'))
+    return list
+  }, [recipes, recipeSearch, recipeCategoryFilter, recipeSortMode])
 
   function suggestionsFor(label) {
     const fromLibrary = dishLibrary?.[label] || []
@@ -1103,8 +1127,64 @@ export default function MenuPlanner({
             }
           >
             {recipes.length === 0 && <p className="text-sm text-slate-400 text-center py-2">Рецептов пока нет</p>}
+            {recipes.length > 0 && !recipePrintMode && (
+              <div className="mb-3">
+                <div className="relative mb-2">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    className={inputClass + ' pl-9'}
+                    placeholder="Поиск по названию…"
+                    value={recipeSearch}
+                    onChange={(e) => setRecipeSearch(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto mb-2">
+                  <button
+                    onClick={() => setRecipeCategoryFilter('all')}
+                    className={`shrink-0 min-h-[32px] px-3 rounded-full text-xs font-semibold whitespace-nowrap ${
+                      recipeCategoryFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    Все
+                  </button>
+                  {RECIPE_CATEGORIES.map((c) => (
+                    <button
+                      key={c.key}
+                      onClick={() => setRecipeCategoryFilter(c.key)}
+                      className={`shrink-0 min-h-[32px] px-3 rounded-full text-xs font-semibold whitespace-nowrap ${
+                        recipeCategoryFilter === c.key ? 'bg-slate-800 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto">
+                  {[
+                    { key: 'newest', label: 'Сначала новые' },
+                    { key: 'oldest', label: 'Сначала старые' },
+                    { key: 'alpha', label: 'По алфавиту' },
+                  ].map((s) => (
+                    <button
+                      key={s.key}
+                      onClick={() => setRecipeSortMode(s.key)}
+                      className={`shrink-0 min-h-[32px] px-3 rounded-full text-xs font-semibold whitespace-nowrap border ${
+                        recipeSortMode === s.key
+                          ? 'bg-orange-500 border-orange-500 text-white'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {recipes.length > 0 && visibleRecipes.length === 0 && (
+              <p className="text-sm text-slate-400 text-center py-2">Ничего не найдено</p>
+            )}
             <div className="flex flex-col gap-2">
-              {recipes.map((r) => {
+              {visibleRecipes.map((r) => {
                 const isExpanded = expandedRecipeId === r.id
                 const isEditing = editingRecipeId === r.id
                 const isSelected = selectedForPrint.has(r.id)
@@ -1833,6 +1913,17 @@ function RecipeFormFields({
           value={recipeForm.name}
           onChange={(e) => setRecipeForm((f) => ({ ...f, name: e.target.value }))}
         />
+      </Field>
+      <Field label="Тип блюда">
+        <select
+          className={inputClass}
+          value={recipeForm.category || 'other'}
+          onChange={(e) => setRecipeForm((f) => ({ ...f, category: e.target.value }))}
+        >
+          {RECIPE_CATEGORIES.map((c) => (
+            <option key={c.key} value={c.key}>{c.label}</option>
+          ))}
+        </select>
       </Field>
       {recipeForm.ingredients.map((ing, idx) => (
         <div key={idx} className="flex gap-2 mb-2">

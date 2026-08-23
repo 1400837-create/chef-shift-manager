@@ -114,6 +114,18 @@ export const DEFAULT_MENU_COURSES = ['Суп', 'Горячее', 'Гарнир',
 
 export const KUCHENLEITERIN_EMAIL_KEY = 'kuchenleiterinEmail'
 
+// Recipe type, for filtering/grouping the Рецепты list. 'other' is the
+// fallback for recipes saved before this field existed.
+export const RECIPE_CATEGORIES = [
+  { key: 'main', label: 'Основное' },
+  { key: 'side', label: 'Гарнир' },
+  { key: 'appetizer', label: 'Закуска' },
+  { key: 'soup', label: 'Суп' },
+  { key: 'salad', label: 'Салат' },
+  { key: 'spread', label: 'Намазка' },
+  { key: 'other', label: 'Другое' },
+]
+
 // Рубрика — a different axis from "zone" (zone = where it's physically
 // stored; category = what kind of product it is), used for grouping/sorting
 // the catalog and balances.
