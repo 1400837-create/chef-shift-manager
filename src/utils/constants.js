@@ -4,6 +4,21 @@ export const TASK_CATEGORIES = [
   { key: 'cleaning', label: 'Уборка' },
 ]
 
+// Categories for the chef/manager's own task list on Дашборд (separate from
+// TASK_CATEGORIES above, which is the daily prep list handed to Küchenhilfe)
+// — broader, not tied to a single shift, spans everything from cooking to
+// paperwork.
+export const MY_TASK_CATEGORIES = [
+  { key: 'cooking', label: 'Приготовление' },
+  { key: 'cleaning', label: 'Уборка' },
+  { key: 'prep', label: 'Подготовка' },
+  { key: 'purchasing', label: 'Необходимость закупки' },
+  { key: 'inventory', label: 'Инвентарь' },
+  { key: 'admin', label: 'Административные вопросы' },
+  { key: 'documents', label: 'Документы' },
+  { key: 'planning', label: 'Организация и планирование' },
+]
+
 export const DAILY_CLEANING_ITEMS = [
   'Рабочие поверхности вымыты и продезинфицированы',
   'Плита / индукция очищена',

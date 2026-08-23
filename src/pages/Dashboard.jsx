@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, AlertTriangle, UtensilsCrossed, Plus, CalendarClock, Sunrise, Sunset, History, Download, Upload, LayoutDashboard, SprayCan } from 'lucide-react'
+import { ClipboardList, ListChecks, AlertTriangle, UtensilsCrossed, Plus, Check, CalendarClock, Download, Upload, LayoutDashboard, SprayCan } from 'lucide-react'
 import { Section, CheckRow, Badge, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton, UndoRedoBar } from '../components/UI'
-import { TASK_CATEGORIES } from '../utils/constants'
-import { todayKey, formatRu, monthKey, parseLocalDate } from '../utils/dateUtils'
+import { TASK_CATEGORIES, MY_TASK_CATEGORIES } from '../utils/constants'
+import { todayKey, formatRu, monthKey, parseLocalDate, daysBetween, startOfDay } from '../utils/dateUtils'
 import { menuDeadlineInfo, urgencyColor } from '../utils/deadlines'
 import { downloadBackup, parseBackupFile, applyBackup } from '../utils/backup'
 import { printReport } from '../utils/printReport'
@@ -11,7 +11,7 @@ import { coursesForDay } from '../utils/menuCourses'
 import Cleaning from './Cleaning'
 
 export default function Dashboard({
-  shiftChecklist, setShiftChecklist,
+  myTasks, setMyTasks,
   kuchenhilfeTasks, setKuchenhilfeTasks,
   recountCatalog, recounts, purchases, productions, catalogWaste, recipes, plannedPurchases,
   menuData, onNavigate,
@@ -25,16 +25,35 @@ export default function Dashboard({
   const [dashTab, setDashTab] = useState('overview')
   const today = todayKey()
   const now = new Date()
-  const day = shiftChecklist[today] || {
-    kitchenClean: false, tasksAssigned: false, leftoversPacked: false, cleaningDone: false,
-  }
   const tasksToday = kuchenhilfeTasks[today] || []
 
   const [newTaskText, setNewTaskText] = useState('')
   const [newTaskCategory, setNewTaskCategory] = useState('prep')
 
-  function updateDay(patch) {
-    setShiftChecklist((prev) => ({ ...prev, [today]: { ...day, ...patch } }))
+  const [newMyTaskText, setNewMyTaskText] = useState('')
+  const [newMyTaskCategory, setNewMyTaskCategory] = useState(MY_TASK_CATEGORIES[0].key)
+  const [newMyTaskDeadline, setNewMyTaskDeadline] = useState('')
+
+  function addMyTask() {
+    if (!newMyTaskText.trim()) return
+    const task = {
+      id: Date.now(),
+      category: newMyTaskCategory,
+      text: newMyTaskText.trim(),
+      done: false,
+      deadline: newMyTaskDeadline || null,
+    }
+    setMyTasks((prev) => [...prev, task])
+    setNewMyTaskText('')
+    setNewMyTaskDeadline('')
+  }
+
+  function toggleMyTask(id) {
+    setMyTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)))
+  }
+
+  function removeMyTask(id) {
+    setMyTasks((prev) => prev.filter((t) => t.id !== id))
   }
 
   function addTask() {
@@ -78,12 +97,6 @@ export default function Dashboard({
   }, [menuData])
 
   const menuDl = menuDeadlineInfo(now)
-
-  const [showHistory, setShowHistory] = useState(false)
-  const historyDays = Object.keys(shiftChecklist)
-    .filter((k) => k !== today)
-    .sort((a, b) => (a < b ? 1 : -1))
-    .slice(0, 14)
 
   const [importPreview, setImportPreview] = useState(null)
   const [importMessage, setImportMessage] = useState(null)
@@ -162,35 +175,62 @@ export default function Dashboard({
 
       {dashTab === 'overview' && (
       <>
-      <Section
-        title="Мало на складе"
-        icon={AlertTriangle}
-        right={lowStockItems.length > 0 && <Badge color="red">{lowStockItems.length}</Badge>}
-      >
-        {lowStockItems.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-2">Низких остатков нет</p>
-        ) : (
-          <div className="flex flex-col gap-2 mb-2">
-            {lowStockItems.slice(0, 6).map((row) => (
-              <div
-                key={row.product.id}
-                className="flex items-center justify-between gap-2 rounded-xl border-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30 px-3 py-2"
-              >
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
-                <span className="text-xs font-semibold text-red-700 dark:text-red-300 shrink-0">{row.balance} {row.product.unit}</span>
+      <div className="rounded-2xl shadow-md border-2 border-orange-300 dark:border-orange-700 mb-4 overflow-hidden bg-white dark:bg-slate-800">
+        <div className="flex items-center gap-2 px-4 py-3 bg-orange-500 dark:bg-orange-600">
+          <ListChecks size={20} className="text-white shrink-0" />
+          <h2 className="font-bold text-white text-[15px]">Мои задачи</h2>
+        </div>
+        <div className="p-3">
+          <div className="flex flex-col gap-2 mb-3">
+            <Field label="Новая задача">
+              <input
+                className={inputClass}
+                placeholder="Например: заказать инвентарь"
+                value={newMyTaskText}
+                onChange={(e) => setNewMyTaskText(e.target.value)}
+              />
+            </Field>
+            <div className="flex gap-2">
+              <div className="flex-1 min-w-0">
+                <select
+                  className={inputClass}
+                  value={newMyTaskCategory}
+                  onChange={(e) => setNewMyTaskCategory(e.target.value)}
+                >
+                  {MY_TASK_CATEGORIES.map((c) => (
+                    <option key={c.key} value={c.key}>{c.label}</option>
+                  ))}
+                </select>
               </div>
-            ))}
-            {lowStockItems.length > 6 && (
-              <p className="text-xs text-slate-400 text-center">
-                Показаны первые 6 из {lowStockItems.length} — остальные в «Закупке»
-              </p>
-            )}
+              <div className="w-36 shrink-0">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={newMyTaskDeadline}
+                  onChange={(e) => setNewMyTaskDeadline(e.target.value)}
+                />
+              </div>
+            </div>
+            <BigButton onClick={addMyTask} icon={Plus} disabled={!newMyTaskText.trim()}>Добавить задачу</BigButton>
           </div>
-        )}
-        {lowStockItems.length > 0 && (
-          <BigButton onClick={() => onNavigate('shopping')} color="red">Перейти в закупку</BigButton>
-        )}
-      </Section>
+
+          {MY_TASK_CATEGORIES.map((cat) => {
+            const items = myTasks.filter((t) => t.category === cat.key)
+            if (items.length === 0) return null
+            return (
+              <div key={cat.key} className="mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">{cat.label}</p>
+                {items.map((t) => (
+                  <MyTaskRow key={t.id} task={t} onToggle={() => toggleMyTask(t.id)} onRemove={() => removeMyTask(t.id)} />
+                ))}
+              </div>
+            )
+          })}
+          {myTasks.length === 0 && (
+            <p className="text-sm text-slate-400 text-center py-3">Задач пока нет</p>
+          )}
+        </div>
+      </div>
 
       <Section title="Меню на сегодня" icon={UtensilsCrossed}>
         {todayCourses.length === 0 ? (
@@ -208,26 +248,6 @@ export default function Dashboard({
           </div>
         )}
         <BigButton onClick={() => onNavigate('menu')} color="outline">Открыть меню</BigButton>
-      </Section>
-
-      <Section title="Открытие смены" icon={Sunrise}>
-        <CheckRow
-          label="Кухня проверена на чистоту"
-          checked={day.kitchenClean}
-          onChange={(v) => updateDay({ kitchenClean: v })}
-          tone="urgent"
-        />
-        {!day.kitchenClean && (
-          <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2 mb-2">
-            <AlertTriangle size={16} className="shrink-0" />
-            Если кухня грязная — смену начинаем с уборки, прежде чем готовить.
-          </div>
-        )}
-        <CheckRow
-          label="Задачи Küchenhilfe выданы"
-          checked={day.tasksAssigned}
-          onChange={(v) => updateDay({ tasksAssigned: v })}
-        />
       </Section>
 
       <Section
@@ -293,52 +313,33 @@ export default function Dashboard({
         </div>
       </Section>
 
-      <Section title="Закрытие смены" icon={Sunset}>
-        <CheckRow
-          label="Остатки упакованы, подписаны (дата/содержимое)"
-          checked={day.leftoversPacked}
-          onChange={(v) => updateDay({ leftoversPacked: v })}
-        />
-        <CheckRow
-          label="Базовая уборка завершена"
-          checked={day.cleaningDone}
-          onChange={(v) => updateDay({ cleaningDone: v })}
-        />
-      </Section>
-
       <Section
-        title="История смен"
-        icon={History}
-        right={
-          <button onClick={() => setShowHistory((v) => !v)} className="text-xs font-semibold text-orange-600">
-            {showHistory ? 'Скрыть' : 'Показать'}
-          </button>
-        }
+        title="Мало на складе"
+        icon={AlertTriangle}
+        right={lowStockItems.length > 0 && <Badge color="red">{lowStockItems.length}</Badge>}
       >
-        {showHistory && (
-          historyDays.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-3">Пока нет прошлых смен</p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {historyDays.map((dateKey) => {
-                const d = shiftChecklist[dateKey]
-                const tasks = kuchenhilfeTasks[dateKey] || []
-                const tasksDone = tasks.filter((t) => t.done).length
-                const openingDone = d.kitchenClean && d.tasksAssigned
-                const closingDone = d.leftoversPacked && d.cleaningDone
-                return (
-                  <li key={dateKey} className="py-2.5 flex items-center justify-between">
-                    <span className="text-sm text-slate-700 dark:text-slate-200">{formatRu(parseLocalDate(dateKey))}</span>
-                    <div className="flex items-center gap-1.5">
-                      {tasks.length > 0 && <Badge color="slate">Задачи {tasksDone}/{tasks.length}</Badge>}
-                      <Badge color={openingDone ? 'green' : 'slate'}>Открытие</Badge>
-                      <Badge color={closingDone ? 'green' : 'slate'}>Закрытие</Badge>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )
+        {lowStockItems.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-2">Низких остатков нет</p>
+        ) : (
+          <div className="flex flex-col gap-2 mb-2">
+            {lowStockItems.slice(0, 6).map((row) => (
+              <div
+                key={row.product.id}
+                className="flex items-center justify-between gap-2 rounded-xl border-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30 px-3 py-2"
+              >
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{row.product.name}</p>
+                <span className="text-xs font-semibold text-red-700 dark:text-red-300 shrink-0">{row.balance} {row.product.unit}</span>
+              </div>
+            ))}
+            {lowStockItems.length > 6 && (
+              <p className="text-xs text-slate-400 text-center">
+                Показаны первые 6 из {lowStockItems.length} — остальные в «Закупке»
+              </p>
+            )}
+          </div>
+        )}
+        {lowStockItems.length > 0 && (
+          <BigButton onClick={() => onNavigate('shopping')} color="red">Перейти в закупку</BigButton>
         )}
       </Section>
 
@@ -390,6 +391,49 @@ function DeadlineRow({ label, date, daysLeft }) {
         <p className="text-xs text-slate-400">до {date}</p>
       </div>
       <Badge color={color}>{daysLeft < 0 ? 'Просрочено' : daysLeft === 0 ? 'Сегодня!' : `${daysLeft} дн.`}</Badge>
+    </div>
+  )
+}
+
+// Same checkbox-row look as the shared CheckRow component, but with room for
+// a deadline badge — CheckRow's sublabel slot is fixed green (built for "✓
+// done by so-and-so"), not suitable for an urgency color, so this is its own
+// small component instead of bending CheckRow to a second purpose.
+function MyTaskRow({ task, onToggle, onRemove }) {
+  const urgency = !task.done && task.deadline
+    ? { daysLeft: daysBetween(startOfDay(new Date()), parseLocalDate(task.deadline)) }
+    : null
+  const urgencyColorValue = urgency ? urgencyColor(urgency.daysLeft) : null
+
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <label
+        className={`flex-1 flex items-center gap-3 min-h-[52px] px-3 py-2.5 rounded-xl border cursor-pointer select-none active:scale-[0.99] transition-all ${
+          task.done
+            ? 'bg-green-50 border-green-300 dark:bg-green-900/30 dark:border-green-700'
+            : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'
+        }`}
+      >
+        <input type="checkbox" checked={task.done} onChange={onToggle} className="sr-only" />
+        <span
+          className={`shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center ${
+            task.done ? 'bg-green-600 border-green-600' : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
+          }`}
+        >
+          {task.done && <Check size={18} strokeWidth={3} className="text-white" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={`block text-[15px] leading-snug ${task.done ? 'text-green-800 dark:text-green-300 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
+            {task.text}
+          </span>
+        </span>
+        {urgency && (
+          <Badge color={urgencyColorValue}>
+            {urgency.daysLeft < 0 ? 'Просрочено' : urgency.daysLeft === 0 ? 'Сегодня' : `${urgency.daysLeft} дн.`}
+          </Badge>
+        )}
+      </label>
+      <ConfirmDeleteButton onConfirm={onRemove} size="w-11 h-11" iconSize={18} />
     </div>
   )
 }

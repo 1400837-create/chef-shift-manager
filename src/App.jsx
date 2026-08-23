@@ -72,8 +72,11 @@ export default function App() {
     setTab('recipes')
   }
 
-  const [shiftChecklist, setShiftChecklist] = useLocalStorage('shiftChecklist', {})
   const [kuchenhilfeTasks, setKuchenhilfeTasks] = useLocalStorage('kuchenhilfeTasks', {})
+  // The chef/manager's own task list on Дашборд — not date-keyed like
+  // kuchenhilfeTasks (which resets to "today's list"); these persist until
+  // done or deleted, since admin/planning/documents tasks aren't a daily thing.
+  const [myTasks, setMyTasks] = useLocalStorage('myTasks', [])
 
   const [menuData, setMenuData] = useLocalStorage('menuData', {})
   const [settings, setSettings] = useLocalStorage('settings', { kuchenleiterinEmail: '' })
@@ -109,7 +112,7 @@ export default function App() {
   // stacks over the same arrays could let an undo on one tab silently skip
   // over a change made from the other.
   const dashboardHistory = useTabHistory({
-    shiftChecklist: [shiftChecklist, setShiftChecklist],
+    myTasks: [myTasks, setMyTasks],
     kuchenhilfeTasks: [kuchenhilfeTasks, setKuchenhilfeTasks],
     settings: [settings, setSettings],
   })
@@ -255,7 +258,10 @@ export default function App() {
     const dailyState = dailyCleaning[today] || {}
     const dailyIncomplete = DAILY_CLEANING_ITEMS.some((_, idx) => !dailyState[idx])
 
-    const openingIncomplete = !shiftChecklist[today]?.kitchenClean || !shiftChecklist[today]?.tasksAssigned
+    const myTasksDue = myTasks.some((t) => {
+      if (t.done || !t.deadline) return false
+      return daysBetween(startOfDay(now), parseLocalDate(t.deadline)) <= 0
+    })
 
     const shoppingNeeded = recountCatalog.some((product) => {
       if (product.archived) return false
@@ -269,15 +275,15 @@ export default function App() {
     return {
       // Уборка moved inside Дашборд (its own sub-tab there) rather than a
       // top-level nav entry — an incomplete daily checklist still needs to
-      // surface somewhere, so it rolls into the same dot as opening tasks.
-      dashboard: openingIncomplete || dailyIncomplete,
+      // surface somewhere, so it rolls into the same dot as an overdue task.
+      dashboard: dailyIncomplete || myTasksDue,
       inventory: expiringSoon,
       menu: menuUrgent,
       finances: financeOverspent,
       shopping: shoppingNeeded,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inventoryItems, dailyCleaning, shiftChecklist, today, recountCatalog, recounts, purchases, productions, recipes, plannedPurchases, catalogWaste, advance, receipts])
+  }, [inventoryItems, dailyCleaning, myTasks, today, recountCatalog, recounts, purchases, productions, recipes, plannedPurchases, catalogWaste, advance, receipts])
 
   // Best-effort reminders: GitHub Pages is static (no server), so there is no
   // real background push — this only fires while the app/tab is open.
@@ -309,13 +315,28 @@ export default function App() {
       if (alerts.shopping) {
         notifyOnce(`shopping_${d}`, 'LA CHEF — мало на складе', 'Есть товары с низким остатком, ещё не добавленные в закупку')
       }
+      // Personal task deadlines (Мои задачи на Дашборде) — once a task's
+      // deadline arrives (or passes) and it's still open, notify once per
+      // day it stays that way rather than just once ever, so an overdue
+      // task keeps nudging instead of going silent after the first day.
+      myTasks.forEach((t) => {
+        if (t.done || !t.deadline) return
+        const daysLeft = daysBetween(startOfDay(new Date()), parseLocalDate(t.deadline))
+        if (daysLeft <= 0) {
+          notifyOnce(
+            `mytask_${t.id}_${d}`,
+            'LA CHEF — задача',
+            `${daysLeft < 0 ? 'Просрочена' : 'Срок сегодня'}: ${t.text}`
+          )
+        }
+      })
     }
 
     check()
     const id = setInterval(check, 5 * 60 * 1000)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notificationsEnabled, alerts.shopping, alerts.finances])
+  }, [notificationsEnabled, alerts.shopping, alerts.finances, myTasks])
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
@@ -390,8 +411,8 @@ export default function App() {
       <main className="max-w-lg md:max-w-none mx-auto px-3 md:px-6 lg:px-10 pt-3 pb-24">
         {tab === 'dashboard' && (
           <Dashboard
-            shiftChecklist={shiftChecklist}
-            setShiftChecklist={setShiftChecklist}
+            myTasks={myTasks}
+            setMyTasks={setMyTasks}
             kuchenhilfeTasks={kuchenhilfeTasks}
             setKuchenhilfeTasks={setKuchenhilfeTasks}
             recountCatalog={recountCatalog}
