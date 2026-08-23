@@ -55,11 +55,19 @@ const KEY_ESCAPES = [
   [']', '%5D'],
 ]
 
+// Firebase also rejects "" (empty string) as a key outright — distinct from
+// the forbidden-character case above, so it needs its own placeholder.
+// "%00" can't collide with the character-escaping scheme: a literal "%00" in
+// a real key gets "%" escaped to "%25" first, becoming "%2500", never "%00".
+const EMPTY_KEY_PLACEHOLDER = '%00'
+
 function escapeKey(key) {
+  if (key === '') return EMPTY_KEY_PLACEHOLDER
   return KEY_ESCAPES.reduce((acc, [ch, esc]) => acc.split(ch).join(esc), key)
 }
 
 function unescapeKey(key) {
+  if (key === EMPTY_KEY_PLACEHOLDER) return ''
   return KEY_ESCAPES.reduceRight((acc, [ch, esc]) => acc.split(esc).join(ch), key)
 }
 
