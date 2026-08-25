@@ -72,6 +72,13 @@ function unescapeKey(key) {
 }
 
 function sanitizeForFirebase(value) {
+  // Firebase's set() throws synchronously (not a rejected promise) if
+  // `undefined` appears anywhere in the payload — e.g. a receipt's
+  // `by: staffName || undefined` when no staff name is set. A synchronous
+  // throw from inside pushToCloud (called from every useLocalStorage write)
+  // would propagate straight out of a React effect and crash the whole app,
+  // so undefined is normalized to null (Firebase's own "no value" already).
+  if (value === undefined) return null
   if (Array.isArray(value)) return value.map(sanitizeForFirebase)
   if (value && typeof value === 'object') {
     const out = {}
@@ -102,10 +109,15 @@ function roomKeyRef(key) {
 export function pushToCloud(key, value) {
   const r = roomKeyRef(key)
   if (!r) return
-  set(r, sanitizeForFirebase(value)).catch(() => {
-    // Best-effort — offline, or the room is unreachable. The local write
-    // already succeeded, so nothing is lost; it'll catch up once connected.
-  })
+  try {
+    // set() can throw synchronously (invalid data) as well as reject its
+    // promise (offline/network) — both must be swallowed here. The local
+    // write already succeeded before this runs, so nothing is lost either
+    // way; a failed cloud push just means it'll catch up once fixed/online.
+    set(r, sanitizeForFirebase(value)).catch(() => {})
+  } catch {
+    // ignore — see above
+  }
 }
 
 // Called once per mounted useLocalStorage instance — attaches (and
