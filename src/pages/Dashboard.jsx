@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, ListChecks, AlertTriangle, UtensilsCrossed, Plus, Check, CalendarClock, Download, Upload, LayoutDashboard, SprayCan, RefreshCw, Copy } from 'lucide-react'
+import { ClipboardList, ListChecks, AlertTriangle, UtensilsCrossed, Plus, Check, CalendarClock, Download, Upload, LayoutDashboard, SprayCan, RefreshCw, Copy, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Section, CheckRow, Badge, Field, inputClass, BigButton, PrintButton, ConfirmDeleteButton, UndoRedoBar } from '../components/UI'
 import { TASK_CATEGORIES, MY_TASK_CATEGORIES } from '../utils/constants'
-import { todayKey, formatRu, monthKey, parseLocalDate, daysBetween, startOfDay } from '../utils/dateUtils'
+import { todayKey, formatRu, formatRuShort, monthKey, parseLocalDate, daysBetween, startOfDay } from '../utils/dateUtils'
 import { menuDeadlineInfo, urgencyColor } from '../utils/deadlines'
 import { downloadBackup, parseBackupFile, applyBackup } from '../utils/backup'
 import { getSyncConfig, enableSync, disableSync, generateSyncCode } from '../utils/sync'
@@ -26,7 +26,17 @@ export default function Dashboard({
   const [dashTab, setDashTab] = useState('overview')
   const today = todayKey()
   const now = new Date()
-  const tasksToday = kuchenhilfeTasks[today] || []
+  // Küchenhilfe's daily list is a fresh, empty checklist every day by design
+  // (see addTask/toggleTask/removeTask below, all keyed by date) — but with
+  // no way to look at another day, yesterday's finished list reads as if it
+  // had been deleted the moment the date rolls over. This lets the same
+  // Section page back/forward through any day instead of only ever showing
+  // today's (still-empty) one.
+  const [taskDayOffset, setTaskDayOffset] = useState(0)
+  const viewedTaskDate = new Date(now)
+  viewedTaskDate.setDate(viewedTaskDate.getDate() + taskDayOffset)
+  const viewedTaskDateKey = todayKey(viewedTaskDate)
+  const tasksToday = kuchenhilfeTasks[viewedTaskDateKey] || []
 
   const [newTaskText, setNewTaskText] = useState('')
   const [newTaskCategory, setNewTaskCategory] = useState('prep')
@@ -60,21 +70,21 @@ export default function Dashboard({
   function addTask() {
     if (!newTaskText.trim()) return
     const task = { id: Date.now(), category: newTaskCategory, text: newTaskText.trim(), done: false }
-    setKuchenhilfeTasks((prev) => ({ ...prev, [today]: [...(prev[today] || []), task] }))
+    setKuchenhilfeTasks((prev) => ({ ...prev, [viewedTaskDateKey]: [...(prev[viewedTaskDateKey] || []), task] }))
     setNewTaskText('')
   }
 
   function toggleTask(id) {
     setKuchenhilfeTasks((prev) => ({
       ...prev,
-      [today]: (prev[today] || []).map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
+      [viewedTaskDateKey]: (prev[viewedTaskDateKey] || []).map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
     }))
   }
 
   function removeTask(id) {
     setKuchenhilfeTasks((prev) => ({
       ...prev,
-      [today]: (prev[today] || []).filter((t) => t.id !== id),
+      [viewedTaskDateKey]: (prev[viewedTaskDateKey] || []).filter((t) => t.id !== id),
     }))
   }
 
@@ -166,7 +176,7 @@ export default function Dashboard({
   function printTasks() {
     printReport({
       type: 'tasks',
-      date: formatRu(now),
+      date: formatRu(viewedTaskDate),
       tasksByCategory: TASK_CATEGORIES.map((cat) => ({
         label: cat.label,
         items: tasksToday.filter((t) => t.category === cat.key).map((t) => t.text),
@@ -292,6 +302,26 @@ export default function Dashboard({
         icon={ClipboardList}
         right={<PrintButton onClick={printTasks} />}
       >
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <button
+            onClick={() => setTaskDayOffset((v) => v - 1)}
+            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            onClick={() => setTaskDayOffset(0)}
+            className="text-sm font-semibold text-slate-600 dark:text-slate-300"
+          >
+            {taskDayOffset === 0 ? 'Сегодня' : formatRuShort(viewedTaskDate)}
+          </button>
+          <button
+            onClick={() => setTaskDayOffset((v) => v + 1)}
+            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
         <div className="flex flex-col gap-2 mb-3">
           <Field label="Новая задача">
             <input
@@ -340,7 +370,9 @@ export default function Dashboard({
           )
         })}
         {tasksToday.length === 0 && (
-          <p className="text-sm text-slate-400 text-center py-3">Задач на сегодня пока нет</p>
+          <p className="text-sm text-slate-400 text-center py-3">
+            {taskDayOffset === 0 ? 'Задач на сегодня пока нет' : 'Задач за этот день нет'}
+          </p>
         )}
       </Section>
 
