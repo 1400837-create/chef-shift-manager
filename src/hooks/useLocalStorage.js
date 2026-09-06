@@ -30,6 +30,17 @@ export function useLocalStorage(key, initialValue) {
   // without this, two devices with the sync open would just bounce the same
   // write back and forth.
   const skipNextPush = useRef(false)
+  // Guards against a worse version of that same echo: a FRESH device (empty
+  // localStorage, sync already on) mounts with `value` still at its local
+  // default, and the very first render's one-time migration/defaulting
+  // effects elsewhere in the app (e.g. minQtyDefaultsApplied) can touch this
+  // same state before Firebase's first response arrives — that's no longer
+  // "first render" by the time it happens, so without this guard it would
+  // push straight through and overwrite the real cloud data with the empty
+  // local default. Starts false whenever sync is enabled, and only flips
+  // true once subscribeToCloud confirms it's heard from Firebase for this
+  // key (or confirms there's nothing to hear because sync is off).
+  const readyToPush = useRef(false)
 
   useEffect(() => {
     if (firstRender.current) {
@@ -47,16 +58,24 @@ export function useLocalStorage(key, initialValue) {
     }
     if (skipNextPush.current) {
       skipNextPush.current = false
-    } else {
+    } else if (readyToPush.current) {
       pushToCloud(key, value)
     }
+    // else: sync is on but we haven't confirmed the cloud's actual state for
+    // this key yet — the localStorage write above still happened, so this
+    // change isn't lost; it (or whatever the cloud turns out to hold) syncs
+    // normally as soon as readyToPush flips true.
   }, [key, value])
 
   useEffect(() => {
-    return subscribeToCloud(key, (remoteValue) => {
-      skipNextPush.current = true
-      setValue(remoteValue)
-    })
+    return subscribeToCloud(
+      key,
+      (remoteValue) => {
+        skipNextPush.current = true
+        setValue(remoteValue)
+      },
+      (ready) => { readyToPush.current = ready }
+    )
   }, [key])
 
   return [value, setValue]

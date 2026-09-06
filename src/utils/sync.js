@@ -123,16 +123,27 @@ export function pushToCloud(key, value) {
 // Called once per mounted useLocalStorage instance — attaches (and
 // re-attaches, if sync gets turned on/off/switched to a different room
 // while already mounted) a live listener for that one key.
-export function subscribeToCloud(key, onRemoteChange) {
+//
+// onReadyChange(false/true) brackets each (re)attach: false the instant a
+// new subscription attempt starts, true once we've actually heard from
+// Firebase for this key (or confirmed there's nothing to hear — sync is off
+// or misconfigured). useLocalStorage uses this to hold off pushing this
+// device's local value until it's confirmed safe — see the comment there
+// for the empty-overwrite bug this closes.
+export function subscribeToCloud(key, onRemoteChange, onReadyChange) {
   let detachValue = null
 
   function attach() {
     if (detachValue) { detachValue(); detachValue = null }
+    onReadyChange?.(false)
     const r = roomKeyRef(key)
-    if (!r) return
+    if (!r) {
+      onReadyChange?.(true)
+      return
+    }
     detachValue = onValue(r, (snapshot) => {
-      if (!snapshot.exists()) return
-      onRemoteChange(restoreFromFirebase(snapshot.val()))
+      if (snapshot.exists()) onRemoteChange(restoreFromFirebase(snapshot.val()))
+      onReadyChange?.(true)
     })
   }
 
