@@ -155,9 +155,15 @@ function buildShoppingListHtml(payload) {
         const storeMark = item.store
           ? `<b style="color:#c00;">${escapeHtml(item.store)}</b>${item.comment ? '<br>' : ''}`
           : ''
+        // "Обратить внимание" marker. A plain "!" in a box rather than a
+        // flag glyph: it renders in every print font, unlike ⚑/emoji which
+        // can fall back to a tofu box on some printers.
+        const flagMark = item.flagged
+          ? '<span style="display:inline-block;border:1.5px solid #c00;color:#c00;font-weight:bold;width:13px;text-align:center;line-height:15px;margin-right:5px;">!</span>'
+          : ''
         return `
         <tr>
-          <td>${escapeHtml(item.name)}</td>
+          <td>${flagMark}${escapeHtml(item.name)}</td>
           <td>${escapeHtml(item.unit)}</td>
           <td>${escapeHtml(item.qty)}</td>
           <td>${storeMark}${escapeHtml(item.comment || '')}</td>

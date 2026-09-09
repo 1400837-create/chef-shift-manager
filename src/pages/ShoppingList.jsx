@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store, Check, Printer } from 'lucide-react'
+import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store, Check, Printer, Flag } from 'lucide-react'
 import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
 import { formatRu, todayKey, parseLocalDate, addDays, monthKey, toKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
@@ -39,6 +39,9 @@ export default function ShoppingList({
   // what gets printed — lets a run to a specific store print just its own
   // items instead of the whole plan.
   const [storeFilter, setStoreFilter] = useState('all')
+  // Combines with the store filter rather than replacing it, so "отмеченные
+  // в этом магазине" is reachable too.
+  const [flaggedOnly, setFlaggedOnly] = useState(false)
   // Off by default — a planned-purchase list is often checked off over
   // several days, so baking today's date into it by default would be
   // misleading. The date is opt-in, for when printing for one specific trip.
@@ -198,6 +201,13 @@ export default function ShoppingList({
     if (alreadyPlanned) parts.push(`уже в списке (не тронуто): ${alreadyPlanned}`)
     if (missingDishes.size) parts.push(`нет рецепта для: ${Array.from(missingDishes).join(', ')}`)
     setMenuImportResult(parts.join(', '))
+  }
+
+  // Deliberately just a marker, not a severity level: it means "look at
+  // this one" — which may or may not be urgent — so it only colours its own
+  // icon and never restyles the row.
+  function toggleFlag(id) {
+    setPlannedPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, flagged: !p.flagged } : p)))
   }
 
   function setPlannedComment(id, value) {
@@ -398,17 +408,25 @@ export default function ShoppingList({
     return [...byLower.values()].sort((a, b) => a.localeCompare(b, 'ru'))
   }, [recountCatalog, plannedPurchases])
 
+  const flaggedCount = useMemo(
+    () => plannedPurchases.filter((p) => p.flagged).length,
+    [plannedPurchases]
+  )
+
   const visiblePlannedPurchases = useMemo(() => {
-    if (storeFilter === 'all') return sortedPlannedPurchases
-    return sortedPlannedPurchases.filter((p) => (p.store || '') === storeFilter)
+    let list = sortedPlannedPurchases
+    if (storeFilter !== 'all') list = list.filter((p) => (p.store || '') === storeFilter)
+    if (flaggedOnly) list = list.filter((p) => p.flagged)
+    return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedPlannedPurchases, storeFilter])
+  }, [sortedPlannedPurchases, storeFilter, flaggedOnly])
 
   // Defaults to whatever the store filter is showing; selection mode passes
   // just the ticked rows so you can print an arbitrary subset too.
   function printList(itemsToPrint = visiblePlannedPurchases) {
     const titleParts = ['Запланированная закупка']
     if (storeFilter !== 'all') titleParts.push(storeFilter)
+    if (flaggedOnly) titleParts.push('отмеченные')
     if (includeDate && printDate) titleParts.push(formatRu(parseLocalDate(printDate)))
     printReport({
       type: 'shopping-list',
@@ -427,6 +445,7 @@ export default function ShoppingList({
           // several of them — filtered to one store, every row would repeat
           // the same name for nothing.
           store: storeFilter === 'all' ? (p.store || '') : '',
+          flagged: !!p.flagged,
         }
       }),
     })
@@ -708,6 +727,18 @@ export default function ShoppingList({
                 ))}
               </div>
             )}
+            {flaggedCount > 0 && (
+              <div className="flex">
+                <button
+                  onClick={() => setFlaggedOnly((v) => !v)}
+                  className={`shrink-0 min-h-[32px] px-3 rounded-full text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 ${
+                    flaggedOnly ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  <Flag size={13} fill="currentColor" /> Только отмеченные ({flaggedCount})
+                </button>
+              </div>
+            )}
             <label className="flex items-center gap-2 text-xs text-slate-500">
               <input
                 type="checkbox"
@@ -775,7 +806,9 @@ export default function ShoppingList({
           <p className="text-sm text-slate-400 text-center py-3">Список закупки пуст</p>
         )}
         {plannedPurchases.length > 0 && visiblePlannedPurchases.length === 0 && (
-          <p className="text-sm text-slate-400 text-center py-3">Нет товаров для магазина «{storeFilter}»</p>
+          <p className="text-sm text-slate-400 text-center py-3">
+            {storeFilter === 'all' ? 'Нет отмеченных товаров' : `Нет товаров для «${storeFilter}»`}
+          </p>
         )}
         <div className="flex flex-col gap-2">
           {visiblePlannedPurchases.map((p) => {
@@ -847,6 +880,15 @@ export default function ShoppingList({
                   </div>
                   {!selectionMode && (
                     <>
+                      <button
+                        onClick={() => toggleFlag(p.id)}
+                        className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
+                          p.flagged ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600'
+                        }`}
+                        title={p.flagged ? 'Снять отметку' : 'Обратить внимание'}
+                      >
+                        <Flag size={17} fill={p.flagged ? 'currentColor' : 'none'} />
+                      </button>
                       <button
                         onClick={() => setOpenPlannedStore(storeOpen ? null : p.id)}
                         className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
