@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare } from 'lucide-react'
+import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store } from 'lucide-react'
 import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
 import { formatRu, todayKey, parseLocalDate, addDays, monthKey, toKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
@@ -34,6 +34,16 @@ export default function ShoppingList({
   const [menuImportExcluded, setMenuImportExcluded] = useState(() => new Set())
   const [menuImportResult, setMenuImportResult] = useState(null)
   const [openPlannedComment, setOpenPlannedComment] = useState(null)
+  const [openPlannedStore, setOpenPlannedStore] = useState(null)
+  // 'all' shows everything; picking one filters both the on-screen list and
+  // what gets printed — lets a run to a specific store print just its own
+  // items instead of the whole plan.
+  const [storeFilter, setStoreFilter] = useState('all')
+  // Off by default — a planned-purchase list is often checked off over
+  // several days, so baking today's date into it by default would be
+  // misleading. The date is opt-in, for when printing for one specific trip.
+  const [includeDate, setIncludeDate] = useState(false)
+  const [printDate, setPrintDate] = useState(todayKey())
   const now = new Date()
 
   const productSuggestions = useMemo(() => {
@@ -189,6 +199,23 @@ export default function ShoppingList({
     setPlannedPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, comment: value } : p)))
   }
 
+  // The store list lives on the catalog product itself (not the planned
+  // purchase) — so once you've bought "Молоко" at "REWE" once, that store
+  // shows up as a suggestion for "Молоко" from then on, on any future list.
+  function setPlannedStore(id, productId, value) {
+    setPlannedPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, store: value } : p)))
+    const trimmed = value.trim()
+    if (!trimmed) return
+    setRecountCatalog((prev) =>
+      prev.map((item) => {
+        if (String(item.id) !== String(productId)) return item
+        const stores = item.stores || []
+        if (stores.includes(trimmed)) return item
+        return { ...item, stores: [...stores, trimmed] }
+      })
+    )
+  }
+
   function addManual() {
     const product = findProductByName(form.productName)
     if (!product) {
@@ -290,11 +317,30 @@ export default function ShoppingList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plannedPurchases, recountCatalog])
 
+  // Every store name currently assigned to at least one planned item, for
+  // the filter control — not the union of every product's known stores,
+  // since a store nobody's shopping list uses right now would just be dead
+  // weight in that picker.
+  const storesInUse = useMemo(() => {
+    const set = new Set()
+    plannedPurchases.forEach((p) => { if (p.store) set.add(p.store) })
+    return [...set].sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [plannedPurchases])
+
+  const visiblePlannedPurchases = useMemo(() => {
+    if (storeFilter === 'all') return sortedPlannedPurchases
+    return sortedPlannedPurchases.filter((p) => (p.store || '') === storeFilter)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedPlannedPurchases, storeFilter])
+
   function printList() {
+    const titleParts = ['Запланированная закупка']
+    if (storeFilter !== 'all') titleParts.push(storeFilter)
+    if (includeDate && printDate) titleParts.push(formatRu(parseLocalDate(printDate)))
     printReport({
       type: 'shopping-list',
-      title: `Запланированная закупка — ${formatRu(now)}`,
-      items: sortedPlannedPurchases.map((p) => {
+      title: titleParts.join(' — '),
+      items: visiblePlannedPurchases.map((p) => {
         const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
         const unit = product?.unit || ''
         const big = ['г', 'мл'].includes(unit) && Math.abs(Number(p.qty)) >= 1000
@@ -303,6 +349,7 @@ export default function ShoppingList({
           name: (product?.name || '?') + dishSuffix,
           unit: big ? (unit === 'г' ? 'кг' : 'л') : unit,
           qty: big ? formatQtyForDisplay(p.qty, unit).split(' ')[0] : p.qty,
+          comment: p.comment || '',
         }
       }),
     })
@@ -468,7 +515,11 @@ export default function ShoppingList({
       </Section>
 
       <Section
-        title={`Запланированная закупка (${plannedPurchases.length})`}
+        title={
+          storeFilter === 'all'
+            ? `Запланированная закупка (${plannedPurchases.length})`
+            : `Запланированная закупка (${visiblePlannedPurchases.length} из ${plannedPurchases.length})`
+        }
         icon={ShoppingBasket}
         right={<PrintButton onClick={printList} label="Печать" />}
       >
@@ -537,17 +588,68 @@ export default function ShoppingList({
             {error}
           </p>
         )}
+
+        {plannedPurchases.length > 0 && (
+          <div className="flex flex-col gap-2 mb-3">
+            {storesInUse.length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto">
+                <button
+                  onClick={() => setStoreFilter('all')}
+                  className={`shrink-0 min-h-[32px] px-3 rounded-full text-xs font-semibold whitespace-nowrap ${
+                    storeFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  Все магазины
+                </button>
+                {storesInUse.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setStoreFilter(s)}
+                    className={`shrink-0 min-h-[32px] px-3 rounded-full text-xs font-semibold whitespace-nowrap ${
+                      storeFilter === s ? 'bg-slate-800 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+            <label className="flex items-center gap-2 text-xs text-slate-500">
+              <input
+                type="checkbox"
+                checked={includeDate}
+                onChange={(e) => setIncludeDate(e.target.checked)}
+                className="w-4 h-4 accent-orange-500"
+              />
+              Указать дату на печати
+              {includeDate && (
+                <input
+                  type="date"
+                  className={inputClass + ' h-8 py-0 w-auto'}
+                  value={printDate}
+                  onChange={(e) => setPrintDate(e.target.value)}
+                />
+              )}
+            </label>
+          </div>
+        )}
+
         {plannedPurchases.length === 0 && (
           <p className="text-sm text-slate-400 text-center py-3">Список закупки пуст</p>
         )}
+        {plannedPurchases.length > 0 && visiblePlannedPurchases.length === 0 && (
+          <p className="text-sm text-slate-400 text-center py-3">Нет товаров для магазина «{storeFilter}»</p>
+        )}
         <div className="flex flex-col gap-2">
-          {sortedPlannedPurchases.map((p) => {
+          {visiblePlannedPurchases.map((p) => {
             const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
             const { balance } = product
               ? computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now)
               : { balance: null }
             const hasComment = !!p.comment
             const commentOpen = openPlannedComment === p.id
+            const storeOpen = openPlannedStore === p.id
+            const storeListId = `stores-${p.productId}`
             return (
               <div key={p.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
                 <div className="flex items-center gap-2">
@@ -587,6 +689,15 @@ export default function ShoppingList({
                     )}
                   </div>
                   <button
+                    onClick={() => setOpenPlannedStore(storeOpen ? null : p.id)}
+                    className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
+                      p.store ? 'text-orange-600' : 'text-slate-400 dark:text-slate-500'
+                    }`}
+                    title="Магазин"
+                  >
+                    <Store size={16} />
+                  </button>
+                  <button
                     onClick={() => setOpenPlannedComment(commentOpen ? null : p.id)}
                     className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
                       hasComment ? 'text-orange-600' : 'text-slate-400 dark:text-slate-500'
@@ -602,6 +713,24 @@ export default function ShoppingList({
                   />
                   <ConfirmDeleteButton onConfirm={() => remove(p.id)} />
                 </div>
+                {storeOpen && (
+                  <>
+                    <input
+                      list={storeListId}
+                      className={inputClass + ' mt-2 text-sm'}
+                      placeholder="Магазин — выберите или впишите новый"
+                      value={p.store || ''}
+                      onChange={(e) => setPlannedStore(p.id, p.productId, e.target.value)}
+                      autoFocus
+                    />
+                    <datalist id={storeListId}>
+                      {(product?.stores || []).map((s) => <option key={s} value={s} />)}
+                    </datalist>
+                  </>
+                )}
+                {!storeOpen && p.store && (
+                  <p className="text-xs text-orange-600 mt-1.5">🏪 {p.store}</p>
+                )}
                 {commentOpen && (
                   <textarea
                     className={inputClass + ' mt-2 h-16 py-2 text-sm'}

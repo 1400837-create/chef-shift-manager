@@ -153,13 +153,14 @@ function buildShoppingListHtml(payload) {
           <td>${escapeHtml(item.name)}</td>
           <td>${escapeHtml(item.unit)}</td>
           <td>${escapeHtml(item.qty)}</td>
+          <td>${escapeHtml(item.comment || '')}</td>
         </tr>`).join('')
-    : '<tr><td colspan="3" class="muted">Список пуст</td></tr>'
+    : '<tr><td colspan="4" class="muted">Список пуст</td></tr>'
 
   return `
     <h1>${escapeHtml(payload.title)}</h1>
     <table>
-      <thead><tr><th>Продукт</th><th style="width:60px;">Ед.</th><th style="width:90px;">Кол-во</th></tr></thead>
+      <thead><tr><th>Продукт</th><th style="width:60px;">Ед.</th><th style="width:90px;">Кол-во</th><th style="width:160px;">Комментарий</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   `
