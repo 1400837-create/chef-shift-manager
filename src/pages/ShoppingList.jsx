@@ -199,18 +199,26 @@ export default function ShoppingList({
     setPlannedPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, comment: value } : p)))
   }
 
+  // Live value as you type — deliberately does NOT touch the catalog's
+  // stores list on every keystroke, otherwise typing "ALDI" one letter at a
+  // time would save "A", "AL", "ALD" and "ALDI" as four separate stores.
+  // commitPlannedStore (below, on blur) is what actually remembers it.
+  function setPlannedStore(id, value) {
+    setPlannedPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, store: value } : p)))
+  }
+
   // The store list lives on the catalog product itself (not the planned
   // purchase) — so once you've bought "Молоко" at "REWE" once, that store
   // shows up as a suggestion for "Молоко" from then on, on any future list.
-  function setPlannedStore(id, productId, value) {
-    setPlannedPurchases((prev) => prev.map((p) => (p.id === id ? { ...p, store: value } : p)))
+  // Called once the user is done typing (blur), not on every keystroke.
+  function commitPlannedStore(productId, value) {
     const trimmed = value.trim()
     if (!trimmed) return
     setRecountCatalog((prev) =>
       prev.map((item) => {
         if (String(item.id) !== String(productId)) return item
         const stores = item.stores || []
-        if (stores.includes(trimmed)) return item
+        if (stores.some((s) => s.toLowerCase() === trimmed.toLowerCase())) return item
         return { ...item, stores: [...stores, trimmed] }
       })
     )
@@ -720,7 +728,9 @@ export default function ShoppingList({
                       className={inputClass + ' mt-2 text-sm'}
                       placeholder="Магазин — выберите или впишите новый"
                       value={p.store || ''}
-                      onChange={(e) => setPlannedStore(p.id, p.productId, e.target.value)}
+                      onChange={(e) => setPlannedStore(p.id, e.target.value)}
+                      onBlur={(e) => commitPlannedStore(p.productId, e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
                       autoFocus
                     />
                     <datalist id={storeListId}>
