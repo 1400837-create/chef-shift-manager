@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store, Check } from 'lucide-react'
+import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store, Check, Printer } from 'lucide-react'
 import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
 import { formatRu, todayKey, parseLocalDate, addDays, monthKey, toKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
@@ -404,14 +404,16 @@ export default function ShoppingList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortedPlannedPurchases, storeFilter])
 
-  function printList() {
+  // Defaults to whatever the store filter is showing; selection mode passes
+  // just the ticked rows so you can print an arbitrary subset too.
+  function printList(itemsToPrint = visiblePlannedPurchases) {
     const titleParts = ['Запланированная закупка']
     if (storeFilter !== 'all') titleParts.push(storeFilter)
     if (includeDate && printDate) titleParts.push(formatRu(parseLocalDate(printDate)))
     printReport({
       type: 'shopping-list',
       title: titleParts.join(' — '),
-      items: visiblePlannedPurchases.map((p) => {
+      items: itemsToPrint.map((p) => {
         const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
         const unit = product?.unit || ''
         const big = ['г', 'мл'].includes(unit) && Math.abs(Number(p.qty)) >= 1000
@@ -608,7 +610,9 @@ export default function ShoppingList({
                   Выбрать
                 </button>
               )}
-              <PrintButton onClick={printList} label="Печать" />
+              {/* Wrapped, not passed directly: the click event would land in
+                  printList's itemsToPrint parameter and break its default. */}
+              <PrintButton onClick={() => printList()} label="Печать" />
             </div>
           )
         }
@@ -741,17 +745,24 @@ export default function ShoppingList({
                 )}
               </div>
             </div>
-            <button
-              onClick={() => (confirmingBulkDelete ? deleteSelected() : setConfirmingBulkDelete(true))}
-              disabled={selectedIds.size === 0}
-              className={`w-full min-h-[44px] px-4 rounded-xl text-white text-sm font-semibold disabled:opacity-40 ${
-                confirmingBulkDelete ? 'bg-red-700 active:bg-red-800' : 'bg-red-600 active:bg-red-700'
-              }`}
-            >
-              {confirmingBulkDelete
-                ? `Точно удалить ${selectedIds.size}? Нажмите ещё раз`
-                : `Удалить выбранные (${selectedIds.size})`}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => printList(visiblePlannedPurchases.filter((p) => selectedIds.has(p.id)))}
+                disabled={selectedIds.size === 0}
+                className="flex-1 min-h-[44px] px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-sm font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40"
+              >
+                <Printer size={16} /> Печать ({selectedIds.size})
+              </button>
+              <button
+                onClick={() => (confirmingBulkDelete ? deleteSelected() : setConfirmingBulkDelete(true))}
+                disabled={selectedIds.size === 0}
+                className={`flex-1 min-h-[44px] px-3 rounded-xl text-white text-sm font-semibold disabled:opacity-40 ${
+                  confirmingBulkDelete ? 'bg-red-700 active:bg-red-800' : 'bg-red-600 active:bg-red-700'
+                }`}
+              >
+                {confirmingBulkDelete ? `Точно? (${selectedIds.size})` : `Удалить (${selectedIds.size})`}
+              </button>
+            </div>
           </div>
         )}
 
