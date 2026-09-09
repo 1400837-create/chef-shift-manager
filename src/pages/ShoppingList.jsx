@@ -335,6 +335,24 @@ export default function ShoppingList({
     return [...set].sort((a, b) => a.localeCompare(b, 'ru'))
   }, [plannedPurchases])
 
+  // Suggestions for the per-item store field: every store name known
+  // anywhere — across the whole catalog and the current list — not just the
+  // ones already used for that one product. You shop at a handful of stores
+  // and any product can come from any of them, so a product being new
+  // shouldn't mean an empty dropdown.
+  const allKnownStores = useMemo(() => {
+    const byLower = new Map()
+    const add = (name) => {
+      const trimmed = (name || '').trim()
+      if (!trimmed) return
+      const key = trimmed.toLowerCase()
+      if (!byLower.has(key)) byLower.set(key, trimmed)
+    }
+    recountCatalog.forEach((item) => (item.stores || []).forEach(add))
+    plannedPurchases.forEach((p) => add(p.store))
+    return [...byLower.values()].sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [recountCatalog, plannedPurchases])
+
   const visiblePlannedPurchases = useMemo(() => {
     if (storeFilter === 'all') return sortedPlannedPurchases
     return sortedPlannedPurchases.filter((p) => (p.store || '') === storeFilter)
@@ -646,6 +664,11 @@ export default function ShoppingList({
           </div>
         )}
 
+        {/* One shared list for every row's store field — see allKnownStores */}
+        <datalist id="all-known-stores">
+          {allKnownStores.map((s) => <option key={s} value={s} />)}
+        </datalist>
+
         {plannedPurchases.length === 0 && (
           <p className="text-sm text-slate-400 text-center py-3">Список закупки пуст</p>
         )}
@@ -661,7 +684,6 @@ export default function ShoppingList({
             const hasComment = !!p.comment
             const commentOpen = openPlannedComment === p.id
             const storeOpen = openPlannedStore === p.id
-            const storeListId = `stores-${p.productId}`
             return (
               <div key={p.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
                 <div className="flex items-center gap-2">
@@ -726,21 +748,16 @@ export default function ShoppingList({
                   <ConfirmDeleteButton onConfirm={() => remove(p.id)} />
                 </div>
                 {storeOpen && (
-                  <>
-                    <input
-                      list={storeListId}
-                      className={inputClass + ' mt-2 text-sm'}
-                      placeholder="Магазин — выберите или впишите новый"
-                      value={p.store || ''}
-                      onChange={(e) => setPlannedStore(p.id, e.target.value)}
-                      onBlur={(e) => commitPlannedStore(p.productId, e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
-                      autoFocus
-                    />
-                    <datalist id={storeListId}>
-                      {(product?.stores || []).map((s) => <option key={s} value={s} />)}
-                    </datalist>
-                  </>
+                  <input
+                    list="all-known-stores"
+                    className={inputClass + ' mt-2 text-sm'}
+                    placeholder="Магазин — выберите или впишите новый"
+                    value={p.store || ''}
+                    onChange={(e) => setPlannedStore(p.id, e.target.value)}
+                    onBlur={(e) => commitPlannedStore(p.productId, e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+                    autoFocus
+                  />
                 )}
                 {!storeOpen && p.store && (
                   <p className="text-xs text-orange-600 mt-1.5">🏪 {p.store}</p>
