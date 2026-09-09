@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store } from 'lucide-react'
+import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store, Check } from 'lucide-react'
 import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
 import { formatRu, todayKey, parseLocalDate, addDays, monthKey, toKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
@@ -44,6 +44,11 @@ export default function ShoppingList({
   // misleading. The date is opt-in, for when printing for one specific trip.
   const [includeDate, setIncludeDate] = useState(false)
   const [printDate, setPrintDate] = useState(todayKey())
+  // Checkbox mode for deleting several items at once — the per-row bin only
+  // ever removes one, which is painful for clearing a finished list.
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false)
   const now = new Date()
 
   const productSuggestions = useMemo(() => {
@@ -250,6 +255,46 @@ export default function ShoppingList({
   function remove(id) {
     setPlannedPurchases((prev) => prev.filter((p) => p.id !== id))
     setArmedPurchaseIds((prev) => prev.filter((armedId) => armedId !== id))
+  }
+
+  function toggleSelectionMode() {
+    setSelectionMode((v) => !v)
+    setSelectedIds(new Set())
+    setConfirmingBulkDelete(false)
+    // Their toggle buttons are hidden in selection mode, so an editor left
+    // open would be stuck open with no way to close it.
+    setOpenPlannedStore(null)
+    setOpenPlannedComment(null)
+  }
+
+  function toggleSelected(id) {
+    setConfirmingBulkDelete(false)
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // "All" means all *visible* — with a store filter on, selecting things
+  // you can't see would be a nasty surprise.
+  function selectAllVisible() {
+    setConfirmingBulkDelete(false)
+    setSelectedIds(new Set(visiblePlannedPurchases.map((p) => p.id)))
+  }
+
+  function clearSelection() {
+    setConfirmingBulkDelete(false)
+    setSelectedIds(new Set())
+  }
+
+  function deleteSelected() {
+    if (selectedIds.size === 0) return
+    setPlannedPurchases((prev) => prev.filter((p) => !selectedIds.has(p.id)))
+    setArmedPurchaseIds((prev) => prev.filter((armedId) => !selectedIds.has(armedId)))
+    setSelectedIds(new Set())
+    setConfirmingBulkDelete(false)
   }
 
   function markPurchased(planned) {
@@ -551,7 +596,22 @@ export default function ShoppingList({
             : `Запланированная закупка (${visiblePlannedPurchases.length} из ${plannedPurchases.length})`
         }
         icon={ShoppingBasket}
-        right={<PrintButton onClick={printList} label="Печать" />}
+        right={
+          selectionMode ? (
+            <button onClick={toggleSelectionMode} className="text-xs font-semibold text-slate-500 whitespace-nowrap">
+              Готово
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              {plannedPurchases.length > 0 && (
+                <button onClick={toggleSelectionMode} className="text-xs font-semibold text-orange-600 whitespace-nowrap">
+                  Выбрать
+                </button>
+              )}
+              <PrintButton onClick={printList} label="Печать" />
+            </div>
+          )
+        }
       >
         <p className="text-xs text-slate-500 mb-3">
           Список того, что нужно купить — не по факту, а то, что запланировано. Когда товар
@@ -664,6 +724,37 @@ export default function ShoppingList({
           </div>
         )}
 
+        {selectionMode && (
+          <div className="rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 p-2.5 mb-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Выбрано: {selectedIds.size}
+              </p>
+              <div className="flex items-center gap-3">
+                <button onClick={selectAllVisible} className="text-xs font-semibold text-orange-600 whitespace-nowrap">
+                  Выбрать все ({visiblePlannedPurchases.length})
+                </button>
+                {selectedIds.size > 0 && (
+                  <button onClick={clearSelection} className="text-xs font-semibold text-slate-500 whitespace-nowrap">
+                    Снять
+                  </button>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => (confirmingBulkDelete ? deleteSelected() : setConfirmingBulkDelete(true))}
+              disabled={selectedIds.size === 0}
+              className={`w-full min-h-[44px] px-4 rounded-xl text-white text-sm font-semibold disabled:opacity-40 ${
+                confirmingBulkDelete ? 'bg-red-700 active:bg-red-800' : 'bg-red-600 active:bg-red-700'
+              }`}
+            >
+              {confirmingBulkDelete
+                ? `Точно удалить ${selectedIds.size}? Нажмите ещё раз`
+                : `Удалить выбранные (${selectedIds.size})`}
+            </button>
+          </div>
+        )}
+
         {/* One shared list for every row's store field — see allKnownStores */}
         <datalist id="all-known-stores">
           {allKnownStores.map((s) => <option key={s} value={s} />)}
@@ -684,10 +775,31 @@ export default function ShoppingList({
             const hasComment = !!p.comment
             const commentOpen = openPlannedComment === p.id
             const storeOpen = openPlannedStore === p.id
+            const isSelected = selectedIds.has(p.id)
             return (
-              <div key={p.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <div
+                key={p.id}
+                className={`rounded-xl border px-3 py-2 ${
+                  selectionMode && isSelected
+                    ? 'border-orange-400 bg-orange-50 dark:border-orange-600 dark:bg-orange-950/30'
+                    : 'border-slate-200 dark:border-slate-700'
+                }`}
+              >
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
+                  {selectionMode && (
+                    <button
+                      onClick={() => toggleSelected(p.id)}
+                      className={`shrink-0 w-7 h-7 rounded-md border-2 flex items-center justify-center ${
+                        isSelected ? 'bg-orange-500 border-orange-500' : 'border-slate-300 dark:border-slate-600'
+                      }`}
+                    >
+                      {isSelected && <Check size={16} strokeWidth={3} className="text-white" />}
+                    </button>
+                  )}
+                  <div
+                    className="flex-1 min-w-0"
+                    onClick={selectionMode ? () => toggleSelected(p.id) : undefined}
+                  >
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
                       {product?.name || '?'}
                     </p>
@@ -722,30 +834,34 @@ export default function ShoppingList({
                       </p>
                     )}
                   </div>
-                  <button
-                    onClick={() => setOpenPlannedStore(storeOpen ? null : p.id)}
-                    className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
-                      p.store ? 'text-orange-600' : 'text-slate-400 dark:text-slate-500'
-                    }`}
-                    title="Магазин"
-                  >
-                    <Store size={16} />
-                  </button>
-                  <button
-                    onClick={() => setOpenPlannedComment(commentOpen ? null : p.id)}
-                    className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
-                      hasComment ? 'text-orange-600' : 'text-slate-400 dark:text-slate-500'
-                    }`}
-                    title="Комментарий"
-                  >
-                    <MessageSquare size={16} />
-                  </button>
-                  <ConfirmMarkButton
-                    confirming={armedPurchaseIds.includes(p.id)}
-                    onArm={() => setArmedPurchaseIds((prev) => [...prev, p.id])}
-                    onConfirm={() => markPurchased(p)}
-                  />
-                  <ConfirmDeleteButton onConfirm={() => remove(p.id)} />
+                  {!selectionMode && (
+                    <>
+                      <button
+                        onClick={() => setOpenPlannedStore(storeOpen ? null : p.id)}
+                        className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
+                          p.store ? 'text-orange-600' : 'text-slate-400 dark:text-slate-500'
+                        }`}
+                        title="Магазин"
+                      >
+                        <Store size={16} />
+                      </button>
+                      <button
+                        onClick={() => setOpenPlannedComment(commentOpen ? null : p.id)}
+                        className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
+                          hasComment ? 'text-orange-600' : 'text-slate-400 dark:text-slate-500'
+                        }`}
+                        title="Комментарий"
+                      >
+                        <MessageSquare size={16} />
+                      </button>
+                      <ConfirmMarkButton
+                        confirming={armedPurchaseIds.includes(p.id)}
+                        onArm={() => setArmedPurchaseIds((prev) => [...prev, p.id])}
+                        onConfirm={() => markPurchased(p)}
+                      />
+                      <ConfirmDeleteButton onConfirm={() => remove(p.id)} />
+                    </>
+                  )}
                 </div>
                 {storeOpen && (
                   <input
