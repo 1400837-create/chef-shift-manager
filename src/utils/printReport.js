@@ -148,13 +148,21 @@ function buildPurchaseLogHtml(payload) {
 
 function buildShoppingListHtml(payload) {
   const rows = payload.items.length
-    ? payload.items.map((item) => `
+    ? payload.items.map((item) => {
+        // Shown only when printing the mixed "все магазины" view (see
+        // ShoppingList.jsx's printList) — printing one already-filtered
+        // store would just repeat the same name on every row.
+        const storeMark = item.store
+          ? `<b style="color:#c00;">${escapeHtml(item.store)}</b>${item.comment ? '<br>' : ''}`
+          : ''
+        return `
         <tr>
           <td>${escapeHtml(item.name)}</td>
           <td>${escapeHtml(item.unit)}</td>
           <td>${escapeHtml(item.qty)}</td>
-          <td>${escapeHtml(item.comment || '')}</td>
-        </tr>`).join('')
+          <td>${storeMark}${escapeHtml(item.comment || '')}</td>
+        </tr>`
+      }).join('')
     : '<tr><td colspan="4" class="muted">Список пуст</td></tr>'
 
   return `

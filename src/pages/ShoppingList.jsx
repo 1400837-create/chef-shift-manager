@@ -358,6 +358,10 @@ export default function ShoppingList({
           unit: big ? (unit === 'г' ? 'кг' : 'л') : unit,
           qty: big ? formatQtyForDisplay(p.qty, unit).split(' ')[0] : p.qty,
           comment: p.comment || '',
+          // Only worth calling out the store when the printed list mixes
+          // several of them — filtered to one store, every row would repeat
+          // the same name for nothing.
+          store: storeFilter === 'all' ? (p.store || '') : '',
         }
       }),
     })
