@@ -163,10 +163,10 @@ function buildShoppingListHtml(payload) {
           : ''
         return `
         <tr>
-          <td>${flagMark}${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.name)}</td>
           <td>${escapeHtml(item.unit)}</td>
           <td>${escapeHtml(item.qty)}</td>
-          <td>${storeMark}${escapeHtml(item.comment || '')}</td>
+          <td>${flagMark}${storeMark}${escapeHtml(item.comment || '')}</td>
         </tr>`
       }).join('')
     : '<tr><td colspan="4" class="muted">Список пуст</td></tr>'
