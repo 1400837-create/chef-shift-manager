@@ -55,6 +55,7 @@ export function describeEntry(e) {
       return `изменил(а) ${subject} ${name}${parts.length ? ': ' + parts.join('; ') : ''}`.trim()
     }
     case 'password':
+      if (e.id === 'owner') return 'сменил(а) пароль владельца'
       return `сменил(а) пароль пользователя ${name}`.trim()
     case 'disable':
       return `отключил(а) доступ пользователя ${name}`.trim()

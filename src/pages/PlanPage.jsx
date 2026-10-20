@@ -7,7 +7,7 @@ import { usePlanDeviceState, getAuthor } from '../plan/planRoom'
 import { usePlanCollection, createRecord, patchRecord, deleteRecord } from '../plan/planStore'
 import {
   usePlanUsers, addUser, setUserPassword, setUserDisabled, deleteUser, createPlanRoom, joinPlanRoomAsOwner,
-  setOwnerName, useJournal, useUnseenChanges, markChangesSeen, useBackups, createSnapshot, restoreSnapshot, exportPlanFile, parsePlanFile, importPlanFile,
+  setOwnerName, setOwnerPassword, useJournal, useUnseenChanges, markChangesSeen, useBackups, createSnapshot, restoreSnapshot, exportPlanFile, parsePlanFile, importPlanFile,
 } from '../plan/planAdmin'
 import { durationMinutes, formatDuration, parseHM } from '../plan/hours'
 import { describeEntry } from '../plan/journalText'
@@ -386,6 +386,10 @@ function AccessPanel({ config }) {
   const add = useAction()
   const [ownerName, setOwnerNameDraft] = useState(config?.ownerName || '')
   const [joinCode, setJoinCode] = useState('')
+  const [ownerPw, setOwnerPw] = useState('')
+  const [joinPw, setJoinPw] = useState('')
+  const pwAction = useAction()
+  const [newOwnerPw, setNewOwnerPw] = useState('')
   const [newName, setNewName] = useState('')
   const [newPw, setNewPw] = useState('')
   const [copied, setCopied] = useState(false)
@@ -410,7 +414,10 @@ function AccessPanel({ config }) {
         <Field label="Ваше имя в журнале изменений">
           <input className={inputClass} placeholder="Например: Шеф" value={ownerName} onChange={(e) => setOwnerNameDraft(e.target.value)} />
         </Field>
-        <BigButton onClick={() => create.run(() => createPlanRoom(ownerName))} icon={Plus} disabled={create.busy}>
+        <Field label="Пароль владельца (от 6 символов)">
+          <input className={inputClass} type="password" autoComplete="new-password" placeholder="Нужен для входа с других ваших устройств" value={ownerPw} onChange={(e) => setOwnerPw(e.target.value)} />
+        </Field>
+        <BigButton onClick={() => create.run(() => createPlanRoom(ownerName, ownerPw))} icon={Plus} disabled={create.busy}>
           Создать комнату плана
         </BigButton>
         <Message msg={create.msg} />
@@ -418,7 +425,8 @@ function AccessPanel({ config }) {
         <div className="border-t border-slate-100 dark:border-slate-700 mt-4 pt-4">
           <p className="text-xs text-slate-500 mb-2">Комната уже создана на другом вашем устройстве? Введите её код.</p>
           <input className={inputClass + ' mb-2 font-mono'} placeholder="Код плана" value={joinCode} onChange={(e) => setJoinCode(e.target.value.trim())} />
-          <BigButton onClick={() => join.run(() => joinPlanRoomAsOwner(joinCode, ownerName))} color="outline" disabled={join.busy || !joinCode}>
+          <input className={inputClass + ' mb-2'} type="password" autoComplete="current-password" placeholder="Пароль владельца" value={joinPw} onChange={(e) => setJoinPw(e.target.value)} />
+          <BigButton onClick={() => join.run(() => joinPlanRoomAsOwner(joinCode, ownerName, joinPw))} color="outline" disabled={join.busy || !joinCode}>
             Подключиться к существующему плану
           </BigButton>
           <Message msg={join.msg} />
@@ -443,6 +451,23 @@ function AccessPanel({ config }) {
         </div>
         <Field label="Ваше имя в журнале изменений">
           <DraftInput value={config.ownerName || ''} placeholder="Владелец" onCommit={(v) => setOwnerName(v)} />
+        </Field>
+        <Field label="Пароль владельца">
+          <p className="text-xs text-slate-500 mb-2">
+            Нужен, чтобы подключить к плану ещё одно ваше устройство как владельца. Сотрудникам он не нужен и не должен
+            быть им известен. Здесь можно задать новый.
+          </p>
+          <div className="flex gap-2">
+            <input className={inputClass} type="password" autoComplete="new-password" placeholder="Новый пароль (от 6 символов)" value={newOwnerPw} onChange={(e) => setNewOwnerPw(e.target.value)} />
+            <button
+              onClick={() => pwAction.run(async () => { await setOwnerPassword(newOwnerPw); setNewOwnerPw('') }, 'Пароль владельца изменён')}
+              disabled={pwAction.busy || newOwnerPw.length < 6}
+              className="shrink-0 px-4 min-h-[48px] rounded-xl bg-orange-500 text-white text-sm font-semibold disabled:opacity-50"
+            >
+              Сохранить
+            </button>
+          </div>
+          <Message msg={pwAction.msg} />
         </Field>
       </Section>
 

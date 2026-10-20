@@ -71,25 +71,62 @@ function safeEqual(a, b) {
 
 // ---- room lifecycle -----------------------------------------------------------
 
-export async function createPlanRoom(ownerName) {
+async function makeAuth(password) {
+  const salt = newSalt()
+  return { salt, iter: PBKDF2_ITERATIONS, hash: await hashPassword(password, salt) }
+}
+
+function checkNewPassword(password) {
+  if ((password || '').length < 6) throw new Error('Пароль владельца — минимум 6 символов')
+}
+
+export async function createPlanRoom(ownerName, ownerPassword) {
   requireDb()
+  checkNewPassword(ownerPassword)
   const name = (ownerName || '').trim() || 'Владелец'
   let code = generateSyncCode()
   const taken = await withNet(get(ref(db, `rooms/${code}/meta`)))
   if (taken.exists()) code = generateSyncCode()
-  await withNet(set(ref(db, `rooms/${code}/meta`), { createdAt: serverTimestamp(), schema: 1, ownerName: name }))
+  const auth = await makeAuth(ownerPassword)
+  await withNet(update(ref(db, `rooms/${code}`), {
+    meta: { createdAt: serverTimestamp(), schema: 1, ownerName: name },
+    ownerAuth: auth,
+  }))
   setPlanConfig({ code, role: 'owner', ownerName: name })
   return code
 }
 
 // Second owner device (laptop + phone): attach to the plan that already exists.
-export async function joinPlanRoomAsOwner(code, ownerName) {
+// Needs the owner password, so that the plan code alone (which staff hold)
+// only ever opens the staff login. A room that predates the owner password
+// has none yet — the first owner to join sets it.
+export async function joinPlanRoomAsOwner(code, ownerName, password) {
   requireDb()
   const c = (code || '').trim()
   if (!c) throw new Error('Введите код плана')
   const meta = await withNet(get(ref(db, `rooms/${c}/meta`)))
   if (!meta.exists()) throw new Error('Комната плана с таким кодом не найдена')
+  const authSnap = await withNet(get(ref(db, `rooms/${c}/ownerAuth`)))
+  const auth = authSnap.val()
+  if (auth) {
+    if (!password) throw new Error('Введите пароль владельца')
+    const hash = await hashPassword(password, auth.salt, auth.iter || PBKDF2_ITERATIONS)
+    if (!safeEqual(hash, auth.hash)) throw new Error('Неверный код или пароль владельца')
+  } else {
+    checkNewPassword(password)
+    await withNet(set(ref(db, `rooms/${c}/ownerAuth`), await makeAuth(password)))
+  }
   setPlanConfig({ code: c, role: 'owner', ownerName: (ownerName || '').trim() || meta.val().ownerName || 'Владелец' })
+}
+
+export async function setOwnerPassword(password) {
+  requireDb()
+  if (getPlanConfig()?.role !== 'owner') throw new Error('Пароль владельца меняет только владелец')
+  checkNewPassword(password)
+  await writeDirect(
+    { ownerAuth: await makeAuth(password) },
+    { coll: 'users', action: 'password', id: 'owner', label: 'владельца' }
+  )
 }
 
 export function setOwnerName(name) {
