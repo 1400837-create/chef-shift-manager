@@ -223,7 +223,16 @@ function buildWorkPlanHtml(payload) {
         <tbody>${payload.summary.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.norm)}</td><td>${escapeHtml(r.planned)}</td><td>${escapeHtml(r.actual)}</td></tr>`).join('')}</tbody></table></div>`
     : ''
 
-  return `<h1 style="font-size:22px;">${escapeHtml(payload.title)}</h1>${weeks || `<p class="muted">${escapeHtml(L.noData)}</p>`}${summary}`
+  const cost = payload.cost && payload.cost.rows.length
+    ? `<div class="print-no-break"><h2>Калькуляция</h2><table>
+        <thead><tr><th>Позиция</th><th style="width:90px;">Кол-во</th><th style="width:80px;">Цена</th><th style="width:90px;">Сумма</th></tr></thead>
+        <tbody>${payload.cost.rows.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.qty)}</td><td>${escapeHtml(r.price)}</td><td>${escapeHtml(r.sum)}</td></tr>`).join('')}
+        <tr><td colspan="3"><b>Итого</b></td><td><b>${escapeHtml(payload.cost.total)}</b></td></tr>
+        ${payload.cost.perGuest ? `<tr><td colspan="3">На гостя</td><td>${escapeHtml(payload.cost.perGuest)}</td></tr>` : ''}
+        </tbody></table></div>`
+    : ''
+
+  return `<h1 style="font-size:22px;">${escapeHtml(payload.title)}</h1>${weeks || `<p class="muted">${escapeHtml(L.noData)}</p>`}${summary}${cost}`
 }
 
 const BUILDERS = {

@@ -11,6 +11,7 @@ import {
 } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
 import { Message } from './shared'
+import { costSummary, money } from './Cost'
 import { coursesForDay } from '../../utils/menuCourses'
 
 async function copyText(text) {
@@ -47,6 +48,7 @@ export default function ExchangePanel({ plan, data, ctx, shifts, menuBridge }) {
   const [parsed, setParsed] = useState(null)
   const [transfer, setTransfer] = useState(null)
   const [transferMode, setTransferMode] = useState('skip')
+  const [withCost, setWithCost] = useState(false)
 
   const weeks = useMemo(() => {
     const set = new Set(planDates(data).map(mondayOf))
@@ -59,7 +61,16 @@ export default function ExchangePanel({ plan, data, ctx, shifts, menuBridge }) {
 
   function print() {
     setMsg(null)
-    printReport(buildPrintPayload({ plan, data, ctx, shifts, lang, ...range }))
+    const payload = buildPrintPayload({ plan, data, ctx, shifts, lang, ...range })
+    if (menuBridge && withCost) {
+      const c = costSummary(data)
+      payload.cost = {
+        rows: c.rows.map((r) => ({ name: r.name, qty: `${r.qty} ${r.unit || ''}`, price: money(Number(r.price) || 0), sum: money(r.sum) })),
+        total: money(c.total),
+        perGuest: c.perGuest === null ? '' : `${money(c.perGuest)} (${c.guests})`,
+      }
+    }
+    printReport(payload)
   }
 
   async function copy(builder, okText) {
@@ -132,6 +143,12 @@ export default function ExchangePanel({ plan, data, ctx, shifts, menuBridge }) {
               {LANG_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
           </div>
+          {menuBridge && (
+            <label className="flex items-center gap-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
+              <input type="checkbox" checked={withCost} onChange={(e) => setWithCost(e.target.checked)} />
+              Добавить калькуляцию в печать
+            </label>
+          )}
           <BigButton onClick={print} icon={Printer} disabled={weeks.length === 0}>Печать</BigButton>
 
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mt-4 mb-1.5">Скопировать для Google Таблиц</p>

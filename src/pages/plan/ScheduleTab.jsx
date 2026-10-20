@@ -12,6 +12,7 @@ import { todayKey } from '../../utils/dateUtils'
 import { DraftInput, byName } from './shared'
 import { usePlanLang, LOCALE, staffLabel } from '../../plan/lang'
 import ExchangePanel from './Exchange'
+import CostPanel from './Cost'
 
 const PLAN_KINDS = [
   { key: 'month', label: 'Месяц' },
@@ -497,6 +498,7 @@ function defaultDate(plan) {
 }
 
 function PlanView({ plan, ctx, menuBridge }) {
+  const isOwner = usePlanDeviceState().config?.role === 'owner'
   const coll = `planData/${plan.id}`
   const { data } = usePlanCollection(coll)
   const tree = usePlanCollection('planData').data
@@ -550,6 +552,7 @@ function PlanView({ plan, ctx, menuBridge }) {
       </Section>
 
       <ExchangePanel plan={plan} data={data} ctx={ctx} shifts={allShifts} menuBridge={menuBridge} />
+      {isOwner && <CostPanel plan={plan} data={data} />}
 
       {dates.length === 0 && <p className="text-sm text-slate-400 text-center py-4">В плане пока нет дней — добавьте первый.</p>}
       {weeks.map(([monday, list]) => (
