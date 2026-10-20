@@ -223,7 +223,7 @@ export default function Dashboard({
       )}
 
       {dashTab === 'overview' && (
-      <div className="desk:grid desk:grid-cols-2 desk:gap-x-5 desk:items-start">
+      <div className="flex flex-col desk:grid desk:grid-cols-2 desk:gap-x-5 desk:items-start">
       <button
         onClick={() => onNavigate('plan')}
         className="w-full desk:col-span-2 mb-4 rounded-2xl shadow-md bg-slate-800 dark:bg-slate-700 active:bg-slate-900 text-white px-4 py-4 flex items-center gap-3 text-left"
@@ -246,7 +246,8 @@ export default function Dashboard({
         )}
       </button>
 
-      <div className="rounded-2xl shadow-md border-2 border-orange-300 dark:border-orange-700 mb-4 overflow-hidden bg-white dark:bg-slate-800">
+      <div className="contents desk:block">
+      <div className="order-[1] rounded-2xl shadow-md border-2 border-orange-300 dark:border-orange-700 mb-4 overflow-hidden bg-white dark:bg-slate-800">
         <div className="flex items-center gap-2 px-4 py-3 bg-orange-500 dark:bg-orange-600">
           <ListChecks size={20} className="text-white shrink-0" />
           <h2 className="font-bold text-white text-[15px]">Мои задачи</h2>
@@ -303,25 +304,7 @@ export default function Dashboard({
         </div>
       </div>
 
-      <Section title="Меню на сегодня" icon={UtensilsCrossed}>
-        {todayCourses.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-2">Меню на сегодня ещё не заполнено</p>
-        ) : (
-          <div className="flex flex-col gap-1.5 mb-3">
-            {todayCourses.map((c) => (
-              <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                <span className="text-slate-500 dark:text-slate-400 shrink-0">{c.label}</span>
-                <span className="font-medium text-slate-800 dark:text-slate-100 text-right truncate">
-                  {c.dish}{c.qty ? ` — ${c.qty}` : ''}{c.kosher ? ' ✡' : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-        <BigButton onClick={() => onNavigate('menu')} color="outline">Открыть меню</BigButton>
-      </Section>
-
-      <Section
+      <Section className="order-[3]"
         title="Задачи для Küchenhilfe"
         icon={ClipboardList}
         right={<PrintButton onClick={printTasks} />}
@@ -399,14 +382,33 @@ export default function Dashboard({
           </p>
         )}
       </Section>
+      </div>
+      <div className="contents desk:block">
+      <Section className="order-[2]" title="Меню на сегодня" icon={UtensilsCrossed}>
+        {todayCourses.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-2">Меню на сегодня ещё не заполнено</p>
+        ) : (
+          <div className="flex flex-col gap-1.5 mb-3">
+            {todayCourses.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-slate-500 dark:text-slate-400 shrink-0">{c.label}</span>
+                <span className="font-medium text-slate-800 dark:text-slate-100 text-right truncate">
+                  {c.dish}{c.qty ? ` — ${c.qty}` : ''}{c.kosher ? ' ✡' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <BigButton onClick={() => onNavigate('menu')} color="outline">Открыть меню</BigButton>
+      </Section>
 
-      <Section title="Сроки и напоминания" icon={CalendarClock}>
+      <Section className="order-[4]" title="Сроки и напоминания" icon={CalendarClock}>
         <div className="flex flex-col gap-2">
           <DeadlineRow label="Подача меню на след. месяц" date={menuDl.label} daysLeft={menuDl.daysLeft} />
         </div>
       </Section>
 
-      <Section
+      <Section className="order-[5]"
         title="Мало на складе"
         icon={AlertTriangle}
         right={lowStockItems.length > 0 && <Badge color="red">{lowStockItems.length}</Badge>}
@@ -436,7 +438,7 @@ export default function Dashboard({
         )}
       </Section>
 
-      <Section title="Синхронизация между устройствами" icon={RefreshCw}>
+      <Section className="order-[6]" title="Синхронизация между устройствами" icon={RefreshCw}>
         {!syncConfig.enabled ? (
           <>
             <p className="text-xs text-slate-500 mb-3">
@@ -480,7 +482,7 @@ export default function Dashboard({
         )}
       </Section>
 
-      <Section title="Резервная копия данных" icon={Download}>
+      <Section className="order-[7]" title="Резервная копия данных" icon={Download}>
         <p className="text-xs text-slate-500 mb-3">
           Все данные хранятся только в этом браузере. Сохраните файл на телефон, чтобы не
           потерять их при смене устройства или очистке кеша.
@@ -513,6 +515,7 @@ export default function Dashboard({
           </p>
         )}
       </Section>
+      </div>
       </div>
       )}
     </div>

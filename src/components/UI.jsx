@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Printer, Trash2, Undo2, Redo2, Search } from 'lucide-react'
 
-export function Section({ title, icon: Icon, children, right }) {
+export function Section({ title, icon: Icon, children, right, className = "" }) {
   return (
-    <section className="bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 mb-4 overflow-hidden">
+    <section className={`bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 mb-4 overflow-hidden ${className}`}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-gradient-to-b from-slate-50 to-white dark:from-slate-900/50 dark:to-slate-800">
         <div className="flex items-center gap-2.5">
           {Icon && (
