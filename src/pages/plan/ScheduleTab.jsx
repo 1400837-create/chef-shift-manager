@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock, BookOpen, Bookmark } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock, BookOpen, Bookmark, Settings } from 'lucide-react'
 import { dishesFromLines, templateFromBlock, templatePaths } from '../../plan/templates'
 import { Section, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../../components/UI'
 import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
@@ -622,6 +622,7 @@ function PlanView({ plan, ctx, menuBridge, plans }) {
   const allShifts = useMemo(() => collectShifts(tree), [tree])
   const dates = useMemo(() => Object.keys(data).filter(isDateKey).sort(), [data])
   const [note, setNote] = useState(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const emptyDays = dates.filter((d) => isEmptyDay(data[d]))
 
@@ -644,7 +645,17 @@ function PlanView({ plan, ctx, menuBridge, plans }) {
     <>
       <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} plans={plans} tree={tree} menuBridge={menuBridge} />
 
-      <Section title={plan.title || 'План'} icon={Clock} right={<Badge color="slate">{kindLabel(plan.kind)}</Badge>}>
+      <section className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mb-4 overflow-hidden">
+        <button
+          onClick={() => setSettingsOpen((v) => !v)}
+          className="w-full flex items-center gap-2 px-4 py-3 text-left bg-slate-50 dark:bg-slate-900/40"
+        >
+          {settingsOpen ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
+          <Settings size={18} className="text-slate-500 dark:text-slate-400" />
+          <span className="font-semibold text-slate-800 dark:text-slate-100 text-[15px] flex-1">Настройки плана</span>
+          <Badge color="slate">{kindLabel(plan.kind)}</Badge>
+        </button>
+        {settingsOpen && <div className="p-3">
         <div className="grid grid-cols-1 gap-2 mb-3">
           <DraftInput value={plan.title} placeholder="Название плана" onCommit={(v) => { if (v.trim()) patchRecord('plans', plan.id, { title: v.trim() }) }} />
         </div>
@@ -695,7 +706,8 @@ function PlanView({ plan, ctx, menuBridge, plans }) {
             size="w-9 h-9"
           />
         </div>
-      </Section>
+        </div>}
+      </section>
 
       <ExchangePanel plan={plan} data={data} ctx={ctx} shifts={allShifts} menuBridge={menuBridge} />
       {isOwner && <CostPanel plan={plan} data={data} />}

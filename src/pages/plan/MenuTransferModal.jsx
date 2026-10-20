@@ -3,22 +3,29 @@ import { X, Upload } from 'lucide-react'
 import { inputClass, BigButton } from '../../components/UI'
 import { buildMenuTransferFromParts, applyMenuTransfer } from '../../plan/exchange'
 import { coursesForDay } from '../../utils/menuCourses'
-import { dayTitle } from '../../plan/calc'
+import { dayTitle, isDateKey } from '../../plan/calc'
 import { LOCALE } from '../../plan/lang'
 import { useEscape } from '../../plan/ui'
+import PeriodPicker from './PeriodPicker'
+import { daysBetween } from './gridShared'
 
-// Sends the dishes of the period on screen into the main program's Меню, day
-// by day. From there the Закупка tab can import them ("Импорт из меню").
-export default function MenuTransferModal({ title, dates, partsOf, ctx, menuBridge, onClose }) {
+// Sends the dishes of a chosen period into the main program's Меню, day by
+// day. From there the Закупка tab can import them ("Импорт из меню").
+//   initial: the period on screen · bounds: the whole span the data covers
+export default function MenuTransferModal({ title, initial, bounds, partsOf, ctx, menuBridge, onClose }) {
   useEscape(onClose)
+  const [range, setRange] = useState(initial)
   const [mode, setMode] = useState('skip')
   const [done, setDone] = useState(null)
+
+  const dates = useMemo(() => {
+    if (!isDateKey(range.from) || !isDateKey(range.to)) return []
+    return daysBetween(range.from, range.to).slice(0, 400)
+  }, [range])
   const days = useMemo(
     () => buildMenuTransferFromParts({ dates, partsOf, ctx, menuData: menuBridge.menuData }),
     [dates, partsOf, ctx, menuBridge.menuData]
   )
-  const first = days[0]?.date
-  const last = days[days.length - 1]?.date
 
   function run() {
     const list = days
@@ -27,6 +34,8 @@ export default function MenuTransferModal({ title, dates, partsOf, ctx, menuBrid
     const n = list.filter((d) => !(d.hasExisting && m === 'skip')).length
     setDone(`Перенесено дней: ${n}.`)
   }
+
+  const fmt = (k) => `${k.slice(8)}.${k.slice(5, 7)}`
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
@@ -41,7 +50,10 @@ export default function MenuTransferModal({ title, dates, partsOf, ctx, menuBrid
           количество — коэффициент (гостей ÷ 10). После этого в «Закупке» нажмите «Импорт из меню» за этот период.
         </p>
 
-        <select className={`${inputClass} mb-3`} value={mode} onChange={(e) => { setMode(e.target.value); setDone(null) }}>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Период</p>
+        <PeriodPicker from={range.from} to={range.to} bounds={bounds} onChange={(r) => { setRange(r); setDone(null) }} />
+
+        <select className={`${inputClass} my-3`} value={mode} onChange={(e) => { setMode(e.target.value); setDone(null) }}>
           <option value="skip">Не трогать дни, где в Меню уже есть блюда</option>
           <option value="append">Добавить к уже имеющимся блюдам</option>
           <option value="replace">Заменить блюда в этих днях</option>
@@ -66,8 +78,7 @@ export default function MenuTransferModal({ title, dates, partsOf, ctx, menuBrid
 
         {done && (
           <p className="text-sm text-green-700 dark:text-green-400 mb-3">
-            {done} В «Закупке» → «Импорт из меню» выберите период {first ? `${first.slice(8)}.${first.slice(5, 7)}` : ''}
-            {last && last !== first ? ` – ${last.slice(8)}.${last.slice(5, 7)}` : ''}.
+            {done} В «Закупке» → «Импорт из меню» выберите период {fmt(range.from)} – {fmt(range.to)}.
           </p>
         )}
         <BigButton icon={Upload} onClick={run} disabled={days.length === 0 || !!done}>Отправить в Меню</BigButton>

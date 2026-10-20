@@ -11,7 +11,8 @@ import { todayKey } from '../../utils/dateUtils'
 import { loadPos, savePos, useNarrow } from '../../plan/ui'
 import DayCards from './DayCards'
 import MenuTransferModal from './MenuTransferModal'
-import { StaffSelect, StaffSummary, useFocusState } from './StaffFocus'
+import { StaffSummary, useFocusState } from './StaffFocus'
+import ViewBar from './ViewBar'
 import { usePlanDeviceState } from '../../plan/planRoom'
 import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText, DishLine, MealLegend } from './gridShared'
 import { useOpenRecipe } from './recipeBridge'
@@ -28,8 +29,8 @@ const PALETTE = [
 const ALL_POS = '__all'
 
 const SPANS = [
-  { key: 'week', label: 'Неделя' },
-  { key: 'month', label: 'Месяц' },
+  { key: 'week', label: 'Неделя', short: 'Нед' },
+  { key: 'month', label: 'Месяц', short: 'Мес' },
 ]
 
 const isEmpty = (day) =>
@@ -129,6 +130,14 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
   const dayMinutes = (parts) => parts.reduce((sum, { day }) => sum + shiftsOf(day).reduce((a, s) => a + (shiftMinutes(s, 'planned') || 0), 0), 0)
   const periodTotal = dates.reduce((a, d) => a + dayMinutes(dayParts(d)), 0)
 
+  // first and last day that has anything in any plan (for the "whole plan" preset)
+  const allBounds = useMemo(() => {
+    const keys = []
+    Object.values(tree || {}).forEach((days) => Object.keys(days || {}).forEach((k) => { if (isDateKey(k)) keys.push(k) }))
+    keys.sort()
+    return keys.length ? { from: keys[0], to: keys[keys.length - 1] } : null
+  }, [tree])
+
   function printAll() {
     printReport(buildTablePrint({
       title: tr(ctx.lang, 'allPlans'),
@@ -154,58 +163,26 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
 
   return (
     <div className="mb-4">
-      <div className="flex items-center gap-2 mb-2">
-        <button onClick={() => step(-1)} className="w-11 h-11 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-          <ChevronLeft size={20} />
-        </button>
-        <p className="flex-1 text-center font-bold text-slate-800 dark:text-slate-100">{title}</p>
-        <button onClick={() => step(1)} className="w-11 h-11 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-          <ChevronRight size={20} />
-        </button>
-      </div>
-      <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-sm font-semibold mb-2">
-        {SPANS.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => { setSpan(s.key); setHideEmpty(s.key === 'month') }}
-            className={`flex-1 min-h-[40px] ${span === s.key ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <button
-          onClick={() => setHideEmpty((v) => !v)}
-          className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-        >
-          {hideEmpty ? <Eye size={14} /> : <EyeOff size={14} />}
-          {hideEmpty ? 'Показать пустые' : 'Скрыть пустые'}
-        </button>
-        {menuBridge && (
-          <button
-            onClick={() => setMenuOpen(true)}
-            className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-            title="Отправить блюда этого периода в раздел «Меню» основной программы"
-          >
-            <Upload size={14} /> В Меню
-          </button>
-        )}
-        <button
-          onClick={printAll}
-          className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-        >
-          <Printer size={14} /> Печать
-        </button>
-        <StaffSelect ctx={ctx} value={focus} onChange={setFocus} />
-      </div>
+      <ViewBar
+        title={title}
+        onStep={step}
+        span={span}
+        spans={SPANS}
+        onSpan={(k) => { setSpan(k); setHideEmpty(k === 'month') }}
+        ctx={ctx}
+        focus={focus}
+        onFocus={setFocus}
+        actions={[
+          { key: 'empty', icon: hideEmpty ? Eye : EyeOff, title: hideEmpty ? 'Показать пустые дни' : 'Скрыть пустые дни', onClick: () => setHideEmpty((v) => !v), active: hideEmpty },
+          menuBridge && { key: 'menu', icon: Upload, title: 'Отправить блюда в раздел «Меню» основной программы', onClick: () => setMenuOpen(true) },
+          { key: 'print', icon: Printer, title: 'Печать таблицы', onClick: printAll },
+        ]}
+      />
       <StaffSummary ctx={ctx} value={focus} dates={dates} />
-      <MealLegend ctx={ctx} />
 
       <div className="flex flex-wrap gap-1.5 mb-3 items-center text-xs text-slate-500">
         <span>Планы:</span>
         {plans.map((p) => <Tag key={p.id} plan={p} />)}
-        <span className="basis-full">Здесь всё из всех планов за период. Правится в самом плане: нажмите на его метку.</span>
       </div>
 
       {narrow ? (
@@ -322,8 +299,9 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
       )}
       {menuOpen && menuBridge && (
         <MenuTransferModal
-          title={`${tr(ctx.lang, 'allPlans')} · ${title}`}
-          dates={dates}
+          title={tr(ctx.lang, 'allPlans')}
+          initial={{ from: dates[0], to: dates[dates.length - 1] }}
+          bounds={allBounds}
           partsOf={dayParts}
           ctx={ctx}
           menuBridge={menuBridge}

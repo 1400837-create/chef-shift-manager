@@ -11,6 +11,7 @@ import {
 } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
 import { Message } from './shared'
+import PeriodPicker from './PeriodPicker'
 import { costSummary, money } from './Cost'
 import { coursesForDay } from '../../utils/menuCourses'
 
@@ -40,7 +41,7 @@ const LANG_OPTIONS = [
 
 export default function ExchangePanel({ plan, data, ctx, shifts, menuBridge }) {
   const [open, setOpen] = useState(false)
-  const [period, setPeriod] = useState('all')
+  const [period, setPeriod] = useState(null) // null = the whole plan
   const [printLang, setPrintLang] = useState('')
   const [msg, setMsg] = useState(null)
   const [kind, setKind] = useState('shifts')
@@ -50,12 +51,9 @@ export default function ExchangePanel({ plan, data, ctx, shifts, menuBridge }) {
   const [transferMode, setTransferMode] = useState('skip')
   const [withCost, setWithCost] = useState(false)
 
-  const weeks = useMemo(() => {
-    const set = new Set(planDates(data).map(mondayOf))
-    return [...set].sort()
-  }, [data])
+  const allDates = useMemo(() => planDates(data), [data])
+  const bounds = allDates.length ? { from: allDates[0], to: allDates[allDates.length - 1] } : null
 
-  const range = period === 'all' ? {} : { from: period, to: addDaysKey(period, 6) }
   const lang = printLang || ctx.lang
   const defaultYear = plan.month ? Number(plan.month.slice(0, 4)) : Number(todayKey().slice(0, 4))
 
@@ -134,22 +132,23 @@ export default function ExchangePanel({ plan, data, ctx, shifts, menuBridge }) {
       </button>
       {open && (
         <div className="p-3">
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            <select className={inputClass} value={period} onChange={(e) => { setPeriod(e.target.value); setTransfer(null) }}>
-              <option value="all">Весь план</option>
-              {weeks.map((w) => <option key={w} value={w}>Неделя {weekTitle(w, LOCALE.ru)}</option>)}
-            </select>
-            <select className={inputClass} value={lang} onChange={(e) => setPrintLang(e.target.value)}>
-              {LANG_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-            </select>
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Период</p>
+          <PeriodPicker
+            from={period?.from || bounds?.from || ''}
+            to={period?.to || bounds?.to || ''}
+            bounds={bounds}
+            onChange={(r) => { setPeriod(r); setTransfer(null) }}
+          />
+          <select className={`${inputClass} mt-2 mb-2`} value={lang} onChange={(e) => setPrintLang(e.target.value)}>
+            {LANG_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
           {menuBridge && (
             <label className="flex items-center gap-2 mb-2 text-sm text-slate-600 dark:text-slate-300">
               <input type="checkbox" checked={withCost} onChange={(e) => setWithCost(e.target.checked)} />
               Добавить калькуляцию в печать
             </label>
           )}
-          <BigButton onClick={print} icon={Printer} disabled={weeks.length === 0}>Печать</BigButton>
+          <BigButton onClick={print} icon={Printer} disabled={allDates.length === 0}>Печать</BigButton>
 
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mt-4 mb-1.5">Скопировать для Google Таблиц</p>
           <p className="text-xs text-slate-500 mb-2">Скопируется выбранный выше период. Откройте таблицу, выберите ячейку и вставьте (Ctrl+V).</p>

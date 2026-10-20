@@ -16,7 +16,8 @@ import { MenuCell, ShiftCell, NoteCell } from './GridCells'
 import CopyModal from './CopyModal'
 import MenuTransferModal from './MenuTransferModal'
 import DayCards from './DayCards'
-import { StaffSelect, StaffSummary, useFocusState } from './StaffFocus'
+import { StaffSummary, useFocusState } from './StaffFocus'
+import ViewBar from './ViewBar'
 import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween, DishLine, MealLegend } from './gridShared'
 import { useOpenRecipe } from './recipeBridge'
 
@@ -24,9 +25,9 @@ export { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween }
 import { printReport } from '../../utils/printReport'
 
 const SPANS = [
-  { key: 'week', label: 'Неделя' },
-  { key: 'month', label: 'Месяц' },
-  { key: 'all', label: 'Весь план' },
+  { key: 'week', label: 'Неделя', short: 'Нед' },
+  { key: 'month', label: 'Месяц', short: 'Мес' },
+  { key: 'all', label: 'Весь план', short: 'Все' },
 ]
 
 // Which other plan covers this date (a month plan wins over a free-range one).
@@ -215,73 +216,24 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
 
   return (
     <div className="mb-4">
-      <div className="flex items-center gap-2 mb-2">
-        {span !== 'all' && (
-          <button onClick={() => step(-1)} className="w-11 h-11 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-            <ChevronLeft size={20} />
-          </button>
-        )}
-        <p className="flex-1 text-center font-bold text-slate-800 dark:text-slate-100">{title}</p>
-        {span !== 'all' && (
-          <button onClick={() => step(1)} className="w-11 h-11 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-            <ChevronRight size={20} />
-          </button>
-        )}
-      </div>
-      <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-sm font-semibold mb-3">
-        {SPANS.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setSpan(s.key)}
-            className={`flex-1 min-h-[40px] ${span === s.key ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        {!narrow && (
-          <button
-            onClick={toggleEdit}
-            className={`min-h-[36px] rounded-lg text-xs font-semibold flex items-center gap-1.5 border px-2.5 ${
-              editMode
-                ? 'bg-orange-500 border-orange-500 text-white'
-                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-            }`}
-            title="Править блюда, смены и комментарии прямо в ячейках"
-          >
-            <Pencil size={14} />
-            {editMode ? 'Правка вкл.' : 'Править'}
-          </button>
-        )}
-        <button
-          onClick={() => setCopyOpen(true)}
-          className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-          title="Продублировать день или неделю на другие даты этого плана"
-        >
-          <Copy size={14} /> Дублировать
-        </button>
-        {menuBridge && (
-          <button
-            onClick={() => setMenuOpen(true)}
-            className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-            title="Отправить блюда этого периода в раздел «Меню» основной программы"
-          >
-            <Upload size={14} /> В Меню
-          </button>
-        )}
-        <button
-          onClick={printTable}
-          className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-        >
-          <Printer size={14} /> Печать
-        </button>
-        <StaffSelect ctx={ctx} value={focus} onChange={setFocus} />
-      </div>
+      <ViewBar
+        title={title}
+        onStep={span !== 'all' ? step : null}
+        span={span}
+        spans={SPANS}
+        onSpan={setSpan}
+        ctx={ctx}
+        focus={focus}
+        onFocus={setFocus}
+        actions={[
+          !narrow && { key: 'edit', icon: Pencil, title: editMode ? 'Правка в таблице включена — нажмите, чтобы выключить' : 'Править блюда, смены и комментарии прямо в таблице', onClick: toggleEdit, active: editMode },
+          { key: 'dup', icon: Copy, title: 'Продублировать день или неделю на другие даты этого плана', onClick: () => setCopyOpen(true) },
+          menuBridge && { key: 'menu', icon: Upload, title: 'Отправить блюда в раздел «Меню» основной программы', onClick: () => setMenuOpen(true) },
+          { key: 'print', icon: Printer, title: 'Печать таблицы', onClick: printTable },
+        ]}
+      />
 
       <StaffSummary ctx={ctx} value={focus} dates={dates} />
-      <MealLegend ctx={ctx} />
 
       {strays.length > 0 && (
         <div className="mb-3 rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-3 text-sm text-slate-800 dark:text-slate-100">
@@ -455,8 +407,9 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
 
       {menuOpen && menuBridge && (
         <MenuTransferModal
-          title={`${plan.title || 'План'} · ${title}`}
-          dates={dates}
+          title={plan.title || 'План'}
+          initial={{ from: dates[0] || todayKey(), to: dates[dates.length - 1] || todayKey() }}
+          bounds={existing.length ? { from: existing[0], to: existing[existing.length - 1] } : null}
           partsOf={(d) => (data[d] ? [{ plan, day: data[d] }] : [])}
           ctx={ctx}
           menuBridge={menuBridge}
