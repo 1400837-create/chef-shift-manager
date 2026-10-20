@@ -3,15 +3,16 @@ import {
   Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../components/UI'
-import { usePlanDeviceState } from '../plan/planRoom'
+import { usePlanDeviceState, getAuthor } from '../plan/planRoom'
 import { usePlanCollection, createRecord, patchRecord, deleteRecord } from '../plan/planStore'
 import {
   usePlanUsers, addUser, setUserPassword, setUserDisabled, deleteUser, createPlanRoom, joinPlanRoomAsOwner,
-  setOwnerName, useJournal, useBackups, createSnapshot, restoreSnapshot, exportPlanFile, parsePlanFile, importPlanFile,
+  setOwnerName, useJournal, useUnseenChanges, markChangesSeen, useBackups, createSnapshot, restoreSnapshot, exportPlanFile, parsePlanFile, importPlanFile,
 } from '../plan/planAdmin'
 import { durationMinutes, formatDuration, parseHM } from '../plan/hours'
 import { describeEntry } from '../plan/journalText'
 import { DraftInput, ConfirmButton, useAction, Message, StatusBar, parseNorm, byName } from './plan/shared'
+import { usePlanLang, setPlanLang } from '../plan/lang'
 import ScheduleTab from './plan/ScheduleTab'
 import HoursTab from './plan/HoursTab'
 
@@ -167,6 +168,9 @@ function JournalPanel() {
   const [days, setDays] = useState(7)
   const [author, setAuthor] = useState('all')
   const { entries, ready } = useJournal(days)
+  const { lastSeen } = useUnseenChanges()
+  const me = getAuthor().id
+  const isNew = (e) => e.byId !== me && (e.ts || e.clientTs || 0) > lastSeen
   const authors = useMemo(() => [...new Set(entries.map((e) => e.by).filter(Boolean))], [entries])
   const shown = author === 'all' ? entries : entries.filter((e) => e.by === author)
 
@@ -200,6 +204,7 @@ function JournalPanel() {
                 {new Date(e.clientTs).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
               </span>
               <p className="text-sm text-slate-700 dark:text-slate-200 min-w-0">
+                {isNew(e) && <span className="inline-block w-2 h-2 rounded-full bg-orange-500 mr-1.5 align-middle" title="Новое с прошлого визита" />}
                 <b>{e.by}</b> {describeEntry(e)}
               </p>
             </div>
@@ -474,6 +479,44 @@ function AccessPanel({ config }) {
 // page
 // ---------------------------------------------------------------------------
 
+function LangToggle() {
+  const lang = usePlanLang()
+  return (
+    <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-sm font-bold">
+      {['ru', 'de'].map((l) => (
+        <button
+          key={l}
+          onClick={() => setPlanLang(l)}
+          className={`min-h-[36px] px-3 ${lang === l ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}`}
+        >
+          {l.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Shown on entry when the other person changed things since this one last
+// looked. "Seen" is explicit (a button), so merely opening the app doesn't
+// silently swallow the news.
+function ChangesBanner({ onShow }) {
+  const { count, authors, ready } = useUnseenChanges()
+  if (!ready || count === 0) return null
+  return (
+    <div className="rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-3 mb-3">
+      <p className="text-sm text-slate-800 dark:text-slate-100">
+        Изменения с вашего прошлого визита: <b>{count}</b> (от: {authors.join(', ')})
+      </p>
+      <div className="flex gap-2 mt-2">
+        <button onClick={onShow} className="px-3 min-h-[36px] rounded-lg bg-orange-500 text-white text-sm font-semibold">Показать</button>
+        <button onClick={markChangesSeen} className="px-3 min-h-[36px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-semibold">
+          Отметить прочитанным
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function PlanPage() {
   const { config } = usePlanDeviceState()
   const isOwner = !config || config.role === 'owner'
@@ -492,10 +535,14 @@ export default function PlanPage() {
 
   return (
     <div className="pb-4">
-      <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-3">План работы</h1>
+      <div className="flex items-center justify-between mb-3">
+        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">План работы</h1>
+        {config && <LangToggle />}
+      </div>
       {config && (
         <>
           <StatusBar />
+          <ChangesBanner onShow={() => setSub('journal')} />
           <div className="flex gap-1.5 overflow-x-auto mb-3">
             {tabs.map(({ key, label, icon: Icon }) => (
               <button

@@ -46,23 +46,23 @@ export function shiftMonth(month, delta) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-export function monthTitle(month) {
+export function monthTitle(month, locale = 'ru-RU') {
   const [y, m] = month.split('-').map(Number)
-  const s = new Date(y, m - 1, 1).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+  const s = new Date(y, m - 1, 1).toLocaleDateString(locale, { month: 'long', year: 'numeric' })
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-export function dayTitle(key) {
+export function dayTitle(key, locale = 'ru-RU') {
   const d = parseDate(key)
-  const wd = d.toLocaleDateString('ru-RU', { weekday: 'short' })
-  const rest = d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+  const wd = d.toLocaleDateString(locale, { weekday: 'short' })
+  const rest = d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })
   return `${wd.charAt(0).toUpperCase() + wd.slice(1)}, ${rest}`
 }
 
-export function weekTitle(mondayKey) {
+export function weekTitle(mondayKey, locale = 'ru-RU') {
   const a = parseDate(mondayKey)
   const b = parseDate(addDaysKey(mondayKey, 6))
-  const fmt = (d) => d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace('.', '')
+  const fmt = (d) => d.toLocaleDateString(locale,{ day: 'numeric', month: 'short' }).replace('.', '')
   return `${fmt(a)} – ${fmt(b)}`
 }
 

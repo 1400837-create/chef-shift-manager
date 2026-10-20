@@ -180,7 +180,54 @@ function buildShoppingListHtml(payload) {
   `
 }
 
+function buildWorkPlanHtml(payload) {
+  const L = payload.labels
+  const note = (list) => (list && list.length
+    ? `<div class="muted" style="font-size:11px;">${list.map((c) => escapeHtml(c)).join('<br>')}</div>`
+    : '')
+
+  const weeks = payload.weeks.map((week) => {
+    const days = week.days.map((day) => {
+      const blockRows = day.blocks.map((b) => {
+        const dishes = b.dishes.length
+          ? b.dishes.map((d) => `${d.changed ? '<span style="display:inline-block;border:1.5px solid #c00;color:#c00;font-weight:bold;width:13px;text-align:center;line-height:15px;margin-right:5px;" title="' + escapeHtml(L.changed) + '">!</span>' : ''}${escapeHtml(d.text)}`).join('<br>')
+          : ''
+        return `<tr>
+          <td class="nowrap">${escapeHtml(b.time)}</td>
+          <td>${escapeHtml(b.name)}</td>
+          <td>${escapeHtml(b.persons)}</td>
+          <td>${dishes}${note(b.comments)}</td>
+        </tr>`
+      }).join('')
+      const blocks = day.blocks.length
+        ? `<table><thead><tr><th style="width:50px;">${escapeHtml(L.time)}</th><th style="width:150px;">${escapeHtml(L.meal)}</th><th style="width:55px;">${escapeHtml(L.persons)}</th><th>${escapeHtml(L.dishes)}</th></tr></thead><tbody>${blockRows}</tbody></table>`
+        : ''
+      const shiftRows = day.shifts.map((s) => `<tr>
+          <td>${escapeHtml(s.staff)}${note(s.comments)}</td>
+          <td class="nowrap">${escapeHtml(s.time)}</td>
+          <td class="nowrap">${escapeHtml(s.hours)}</td>
+          <td class="nowrap">${escapeHtml(s.actual)}</td>
+        </tr>`).join('')
+      const shifts = day.shifts.length
+        ? `<table><thead><tr><th>${escapeHtml(L.staff)}</th><th style="width:100px;">${escapeHtml(L.time)}</th><th style="width:60px;">${escapeHtml(L.hours)}</th><th style="width:150px;">${escapeHtml(L.actual)}</th></tr></thead><tbody>${shiftRows}
+            <tr><td colspan="2"><b>${escapeHtml(L.total)}</b></td><td colspan="2"><b>${escapeHtml(day.total)}</b></td></tr></tbody></table>`
+        : ''
+      return `<div class="print-no-break"><h2>${escapeHtml(day.title)}</h2>${blocks}${shifts}${note(day.dayComments)}</div>`
+    }).join('')
+    return `<h1 style="margin-top:14px;">${escapeHtml(week.title)}</h1>${days}`
+  }).join('')
+
+  const summary = payload.summary.length
+    ? `<div class="print-no-break"><h2>${escapeHtml(L.totalPeriod)}</h2><table>
+        <thead><tr><th>${escapeHtml(L.staff)}</th><th style="width:70px;">${escapeHtml(L.norm)}</th><th style="width:70px;">${escapeHtml(L.planned)}</th><th style="width:70px;">${escapeHtml(L.actual)}</th></tr></thead>
+        <tbody>${payload.summary.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.norm)}</td><td>${escapeHtml(r.planned)}</td><td>${escapeHtml(r.actual)}</td></tr>`).join('')}</tbody></table></div>`
+    : ''
+
+  return `<h1 style="font-size:22px;">${escapeHtml(payload.title)}</h1>${weeks || `<p class="muted">${escapeHtml(L.noData)}</p>`}${summary}`
+}
+
 const BUILDERS = {
+  'work-plan': buildWorkPlanHtml,
   tasks: buildTasksHtml,
   menu: buildMenuHtml,
   recount: buildRecountHtml,

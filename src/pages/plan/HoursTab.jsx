@@ -9,6 +9,7 @@ import {
 } from '../../plan/calc'
 import { todayKey } from '../../utils/dateUtils'
 import { byName } from './shared'
+import { usePlanLang, LOCALE, staffLabel } from '../../plan/lang'
 
 const normMinutes = (norm) => (typeof norm === 'number' ? Math.round(norm * 60) : null)
 
@@ -32,6 +33,7 @@ function weeksOfMonth(from, to) {
 }
 
 function StaffRow({ row, weeks, shifts }) {
+  const lang = usePlanLang()
   const [open, setOpen] = useState(false)
   const st = status(row.planned, row.norm)
   const perWeek = useMemo(
@@ -51,7 +53,7 @@ function StaffRow({ row, weeks, shifts }) {
         {open ? <ChevronDown size={16} className="text-slate-400 shrink-0" /> : <ChevronRight size={16} className="text-slate-400 shrink-0" />}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
-            {row.name}{row.removed ? ' (удалён)' : ''}
+            {staffLabel(row, lang)}{row.removed ? ' (удалён)' : ''}
           </p>
           <p className="text-xs text-slate-500">
             Норма {row.norm !== null ? `${row.norm} ч` : '—'} · План <b>{formatDuration(row.planned)}</b>
@@ -64,7 +66,7 @@ function StaffRow({ row, weeks, shifts }) {
         <div className="border-t border-slate-100 dark:border-slate-700 px-3 py-2 bg-slate-50 dark:bg-slate-900/30">
           {perWeek.map((w) => (
             <div key={w.monday} className="flex justify-between text-sm py-1 text-slate-600 dark:text-slate-300">
-              <span>{weekTitle(w.monday)}</span>
+              <span>{weekTitle(w.monday, LOCALE[lang])}</span>
               <span>
                 план <b>{formatDuration(w.planned)}</b>
                 {w.actual > 0 && <> · факт <b>{formatDuration(w.actual)}</b></>}
@@ -79,6 +81,7 @@ function StaffRow({ row, weeks, shifts }) {
 }
 
 export default function HoursTab() {
+  const lang = usePlanLang()
   const staff = usePlanCollection('staff')
   const tree = usePlanCollection('planData').data
   const [month, setMonth] = useState(() => monthOf(todayKey()))
@@ -96,7 +99,7 @@ export default function HoursTab() {
       const r = byKey.get(s.id)
       seen.add(s.id)
       list.push({
-        key: s.id, name: s.name, norm: typeof s.norm === 'number' ? s.norm : null,
+        key: s.id, name: s.name, nameDe: s.nameDe, norm: typeof s.norm === 'number' ? s.norm : null,
         planned: r ? r.planned : 0, actual: r ? r.actual : 0, removed: false,
       })
     })
@@ -129,7 +132,7 @@ export default function HoursTab() {
         <button onClick={() => setMonth((m) => shiftMonth(m, -1))} className="w-11 h-11 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
           <ChevronLeft size={20} />
         </button>
-        <p className="flex-1 text-center font-bold text-slate-800 dark:text-slate-100">{monthTitle(month)}</p>
+        <p className="flex-1 text-center font-bold text-slate-800 dark:text-slate-100">{monthTitle(month, LOCALE[lang])}</p>
         <button onClick={() => setMonth((m) => shiftMonth(m, 1))} className="w-11 h-11 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
           <ChevronRight size={20} />
         </button>
@@ -147,7 +150,7 @@ export default function HoursTab() {
         <div className="rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-3 mb-4 text-sm text-red-800 dark:text-red-200">
           <p className="font-semibold flex items-center gap-1.5 mb-1"><AlertTriangle size={16} /> Запланировано больше нормы</p>
           {warnings.map((r) => (
-            <p key={r.key}>{r.name}: {formatDuration(r.planned)} из {r.norm} ч (+{formatDuration(r.planned - normMinutes(r.norm))})</p>
+            <p key={r.key}>{staffLabel(r, lang)}: {formatDuration(r.planned)} из {r.norm} ч (+{formatDuration(r.planned - normMinutes(r.norm))})</p>
           ))}
         </div>
       )}
@@ -155,7 +158,7 @@ export default function HoursTab() {
       <Section title="По неделям">
         {weekTotals.map((w) => (
           <div key={w.monday} className="flex justify-between text-sm py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-0 text-slate-700 dark:text-slate-200">
-            <span>{weekTitle(w.monday)}</span>
+            <span>{weekTitle(w.monday, LOCALE[lang])}</span>
             <span>
               план <b>{formatDuration(w.planned)}</b>
               {w.actual > 0 && <> · факт <b>{formatDuration(w.actual)}</b></>}

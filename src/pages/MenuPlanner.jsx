@@ -238,7 +238,7 @@ export default function MenuPlanner({
   }
 
   function blankRecipeForm() {
-    return { name: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null, category: 'other' }
+    return { name: '', nameDe: '', ingredients: [{ productName: '', qty: '' }], comment: '', photo: null, category: 'other' }
   }
 
   function openNewRecipeForm() {
@@ -304,6 +304,7 @@ export default function MenuPlanner({
   function startEditRecipe(recipe) {
     setRecipeForm({
       name: recipe.name,
+      nameDe: recipe.nameDe || '',
       ingredients: recipe.ingredients.map((ing) => ({ productName: productNameById(ing.productId), qty: ing.qty })),
       comment: recipe.comment || '',
       photo: recipe.photo || null,
@@ -382,6 +383,7 @@ export default function MenuPlanner({
     setRecipeError(null)
     const payload = {
       name: recipeForm.name.trim(),
+      nameDe: (recipeForm.nameDe || '').trim(),
       ingredients,
       comment: recipeForm.comment.trim(),
       photo: recipeForm.photo || null,
@@ -2000,6 +2002,14 @@ function RecipeFormFields({
           placeholder="Например: Бульон"
           value={recipeForm.name}
           onChange={(e) => setRecipeForm((f) => ({ ...f, name: e.target.value }))}
+        />
+      </Field>
+      <Field label="Название (DE) — для плана работы и печати на немецком">
+        <input
+          className={inputClass}
+          placeholder="Например: Rinderbrühe"
+          value={recipeForm.nameDe || ''}
+          onChange={(e) => setRecipeForm((f) => ({ ...f, nameDe: e.target.value }))}
         />
       </Field>
       <Field label="Тип блюда">

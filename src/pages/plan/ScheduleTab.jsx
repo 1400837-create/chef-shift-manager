@@ -10,6 +10,8 @@ import {
 } from '../../plan/calc'
 import { todayKey } from '../../utils/dateUtils'
 import { DraftInput, byName } from './shared'
+import { usePlanLang, LOCALE, staffLabel } from '../../plan/lang'
+import ExchangePanel from './Exchange'
 
 const PLAN_KINDS = [
   { key: 'month', label: 'Месяц' },
@@ -205,19 +207,25 @@ function BlockCard({ coll, date, block, ctx }) {
               >
                 <Flag size={15} fill={d.changed ? 'currentColor' : 'none'} />
               </button>
-              <DraftInput
-                value={d.text}
-                className={d.changed ? '!text-red-600' : ''}
-                onCommit={(v) => {
-                  const text = v.trim()
-                  if (!text) return
-                  const rel = { [`${base}/dishes/${d.id}/text`]: text }
-                  // Renaming a dish away from its recipe's name means it is no
-                  // longer that recipe — drop the link rather than lie.
-                  if (d.recipeId && recipe && recipe.name !== text) rel[`${base}/dishes/${d.id}/recipeId`] = null
-                  patchDish(d, rel)
-                }}
-              />
+              {ctx.lang === 'de' && recipe?.de ? (
+                // German view of a linked dish is read-only: the German name
+                // belongs to the recipe, edit the dish in the Russian view.
+                <div className={`${inputClass} flex items-center ${d.changed ? '!text-red-600' : ''}`}>{recipe.de}</div>
+              ) : (
+                <DraftInput
+                  value={d.text}
+                  className={d.changed ? '!text-red-600' : ''}
+                  onCommit={(v) => {
+                    const text = v.trim()
+                    if (!text) return
+                    const rel = { [`${base}/dishes/${d.id}/text`]: text }
+                    // Renaming a dish away from its recipe's name means it is no
+                    // longer that recipe — drop the link rather than lie.
+                    if (d.recipeId && recipe && recipe.name !== text) rel[`${base}/dishes/${d.id}/recipeId`] = null
+                    patchDish(d, rel)
+                  }}
+                />
+              )}
               {d.recipeId && recipe && <Badge color="green">ТК</Badge>}
               {coef !== null && <span className="shrink-0 text-xs text-slate-400">×{coef}</span>}
               <button
@@ -274,7 +282,7 @@ function ShiftRow({ coll, date, shift, ctx, blocks }) {
           <select className={inputClass} value={shift.staffId || (shift.staffName ? '__old' : '')} onChange={(e) => setStaff(e.target.value)}>
             <option value="">— выберите сотрудника —</option>
             {!staffKnown && shift.staffName && <option value={shift.staffId || '__old'} disabled>{shift.staffName} (нет в списке)</option>}
-            {ctx.staffList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {ctx.staffList.map((s) => <option key={s.id} value={s.id}>{staffLabel(s, ctx.lang)}</option>)}
           </select>
         </div>
         <div>
@@ -375,7 +383,7 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
       <div className="grid grid-cols-2 gap-2">
         <select className={inputClass + ' col-span-2'} value={staffId} onChange={(e) => setStaffId(e.target.value)}>
           <option value="">— сотрудник —</option>
-          {ctx.staffList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {ctx.staffList.map((s) => <option key={s.id} value={s.id}>{staffLabel(s, ctx.lang)}</option>)}
         </select>
         {ctx.templates.length > 0 && (
           <select className={inputClass + ' col-span-2'} value={templateId} onChange={(e) => chooseTemplate(e.target.value)}>
@@ -403,7 +411,7 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
           {suggestions.map(({ staff, remainingMin, busy, workingToday }) => (
             <div key={staff.id} className="flex items-center gap-2 py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-0">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{staff.name}</p>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{staffLabel(staff, ctx.lang)}</p>
                 <p className="text-xs text-slate-400">
                   {remainingMin === null ? 'норма не задана' : remainingMin >= 0 ? `осталось ${formatDuration(remainingMin)} до нормы` : `сверх нормы ${formatDuration(-remainingMin)}`}
                   {busy ? ' · занят(а) в это время' : workingToday ? ' · уже работает в этот день' : ''}
@@ -446,7 +454,7 @@ function DayCard({ coll, date, day, ctx, allShifts, open, onToggle }) {
     <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 mb-3 overflow-hidden">
       <button onClick={onToggle} className="w-full flex items-center gap-2 px-3 py-3 text-left bg-slate-50 dark:bg-slate-900/40">
         {open ? <ChevronDown size={18} className="text-slate-400 shrink-0" /> : <ChevronRight size={18} className="text-slate-400 shrink-0" />}
-        <span className="font-bold text-slate-800 dark:text-slate-100 flex-1 min-w-0">{dayTitle(date)}</span>
+        <span className="font-bold text-slate-800 dark:text-slate-100 flex-1 min-w-0">{dayTitle(date, LOCALE[ctx.lang])}</span>
         {blocks.length > 0 && <Badge color="slate">{blocks.length} приём. · {dishCount} блюд</Badge>}
         {shifts.length > 0 && <Badge color="orange">{formatDuration(plannedMin)} ч</Badge>}
         {commentCount > 0 && <MessageSquare size={14} className="text-orange-500 shrink-0" />}
@@ -541,10 +549,12 @@ function PlanView({ plan, ctx }) {
         </div>
       </Section>
 
+      <ExchangePanel plan={plan} data={data} ctx={ctx} shifts={allShifts} />
+
       {dates.length === 0 && <p className="text-sm text-slate-400 text-center py-4">В плане пока нет дней — добавьте первый.</p>}
       {weeks.map(([monday, list]) => (
         <div key={monday}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 mt-1">Неделя {weekTitle(monday)}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 mt-1">Неделя {weekTitle(monday, LOCALE[ctx.lang])}</p>
           {list.map((date) => (
             <DayCard
               key={date}
@@ -602,6 +612,7 @@ export default function ScheduleTab() {
   const staff = usePlanCollection('staff')
   const templatesCol = usePlanCollection('shiftTemplates')
   const recipes = usePlanCollection('recipesSlim')
+  const lang = usePlanLang()
 
   const sortedPlans = useMemo(() => [...plans.items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [plans.items])
   const selKey = `kitchenPlan_selectedPlan:${code}`
@@ -623,13 +634,15 @@ export default function ScheduleTab() {
     // recipesSlim can come back as an array with holes (Firebase turns small
     // integer keys into one) — skip the empty slots.
     const recipeList = Object.entries(recipes.data || {})
-      .map(([id, r]) => (r && r.n ? { id, name: r.n } : null))
+      .map(([id, r]) => (r && r.n ? { id, name: r.n, de: r.d || '' } : null))
       .filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
     const recipeById = {}
     recipeList.forEach((r) => { recipeById[r.id] = r })
-    return { staffList, templates, recipeList, recipeById }
-  }, [staff.items, templatesCol.items, recipes.data])
+    const staffById = {}
+    staffList.forEach((s) => { staffById[s.id] = s })
+    return { staffList, staffById, templates, recipeList, recipeById, lang }
+  }, [staff.items, templatesCol.items, recipes.data, lang])
 
   const plan = sortedPlans.find((p) => p.id === selected)
 

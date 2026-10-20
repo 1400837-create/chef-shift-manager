@@ -1,0 +1,313 @@
+import { formatDuration, parseHM } from './hours'
+import {
+  isDateKey, dayTitle, weekTitle, mondayOf, shiftMinutes, aggregateByStaff,
+} from './calc'
+import { LOCALE, tr } from './lang'
+
+// Everything here is pure: plan data in, text / print payload / write-set out.
+// `data` is one plan's tree: { [YYYY-MM-DD]: { blocks, shifts, comments } }.
+
+export function sortedEntries(obj, cmp) {
+  return Object.entries(obj || {})
+    .filter(([, v]) => v && typeof v === 'object')
+    .map(([id, v]) => ({ id, ...v }))
+    .sort(cmp)
+}
+
+export const blocksOf = (day) =>
+  sortedEntries(day.blocks, (a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || a.id.localeCompare(b.id))
+export const shiftsOf = (day) =>
+  sortedEntries(day.shifts, (a, b) => (a.start || '99:99').localeCompare(b.start || '99:99') || (a.staffName || '').localeCompare(b.staffName || '', 'ru'))
+export const dishesOf = (block) => sortedEntries(block.dishes, (a, b) => a.id.localeCompare(b.id))
+export const commentsOf = (node) => sortedEntries(node.comments, (a, b) => (a.ts || 0) - (b.ts || 0))
+
+export function planDates(data, from, to) {
+  return Object.keys(data || {})
+    .filter(isDateKey)
+    .filter((d) => (!from || d >= from) && (!to || d <= to))
+    .sort()
+}
+
+// ---------------------------------------------------------------------------
+// text for Google Sheets / Excel (tab-separated pastes into cells)
+// ---------------------------------------------------------------------------
+
+const cell = (v) => String(v ?? '').replace(/[\t\r\n]+/g, ' ').trim()
+const tsv = (rows) => rows.map((r) => r.map(cell).join('\t')).join('\n')
+
+function staffRu(shift, staffById) {
+  return (shift.staffId && staffById[shift.staffId]?.name) || shift.staffName || ''
+}
+
+export function shiftsTsv(data, ctx, from, to) {
+  const rows = [['Дата', 'Сотрудник', 'Начало', 'Конец', 'Факт начало', 'Факт конец', 'Часы план', 'Часы факт']]
+  planDates(data, from, to).forEach((date) => {
+    shiftsOf(data[date]).forEach((s) => {
+      const p = shiftMinutes(s, 'planned')
+      const a = shiftMinutes(s, 'actual')
+      rows.push([
+        date, staffRu(s, ctx.staffById), s.start, s.end, s.actStart, s.actEnd,
+        p === null ? '' : formatDuration(p), a === null ? '' : formatDuration(a),
+      ])
+    })
+  })
+  return tsv(rows)
+}
+
+export function dishesTsv(data, ctx, from, to) {
+  const rows = [['Дата', 'Приём', 'Время', 'Персон', 'Блюдо', 'Блюдо (DE)']]
+  planDates(data, from, to).forEach((date) => {
+    blocksOf(data[date]).forEach((b) => {
+      const dishes = dishesOf(b)
+      if (!dishes.length) rows.push([date, b.name, b.time, b.persons, '', ''])
+      dishes.forEach((d) => rows.push([date, b.name, b.time, b.persons, d.text, ctx.recipeById[d.recipeId]?.de || '']))
+    })
+  })
+  return tsv(rows)
+}
+
+export function hoursRows(shifts, staffList, from, to) {
+  const byKey = aggregateByStaff(shifts, from, to)
+  const seen = new Set()
+  const rows = []
+  staffList.forEach((s) => {
+    const r = byKey.get(s.id)
+    seen.add(s.id)
+    rows.push({ key: s.id, staff: s, name: s.name, norm: typeof s.norm === 'number' ? s.norm : null, planned: r ? r.planned : 0, actual: r ? r.actual : 0 })
+  })
+  byKey.forEach((r, key) => {
+    if (!seen.has(key)) rows.push({ key, staff: null, name: r.name || '(?)', norm: null, planned: r.planned, actual: r.actual })
+  })
+  return rows.filter((r) => r.planned > 0 || r.actual > 0)
+}
+
+export function hoursTsv(shifts, staffList, from, to) {
+  const rows = [['Сотрудник', 'Норма, ч', 'План', 'Факт']]
+  hoursRows(shifts, staffList, from, to).forEach((r) =>
+    rows.push([r.name, r.norm === null ? '' : String(r.norm).replace('.', ','), formatDuration(r.planned), formatDuration(r.actual)])
+  )
+  return tsv(rows)
+}
+
+// ---------------------------------------------------------------------------
+// import by paste
+// ---------------------------------------------------------------------------
+
+export function parseDateCell(raw, defaultYear) {
+  const s = String(raw ?? '').trim()
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s)
+  let y; let mo; let d
+  if (m) { y = +m[1]; mo = +m[2]; d = +m[3] } else {
+    m = /^(\d{1,2})[./](\d{1,2})(?:[./](\d{2}|\d{4}))?\.?$/.exec(s)
+    if (!m) return null
+    d = +m[1]; mo = +m[2]
+    y = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : defaultYear
+  }
+  const dt = new Date(y, mo - 1, d)
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+export function parseTimeCell(raw) {
+  const s = String(raw ?? '').trim().replace('.', ':')
+  if (!s) return ''
+  const m = /^(\d{1,2})(?::(\d{2}))?$/.exec(s)
+  if (!m) return null
+  const norm = `${m[1].padStart(2, '0')}:${m[2] || '00'}`
+  return parseHM(norm) === null ? null : norm
+}
+
+function splitLines(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => (line.includes('\t') ? line.split('\t') : line.split(';')))
+    .map((cells) => cells.map((c) => c.trim()))
+    .filter((cells) => cells.some((c) => c !== ''))
+}
+
+const norm = (s) => String(s || '').trim().toLowerCase()
+
+// kind: 'shifts' | 'dishes'. Returns { rows, ok, bad } — bad rows carry a
+// reason and are simply skipped on import.
+export function parsePaste(kind, text, { staffList, recipeList, defaultYear }) {
+  const lines = splitLines(text)
+  const staffByName = new Map()
+  staffList.forEach((s) => {
+    staffByName.set(norm(s.name), s)
+    if (s.nameDe) staffByName.set(norm(s.nameDe), s)
+  })
+  const recipeByName = new Map()
+  recipeList.forEach((r) => {
+    recipeByName.set(norm(r.name), r)
+    if (r.de) recipeByName.set(norm(r.de), r)
+  })
+
+  const rows = []
+  lines.forEach((cells, i) => {
+    const date = parseDateCell(cells[0], defaultYear)
+    if (!date) {
+      // a header line is expected first and is silently skipped
+      if (i === 0) return
+      rows.push({ line: i + 1, error: `не распознана дата «${cells[0] || ''}»` })
+      return
+    }
+    if (kind === 'shifts') {
+      const staff = staffByName.get(norm(cells[1]))
+      const start = parseTimeCell(cells[2])
+      const end = parseTimeCell(cells[3])
+      const actStart = parseTimeCell(cells[4])
+      const actEnd = parseTimeCell(cells[5])
+      if (!staff) return rows.push({ line: i + 1, error: `сотрудник «${cells[1] || ''}» не найден в справочнике` })
+      if (!start || !end) return rows.push({ line: i + 1, error: 'не указано начало или конец смены' })
+      if (actStart === null || actEnd === null) return rows.push({ line: i + 1, error: 'фактическое время не распознано' })
+      rows.push({ line: i + 1, date, staff, start, end, actStart: actStart || null, actEnd: actEnd || null })
+    } else {
+      const time = parseTimeCell(cells[2])
+      const persons = cells[3] ? parseInt(cells[3], 10) : null
+      const text = cells[4]
+      if (!text) return rows.push({ line: i + 1, error: 'не указано блюдо' })
+      if (time === null) return rows.push({ line: i + 1, error: 'время не распознано' })
+      const recipe = recipeByName.get(norm(text))
+      rows.push({
+        line: i + 1, date, block: cells[1] || '', time, persons: Number.isFinite(persons) && persons > 0 ? persons : null,
+        text: recipe ? recipe.name : text, recipeId: recipe ? recipe.id : null,
+      })
+    }
+  })
+  return { rows, ok: rows.filter((r) => !r.error), bad: rows.filter((r) => r.error) }
+}
+
+// Turns parsed rows into one multi-path write relative to `planData/<planId>`.
+// Dishes join an existing block of the same name on that day when there is one.
+export function buildImportUpdates(kind, rows, data, planId, makeId) {
+  const base = `planData/${planId}`
+  const updates = {}
+  const dayAdded = new Set()
+  const blockPaths = new Map()
+
+  function ensureDay(date) {
+    if (!data[date] && !dayAdded.has(date)) {
+      dayAdded.add(date)
+      updates[`${base}/${date}/d`] = 1
+    }
+  }
+
+  rows.forEach((r) => {
+    ensureDay(r.date)
+    if (kind === 'shifts') {
+      updates[`${base}/${r.date}/shifts/${makeId()}`] = {
+        staffId: r.staff.id, staffName: r.staff.name, start: r.start, end: r.end,
+        actStart: r.actStart, actEnd: r.actEnd,
+      }
+      return
+    }
+    const key = `${r.date}|${norm(r.block)}|${r.block ? '' : r.time}`
+    let blockId = blockPaths.get(key)
+    if (!blockId) {
+      const existing = r.block
+        ? Object.entries(data[r.date]?.blocks || {}).find(([, b]) => b && norm(b.name) === norm(r.block))
+        : null
+      if (existing) blockId = existing[0]
+      else {
+        blockId = makeId()
+        const bp = `${base}/${r.date}/blocks/${blockId}`
+        // fields written one by one, so each path is a leaf (no parent/child overlap)
+        updates[`${bp}/name`] = r.block
+        updates[`${bp}/time`] = r.time || ''
+        if (r.persons) updates[`${bp}/persons`] = r.persons
+      }
+      blockPaths.set(key, blockId)
+    }
+    updates[`${base}/${r.date}/blocks/${blockId}/dishes/${makeId()}`] = { text: r.text, recipeId: r.recipeId }
+  })
+  return updates
+}
+
+// ---------------------------------------------------------------------------
+// print payload
+// ---------------------------------------------------------------------------
+
+// `lang`: 'ru' | 'de' | 'both'. With 'both' every name reads "русское / deutsch".
+export function buildPrintPayload({ plan, data, ctx, shifts, lang, from, to }) {
+  const L = (ru, de) => (lang === 'both' ? (de && de !== ru ? `${ru} / ${de}` : ru) : lang === 'de' ? (de || ru) : ru)
+  const T = (key) => (lang === 'both' ? `${tr('ru', key)} / ${tr('de', key)}` : tr(lang, key))
+  const D = (fn) => (lang === 'both' ? `${fn('ru-RU')} / ${fn('de-DE')}` : fn(LOCALE[lang]))
+
+  const dates = planDates(data, from, to)
+  const weeks = new Map()
+  dates.forEach((date) => {
+    const monday = mondayOf(date)
+    if (!weeks.has(monday)) weeks.set(monday, [])
+    weeks.get(monday).push(date)
+  })
+
+  const staffName = (s) => {
+    const rec = s.staffId ? ctx.staffById[s.staffId] : null
+    return L(rec?.name || s.staffName || '', rec?.nameDe || '')
+  }
+
+  const out = []
+  weeks.forEach((days, monday) => {
+    out.push({
+      title: `${T('week')} ${D((loc) => weekTitle(monday, loc))}`,
+      days: days.map((date) => {
+        const day = data[date]
+        const shiftList = shiftsOf(day)
+        let planned = 0
+        shiftList.forEach((s) => { planned += shiftMinutes(s, 'planned') || 0 })
+        return {
+          title: D((loc) => dayTitle(date, loc)),
+          blocks: blocksOf(day).map((b) => ({
+            time: b.time || '',
+            name: b.name || '',
+            persons: b.persons || '',
+            dishes: dishesOf(b).map((d) => ({
+              text: L(d.text || '', ctx.recipeById[d.recipeId]?.de || ''),
+              changed: !!d.changed,
+            })),
+            comments: commentsOf(b).map((c) => `${c.text} (${c.by})`),
+          })),
+          shifts: shiftList.map((s) => {
+            const p = shiftMinutes(s, 'planned')
+            const a = shiftMinutes(s, 'actual')
+            return {
+              staff: staffName(s),
+              time: `${s.start || ''}–${s.end || ''}`,
+              hours: p === null ? '' : formatDuration(p),
+              actual: a === null ? '' : `${s.actStart}–${s.actEnd} (${formatDuration(a)})`,
+              comments: commentsOf(s).map((c) => `${c.text} (${c.by})`),
+            }
+          }),
+          dayComments: commentsOf(day).map((c) => `${c.text} (${c.by})`),
+          total: shiftList.length ? formatDuration(planned) : '',
+        }
+      }),
+    })
+  })
+
+  const rangeFrom = dates[0]
+  const rangeTo = dates[dates.length - 1]
+  const summary = rangeFrom
+    ? hoursRows(shifts, ctx.staffList, rangeFrom, rangeTo).map((r) => ({
+        name: L(r.staff?.name || r.name, r.staff?.nameDe || ''),
+        norm: r.norm === null ? '' : String(r.norm),
+        planned: formatDuration(r.planned),
+        actual: r.actual ? formatDuration(r.actual) : '',
+      }))
+    : []
+
+  return {
+    type: 'work-plan',
+    title: plan.title || T('plan'),
+    lang,
+    weeks: out,
+    summary,
+    labels: {
+      meals: T('meals'), shifts: T('shifts'), time: T('time'), meal: T('meal'), persons: T('persons'),
+      dishes: T('dishes'), staff: T('staff'), hours: T('hours'), norm: T('norm'), planned: T('planned'),
+      actual: T('actual'), total: T('total'), totalPeriod: T('totalMonth'), noData: T('noData'),
+      changed: T('changed'),
+    },
+  }
+}
+

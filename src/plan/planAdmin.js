@@ -417,6 +417,7 @@ export async function publishRecipesSlim(recipes) {
   recipes.forEach((r) => {
     const key = String(r.id).replace(/[.#$\/\[\]]/g, '_')
     map[key] = { n: r.name || '', c: r.category || 'other' }
+    if (r.nameDe && r.nameDe.trim()) map[key].d = r.nameDe.trim()
   })
   const json = JSON.stringify(map)
   const marker = `kitchenPlan_slimHash:${cfg.code}`
@@ -445,4 +446,55 @@ export function usePlanMaintenance(recipes) {
     const t = setTimeout(() => publishRecipesSlim(recipes).catch(() => {}), 3000)
     return () => clearTimeout(t)
   }, [code, role, recipes])
+}
+
+// ---- "what changed since I last looked" ----------------------------------------------------
+
+const seenListeners = new Set()
+const seenKey = () => {
+  const code = getPlanConfig()?.code
+  return code ? `kitchenPlan_lastSeen:${code}:${getAuthor().id}` : null
+}
+
+function readLastSeen() {
+  const key = seenKey()
+  if (!key) return 0
+  try {
+    const v = Number(localStorage.getItem(key))
+    if (v) return v
+    // First visit on this device: start counting from now rather than
+    // flagging the whole history as news.
+    localStorage.setItem(key, String(Date.now()))
+    return Date.now()
+  } catch {
+    return 0
+  }
+}
+
+export function markChangesSeen() {
+  const key = seenKey()
+  if (!key) return
+  try {
+    localStorage.setItem(key, String(Date.now()))
+  } catch {
+    // nothing to persist to; the banner will simply reappear next visit
+  }
+  seenListeners.forEach((fn) => fn())
+}
+
+// Changes made by someone else since this person last marked things as seen.
+export function useUnseenChanges() {
+  const { entries, ready } = useJournal(14)
+  const [lastSeen, setLastSeen] = useState(() => readLastSeen())
+  useEffect(() => {
+    const fn = () => setLastSeen(readLastSeen())
+    seenListeners.add(fn)
+    fn()
+    return () => seenListeners.delete(fn)
+  }, [])
+  const me = getAuthor().id
+  const unseen = ready
+    ? entries.filter((e) => (e.ts || e.clientTs || 0) > lastSeen && e.byId !== me)
+    : []
+  return { unseen, count: unseen.length, authors: [...new Set(unseen.map((e) => e.by).filter(Boolean))], lastSeen, ready }
 }

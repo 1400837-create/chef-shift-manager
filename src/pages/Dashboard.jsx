@@ -10,6 +10,7 @@ import { printReport } from '../utils/printReport'
 import { computeBalance } from '../utils/stockBalance'
 import { coursesForDay } from '../utils/menuCourses'
 import Cleaning from './Cleaning'
+import { useUnseenChanges } from '../plan/planAdmin'
 
 export default function Dashboard({
   myTasks, setMyTasks,
@@ -24,6 +25,7 @@ export default function Dashboard({
   // offsets are plain useState too), so landing back on Обзор each time
   // Дашборд is revisited isn't a behavior change from before.
   const [dashTab, setDashTab] = useState('overview')
+  const planChanges = useUnseenChanges()
   const today = todayKey()
   const now = new Date()
   // Küchenhilfe's daily list is a fresh, empty checklist every day by design
@@ -231,8 +233,17 @@ export default function Dashboard({
         </span>
         <span className="min-w-0">
           <span className="block font-bold text-[17px] leading-tight">План работы</span>
-          <span className="block text-xs text-slate-300 mt-0.5">Сотрудники, смены, журнал изменений</span>
+          <span className="block text-xs text-slate-300 mt-0.5">
+            {planChanges.count > 0
+              ? `Новых изменений: ${planChanges.count} (от: ${planChanges.authors.join(', ')})`
+              : 'Сотрудники, смены, журнал изменений'}
+          </span>
         </span>
+        {planChanges.count > 0 && (
+          <span className="ml-auto shrink-0 min-w-[26px] h-[26px] px-1.5 rounded-full bg-orange-500 text-white text-sm font-bold flex items-center justify-center">
+            {planChanges.count}
+          </span>
+        )}
       </button>
 
       <div className="rounded-2xl shadow-md border-2 border-orange-300 dark:border-orange-700 mb-4 overflow-hidden bg-white dark:bg-slate-800">
