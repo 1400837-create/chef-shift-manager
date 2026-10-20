@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, Check, X, Plus, CalendarPlus } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { X, Plus, CalendarPlus } from 'lucide-react'
 import { inputClass, BigButton } from '../../components/UI'
-import { RECIPE_CATEGORIES } from '../../utils/constants'
+import RecipeBrowser from './RecipeBrowser'
 import { usePlanDeviceState } from '../../plan/planRoom'
 import { usePlanCollection, writePaths, newId } from '../../plan/planStore'
 import { usePlanLang } from '../../plan/lang'
@@ -9,30 +9,6 @@ import { dayTitle, isDateKey } from '../../plan/calc'
 import { blocksOf } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
 import { BLOCK_NAMES } from './ScheduleTab'
-
-function RecipeRow({ recipe, lang, selected, onToggle }) {
-  const name = lang === 'de' && recipe.de ? recipe.de : recipe.name
-  return (
-    <button
-      onClick={onToggle}
-      className={`w-full text-left flex items-start gap-2.5 px-3 py-2.5 border-b border-slate-100 dark:border-slate-700 last:border-0 ${
-        selected ? 'bg-orange-50 dark:bg-orange-950/30' : 'active:bg-slate-50 dark:active:bg-slate-700/40'
-      }`}
-    >
-      <span
-        className={`shrink-0 mt-0.5 w-6 h-6 rounded-md border-2 flex items-center justify-center ${
-          selected ? 'bg-orange-500 border-orange-500' : 'border-slate-300 dark:border-slate-600'
-        }`}
-      >
-        {selected && <Check size={15} strokeWidth={3} className="text-white" />}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[15px] font-semibold text-slate-800 dark:text-slate-100 leading-snug">{name}</span>
-        {recipe.desc && <span className="block text-xs text-slate-500 dark:text-slate-400 leading-snug mt-0.5">Состав: {recipe.desc}</span>}
-      </span>
-    </button>
-  )
-}
 
 // Adds the chosen recipes to one day of one plan, into an existing meal or a
 // new one. Dishes are stored the same way as hand-picked ones (text + link).
@@ -126,23 +102,9 @@ export default function RecipesTab() {
   const lang = usePlanLang()
   const recipesCol = usePlanCollection('recipesSlim')
   const plansCol = usePlanCollection('plans')
-  const [query, setQuery] = useState('')
   const [picked, setPicked] = useState({})
   const [open, setOpen] = useState(false)
   const [note, setNote] = useState(null)
-  const barRef = useRef(null)
-  const [barH, setBarH] = useState(96)
-
-  // Category jumps must stop below the sticky bar, whose height depends on
-  // the screen width (chips can wrap the search row), so measure it.
-  useEffect(() => {
-    const el = barRef.current
-    if (!el) return undefined
-    const measure = () => setBarH(el.offsetHeight)
-    measure()
-    window.addEventListener("resize", measure)
-    return () => window.removeEventListener("resize", measure)
-  })
 
   // recipesSlim can arrive as an array with holes (small integer keys) — skip the empty slots.
   const recipes = useMemo(
@@ -151,20 +113,6 @@ export default function RecipesTab() {
       .filter(Boolean),
     [recipesCol.data]
   )
-
-  const needle = query.trim().toLowerCase()
-  const groups = useMemo(() => {
-    const keys = new Set(RECIPE_CATEGORIES.map((c) => c.key))
-    return RECIPE_CATEGORIES
-      .map((c) => ({
-        ...c,
-        items: recipes
-          .filter((r) => (keys.has(r.cat) ? r.cat : 'other') === c.key)
-          .filter((r) => !needle || r.name.toLowerCase().includes(needle) || r.de.toLowerCase().includes(needle) || r.desc.toLowerCase().includes(needle))
-          .sort((a, b) => a.name.localeCompare(b.name, 'ru')),
-      }))
-      .filter((g) => g.items.length)
-  }, [recipes, needle])
 
   const plans = useMemo(() => [...plansCol.items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [plansCol.items])
   const defaultPlanId = (() => {
@@ -190,46 +138,16 @@ export default function RecipesTab() {
 
   return (
     <div className="pb-24">
-      <div
-        ref={barRef}
-        className="sticky z-20 -mx-3 md:-mx-6 lg:-mx-10 px-3 md:px-6 lg:px-10 pt-1 pb-2 mb-1 bg-slate-100 dark:bg-slate-950 shadow-[0_2px_4px_-2px_rgba(0,0,0,0.15)]"
-        style={{ top: 'var(--app-header-h, 64px)' }}
-      >
-      <div className="relative mb-2">
-        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input className={inputClass + ' pl-10'} placeholder={`Поиск по ${recipes.length} рецептам…`} value={query} onChange={(e) => setQuery(e.target.value)} />
-      </div>
-
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {groups.map((g) => (
-          <a
-            key={g.key}
-            href={`#plan-cat-${g.key}`}
-            onClick={(e) => {
-              e.preventDefault()
-              document.getElementById(`plan-cat-${g.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }}
-            className="shrink-0 px-3 min-h-[34px] inline-flex items-center rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap"
-          >
-            {g.label} · {g.items.length}
-          </a>
-        ))}
-      </div>
-      </div>
-
       {note && <p className="text-sm text-green-700 dark:text-green-400 mb-2">{note}</p>}
-      {groups.length === 0 && <p className="text-sm text-slate-400 text-center py-6">Ничего не найдено.</p>}
 
-      {groups.map((g) => (
-        <section key={g.key} id={`plan-cat-${g.key}`} className="mb-4" style={{ scrollMarginTop: `calc(var(--app-header-h, 64px) + ${barH}px + 6px)` }}>
-          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-1.5 px-1">{g.label} ({g.items.length})</h2>
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
-            {g.items.map((r) => (
-              <RecipeRow key={r.id} recipe={r} lang={lang} selected={!!picked[r.id]} onToggle={() => toggle(r.id)} />
-            ))}
-          </div>
-        </section>
-      ))}
+      <RecipeBrowser
+        recipes={recipes}
+        lang={lang}
+        picked={picked}
+        onToggle={toggle}
+        topOffset="var(--app-header-h, 64px)"
+        barClass="-mx-3 md:-mx-6 lg:-mx-10 px-3 md:px-6 lg:px-10 bg-slate-100 dark:bg-slate-950"
+      />
 
       {count > 0 && (
         <div className="fixed bottom-24 left-0 right-0 z-40 flex justify-center gap-2 px-4 pointer-events-none">

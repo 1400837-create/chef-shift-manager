@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock, BookOpen } from 'lucide-react'
 import { Section, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../../components/UI'
 import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
 import { usePlanCollection, createRecord, patchRecord, writePaths, newId, commitChange } from '../../plan/planStore'
@@ -14,6 +14,7 @@ import { usePlanLang, LOCALE, staffLabel } from '../../plan/lang'
 import ExchangePanel from './Exchange'
 import CostPanel from './Cost'
 import GridView from './GridView'
+import { RecipePickerModal } from './RecipeBrowser'
 
 const PLAN_KINDS = [
   { key: 'month', label: 'Месяц' },
@@ -164,11 +165,23 @@ function BlockCard({ coll, date, block, ctx }) {
   const label = `${dayTitle(date)} · ${block.name || 'приём'}`
   const dishes = sortedEntries(block.dishes, (a, b) => a.id.localeCompare(b.id))
   const [cOpen, setCOpen] = useState({})
+  const [picker, setPicker] = useState(false)
   const persons = Number(block.persons)
   const coef = Number.isFinite(persons) && persons > 0 ? Math.round((persons / 10) * 100) / 100 : null
 
   const patch = (field, value) =>
     writePaths(coll, { [`${base}/${field}`]: value }, { action: 'update', entity: 'блок', id: date, label })
+
+  // Several dishes in one write = one journal line, not one per dish.
+  function addDishes(list) {
+    if (!list.length) return
+    const rel = {}
+    list.forEach((r) => { rel[`${base}/dishes/${newId(coll)}`] = { text: r.name, recipeId: r.id } })
+    writePaths(coll, rel, {
+      action: 'create', entity: 'блюда', id: date,
+      label: `${label}: ${list.length} шт. (${list.slice(0, 3).map((r) => r.name).join(', ')}${list.length > 3 ? '…' : ''})`,
+    })
+  }
 
   function addDish(text, recipeId) {
     const did = newId(coll)
@@ -254,7 +267,22 @@ function BlockCard({ coll, date, block, ctx }) {
             </div>
           )
         })}
+        <button
+          onClick={() => setPicker(true)}
+          className="w-full min-h-[44px] mb-2 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 text-sm font-semibold flex items-center justify-center gap-1.5"
+        >
+          <BookOpen size={16} /> Выбрать из меню (по рубрикам)
+        </button>
         <DishAdder recipeList={ctx.recipeList} onAdd={addDish} />
+        {picker && (
+          <RecipePickerModal
+            recipes={ctx.recipeList}
+            lang={ctx.lang}
+            title={`${dayTitle(date, LOCALE[ctx.lang])} · ${block.name || 'приём'}`}
+            onClose={() => setPicker(false)}
+            onAdd={(list) => { addDishes(list); setPicker(false) }}
+          />
+        )}
       </div>
 
       <Comments coll={coll} path={base} comments={block.comments} label={label} />
@@ -745,7 +773,7 @@ export default function ScheduleTab({ menuBridge }) {
     // recipesSlim can come back as an array with holes (Firebase turns small
     // integer keys into one) — skip the empty slots.
     const recipeList = Object.entries(recipes.data || {})
-      .map(([id, r]) => (r && r.n ? { id, name: r.n, de: r.d || '' } : null))
+      .map(([id, r]) => (r && r.n ? { id, name: r.n, de: r.d || '', cat: r.c || 'other', desc: r.m || '' } : null))
       .filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
     const recipeById = {}
