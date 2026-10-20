@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CalendarClock, ListChecks, Plus, Check, Copy } from 'lucide-react'
+import { CalendarClock, ListChecks, Plus, Check } from 'lucide-react'
 import { Section, Badge, BigButton, ConfirmDeleteButton, Field, inputClass } from '../../components/UI'
 import { MY_TASK_CATEGORIES } from '../../utils/constants'
 import { urgencyColor } from '../../utils/deadlines'
@@ -8,10 +8,8 @@ import { usePlanCollection, createRecord, patchRecord, deleteRecord } from '../.
 import { getAuthor } from '../../plan/planRoom'
 import { addDaysKey, dayTitle, isDateKey } from '../../plan/calc'
 import { LOCALE } from '../../plan/lang'
-import { dayText } from '../../plan/exchange'
 import DaySummary from './DaySummary'
 import { useOpenRecipe } from './recipeBridge'
-import { copyText } from './Exchange'
 
 // The home screen of the plan: what is on today (every plan at once) and the
 // two shared task lists — the same two the main Дашборд has, but kept in the
@@ -138,28 +136,12 @@ export default function PlanDashboard({ ctx, plans, tree, onOpenPlan }) {
   const todayParts = useMemo(() => dayParts(plans, tree, today), [plans, tree, today])
   const tomorrowParts = useMemo(() => dayParts(plans, tree, tomorrow), [plans, tree, tomorrow])
   const [showTomorrow, setShowTomorrow] = useState(false)
-  const [copied, setCopied] = useState(false)
-
-  async function copyToday() {
-    try {
-      await copyText(dayText({ date: today, parts: todayParts, ctx, lang: ctx.lang }))
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // clipboard blocked — nothing useful to show
-    }
-  }
 
   return (
     <div>
       <Section
         title={`Сегодня · ${dayTitle(today, locale)}`}
         icon={CalendarClock}
-        right={todayParts.length > 0 && (
-          <button onClick={copyToday} className="flex items-center gap-1 text-xs font-semibold text-orange-600">
-            <Copy size={14} /> {copied ? 'Скопировано' : 'Текстом'}
-          </button>
-        )}
       >
         {todayParts.length === 0
           ? <p className="text-sm text-slate-400 text-center py-2">На сегодня в плане ничего нет</p>

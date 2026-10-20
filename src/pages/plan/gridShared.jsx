@@ -4,7 +4,7 @@ import { staffLabel, dishLabel } from '../../plan/lang'
 import { dishesOf, commentsOf } from '../../plan/exchange'
 
 // Every cell gets a full border so the columns read as a table, not a list.
-export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600 sticky z-10 top-[calc(var(--app-header-h,64px)+3.6rem)] bg-slate-200 dark:bg-slate-900'
+export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600 bg-slate-200 dark:bg-slate-900'
 export const TD = 'px-2 py-[var(--cell-py,0.5rem)] border border-slate-300 dark:border-slate-600 text-[length:var(--cell-fs,0.875rem)]'
 
 // All comments of a day in one place — on the day itself, on a meal, on a
@@ -57,6 +57,29 @@ export function DishLine({ d, b, date, ctx, bridge }) {
     >
       · {dishLabel(d, ctx.recipeById, ctx.lang)}
       {rep && <span className="ml-1 text-[11px] font-semibold text-orange-600" title={rep}>↻ повтор</span>}
+    </p>
+  )
+}
+
+// What the coloured bar at the left of a meal means (colour comes from the
+// meal's name, see mealColor in plan/ui.js).
+export function MealLegend() {
+  const items = [
+    ['Завтрак', 'bg-amber-400'],
+    ['Обед', 'bg-emerald-500'],
+    ['Полдник', 'bg-pink-400'],
+    ['Ужин / служба', 'bg-indigo-500'],
+    ['Подготовка / закупка', 'bg-slate-400'],
+    ['Другое', 'bg-orange-300'],
+  ]
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3 text-[11px] text-slate-500">
+      {items.map(([label, dot]) => (
+        <span key={label} className="inline-flex items-center gap-1">
+          <span className={`inline-block w-2.5 h-2.5 rounded-sm ${dot}`} />
+          {label}
+        </span>
+      ))}
     </p>
   )
 }

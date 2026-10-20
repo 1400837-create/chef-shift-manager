@@ -1,11 +1,10 @@
-import { FileText } from 'lucide-react'
 import { weekTitle, dayTitle } from '../../plan/calc'
 import DaySummary from './DaySummary'
 
 // The phone version of the table: one card per day, grouped by week. Tapping a
 // card opens that day's editor (when `onOpenDay` is given).
 export default function DayCards({
-  weeks, getParts, ctx, locale, today, span, showTags, onOpenPlan, onOpenDay, isOutside, outsideNote, hideEmpty, bridge, focusStaff, onCopyDay,
+  weeks, getParts, ctx, locale, today, span, showTags, onOpenPlan, onOpenDay, isOutside, outsideNote, hideEmpty, bridge, focusStaff,
 }) {
   return (
     <div>
@@ -38,14 +37,6 @@ export default function DayCards({
                       {date === today && <span className="ml-2 text-xs font-semibold text-orange-600">сегодня</span>}
                       {outside && <span className="ml-2 text-xs font-normal text-slate-500">вне периода плана</span>}
                     </p>
-                    {onCopyDay && parts.length > 0 && !outside && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onCopyDay(date) }}
-                        className="shrink-0 flex items-center gap-1 px-2 min-h-[30px] rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300"
-                      >
-                        <FileText size={13} /> текст
-                      </button>
-                    )}
                   </div>
                   {outside && outsideNote ? outsideNote(date) : null}
                   <DaySummary date={date} parts={parts} ctx={ctx} showTags={showTags} onOpenPlan={onOpenPlan} bridge={bridge} focusStaff={focusStaff} />

@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, AlertTriangle, Printer, EyeOff, Eye, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertTriangle, Printer, EyeOff, Eye } from 'lucide-react'
 import { formatDuration, parseHM } from '../../plan/hours'
 import {
   dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, shiftMonth, monthTitle, shiftMinutes, isDateKey,
 } from '../../plan/calc'
 import { LOCALE, staffLabel, dishLabel, tr } from '../../plan/lang'
-import { blocksOf, dishesOf, shiftsOf, buildTablePrint, periodText, dayText } from '../../plan/exchange'
-import { copyText } from './Exchange'
+import { blocksOf, dishesOf, shiftsOf, buildTablePrint } from '../../plan/exchange'
 import { printReport } from '../../utils/printReport'
 import { todayKey } from '../../utils/dateUtils'
 import { mealColor, loadPos, savePos, useNarrow } from '../../plan/ui'
 import DayCards from './DayCards'
-import StaffFocus, { useFocusState } from './StaffFocus'
+import { StaffSelect, StaffSummary, useFocusState } from './StaffFocus'
 import { usePlanDeviceState } from '../../plan/planRoom'
-import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText, DishLine } from './gridShared'
+import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText, DishLine, MealLegend } from './gridShared'
 import { useOpenRecipe } from './recipeBridge'
 
 const PALETTE = [
@@ -128,20 +127,6 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
   const dayMinutes = (parts) => parts.reduce((sum, { day }) => sum + shiftsOf(day).reduce((a, s) => a + (shiftMinutes(s, 'planned') || 0), 0), 0)
   const periodTotal = dates.reduce((a, d) => a + dayMinutes(dayParts(d)), 0)
 
-  const [copied, setCopied] = useState(false)
-  async function copyPeriod() {
-    try {
-      await copyText(periodText({ title: `${tr(ctx.lang, 'allPlans')} · ${title}`, dates, partsOf: dayParts, ctx, lang: ctx.lang }))
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      window.alert(err?.message || 'Не удалось скопировать')
-    }
-  }
-  async function copyDay(date) {
-    try { await copyText(dayText({ date, parts: dayParts(date), ctx, lang: ctx.lang })) } catch (err) { window.alert(err?.message || 'Не удалось скопировать') }
-  }
-
   function printAll() {
     printReport(buildTablePrint({
       title: tr(ctx.lang, 'allPlans'),
@@ -187,28 +172,24 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <button
           onClick={() => setHideEmpty((v) => !v)}
-          className="min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+          className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
         >
-          {hideEmpty ? <Eye size={16} /> : <EyeOff size={16} />}
-          {hideEmpty ? 'Показать пустые дни' : 'Скрыть пустые дни'}
-        </button>
-        <button
-          onClick={copyPeriod}
-          className="min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-        >
-          <FileText size={16} /> {copied ? 'Скопировано' : 'Текстом'}
+          {hideEmpty ? <Eye size={14} /> : <EyeOff size={14} />}
+          {hideEmpty ? 'Показать пустые' : 'Скрыть пустые'}
         </button>
         <button
           onClick={printAll}
-          className="min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+          className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
         >
-          <Printer size={16} /> Печать
+          <Printer size={14} /> Печать
         </button>
+        <StaffSelect ctx={ctx} value={focus} onChange={setFocus} />
       </div>
-      <StaffFocus ctx={ctx} value={focus} onChange={setFocus} dates={dates} />
+      <StaffSummary ctx={ctx} value={focus} dates={dates} />
+      <MealLegend />
 
       <div className="flex flex-wrap gap-1.5 mb-3 items-center text-xs text-slate-500">
         <span>Планы:</span>
@@ -227,7 +208,6 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
           showTags
           onOpenPlan={onOpenPlan}
           hideEmpty={hideEmpty}
-          onCopyDay={copyDay}
           bridge={bridge}
           focusStaff={focus}
         />
@@ -236,7 +216,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
         <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-28 left-0 z-[15]`}>День</th>
+              <th className={`${TH} w-28 sticky left-0 z-[15]`}>День</th>
               <th className={`${TH} w-[34%]`}>Меню</th>
               <th className={`${TH} w-[24%]`}>Комментарии</th>
               <th className={`${TH} w-56`}>Сотрудники</th>

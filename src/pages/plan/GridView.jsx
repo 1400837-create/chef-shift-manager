@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer } from 'lucide-react'
 import { BigButton } from '../../components/UI'
 import { writePaths, commitChange } from '../../plan/planStore'
 import { formatDuration } from '../../plan/hours'
@@ -8,16 +8,15 @@ import {
   shiftMinutes,
 } from '../../plan/calc'
 import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
-import { blocksOf, dishesOf, shiftsOf, commentsOf, buildTablePrint, periodText, dayText } from '../../plan/exchange'
+import { blocksOf, dishesOf, shiftsOf, commentsOf, buildTablePrint } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
 import { mealColor, loadPos, savePos, useNarrow } from '../../plan/ui'
 import { usePlanDeviceState } from '../../plan/planRoom'
 import { MenuCell, ShiftCell, NoteCell } from './GridCells'
 import CopyModal from './CopyModal'
-import { copyText } from './Exchange'
 import DayCards from './DayCards'
-import StaffFocus, { useFocusState } from './StaffFocus'
-import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween, DishLine } from './gridShared'
+import { StaffSelect, StaffSummary, useFocusState } from './StaffFocus'
+import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween, DishLine, MealLegend } from './gridShared'
 import { useOpenRecipe } from './recipeBridge'
 
 export { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween }
@@ -174,35 +173,6 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
     })
   }
 
-  const [copiedText, setCopiedText] = useState(false)
-
-  const [toast, setToast] = useState(null)
-  async function copyDay(date) {
-    try {
-      await copyText(dayText({ date, parts: data[date] ? [{ plan, day: data[date] }] : [], ctx, lang: ctx.lang }))
-      setToast(`Скопировано: ${dayTitle(date, LOCALE.ru)}`)
-      setTimeout(() => setToast(null), 2000)
-    } catch (err) {
-      window.alert(err?.message || 'Не удалось скопировать')
-    }
-  }
-
-  async function copyPeriod() {
-    try {
-      await copyText(periodText({
-        title: `${plan.title || 'План'} · ${title}`,
-        dates,
-        partsOf: (d) => (data[d] ? [{ plan, day: data[d] }] : []),
-        ctx,
-        lang: ctx.lang,
-      }))
-      setCopiedText(true)
-      setTimeout(() => setCopiedText(false), 2000)
-    } catch (err) {
-      window.alert(err?.message || 'Не удалось скопировать')
-    }
-  }
-
   function printTable() {
     printReport(buildTablePrint({
       title: plan.title || 'План',
@@ -268,42 +238,39 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         ))}
       </div>
 
-      <div className={`grid ${narrow ? "grid-cols-3" : "grid-cols-[1fr_auto_auto_auto]"} gap-2 mb-3`}>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         {!narrow && (
-        <button
-          onClick={toggleEdit}
-          className={`min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border px-2 ${
-            editMode
-              ? 'bg-orange-500 border-orange-500 text-white'
-              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-          }`}
-        >
-          <Pencil size={16} />
-          {editMode ? 'Правка включена — выключить' : 'Править в таблице'}
-        </button>
+          <button
+            onClick={toggleEdit}
+            className={`min-h-[36px] rounded-lg text-xs font-semibold flex items-center gap-1.5 border px-2.5 ${
+              editMode
+                ? 'bg-orange-500 border-orange-500 text-white'
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+            }`}
+            title="Править блюда, смены и комментарии прямо в ячейках"
+          >
+            <Pencil size={14} />
+            {editMode ? 'Правка вкл.' : 'Править'}
+          </button>
         )}
         <button
           onClick={() => setCopyOpen(true)}
-          className="min-h-[44px] px-3.5 rounded-xl text-sm font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+          className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+          title="Продублировать день или неделю на другие даты этого плана"
         >
-          <Copy size={16} /> Копировать
-        </button>
-        <button
-          onClick={copyPeriod}
-          className="min-h-[44px] px-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-          title="Скопировать период текстом для мессенджера"
-        >
-          <FileText size={16} /> {copiedText ? 'Скопировано' : 'Текстом'}
+          <Copy size={14} /> Дублировать
         </button>
         <button
           onClick={printTable}
-          className="min-h-[44px] px-3.5 rounded-xl text-sm font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+          className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
         >
-          <Printer size={16} /> Печать
+          <Printer size={14} /> Печать
         </button>
+        <StaffSelect ctx={ctx} value={focus} onChange={setFocus} />
       </div>
 
-      <StaffFocus ctx={ctx} value={focus} onChange={setFocus} dates={dates} />
+      <StaffSummary ctx={ctx} value={focus} dates={dates} />
+      <MealLegend />
 
       {strays.length > 0 && (
         <div className="mb-3 rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-3 text-sm text-slate-800 dark:text-slate-100">
@@ -326,7 +293,6 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           span={span}
           showTags={false}
           onOpenDay={setEditing}
-          onCopyDay={copyDay}
           bridge={bridge}
           focusStaff={focus}
           isOutside={(d) => !inPlanRange(range, d)}
@@ -344,7 +310,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         <table className={`w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} border-collapse text-sm`}>
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-28 left-0 z-[15]`}>День</th>
+              <th className={`${TH} w-28 sticky left-0 z-[15]`}>День</th>
               <th className={`${TH} w-[34%]`}>Меню</th>
               <th className={`${TH} w-[24%]`}>Комментарии</th>
               <th className={`${TH} ${editMode ? "w-64" : "w-48"}`}>Сотрудники</th>
@@ -405,15 +371,6 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                             title="Комментарии к блюдам и сменам, флажок «изменено», удаление дня"
                           >
                             подробно
-                          </button>
-                        )}
-                        {hasData && !outside && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); copyDay(date) }}
-                            className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-slate-500"
-                            title="Скопировать день текстом для мессенджера"
-                          >
-                            <FileText size={12} /> текст
                           </button>
                         )}
                       </td>
@@ -483,10 +440,6 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           )}
         </table>
       </div>
-      )}
-
-      {toast && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50 px-4 py-2 rounded-full bg-slate-800 text-white text-sm shadow-lg">{toast}</div>
       )}
 
       {copyOpen && (

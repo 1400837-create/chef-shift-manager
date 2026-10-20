@@ -47,7 +47,7 @@ export default function CopyModal({ plan, data, range, defaultFrom, onClose }) {
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-800 p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-slate-800 dark:text-slate-100">Копировать</h3>
+          <h3 className="font-bold text-slate-800 dark:text-slate-100">Дублировать день или неделю</h3>
           <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500"><X size={18} /></button>
         </div>
 
@@ -81,7 +81,7 @@ export default function CopyModal({ plan, data, range, defaultFrom, onClose }) {
         </p>
         {done && <p className="text-sm text-green-700 dark:text-green-400 mt-2">{done}</p>}
         <div className="mt-3">
-          <BigButton icon={Copy} onClick={run} disabled={!preview.copied || !!done}>Скопировать</BigButton>
+          <BigButton icon={Copy} onClick={run} disabled={!preview.copied || !!done}>Продублировать</BigButton>
         </div>
       </div>
     </div>
