@@ -107,14 +107,20 @@ const keysOf = (t) =>
     .map((s) => String(s || '').trim().toLowerCase())
     .filter(Boolean)
 
-// Returns a function: meal name → { bar, dot, type }.
+// Returns a function: meal name → { bar, dot, type }. When several types match,
+// the one with the longest matching word wins (more specific beats generic).
 export function makeMealColor(types) {
   const list = (types && types.length ? types : DEFAULT_MEAL_TYPES).map((t) => ({ t, keys: keysOf(t) }))
   return (name) => {
     const n = String(name || '').toLowerCase()
     if (n) {
-      const hit = list.find((x) => x.keys.some((k) => n.includes(k)))
-      if (hit) return { ...(MEAL_PALETTE[hit.t.color] || OTHER_MEAL_COLOR), type: hit.t }
+      let best = null
+      list.forEach((x) => {
+        x.keys.forEach((k) => {
+          if (n.includes(k) && (!best || k.length > best.len)) best = { len: k.length, t: x.t }
+        })
+      })
+      if (best) return { ...(MEAL_PALETTE[best.t.color] || OTHER_MEAL_COLOR), type: best.t }
     }
     return { ...OTHER_MEAL_COLOR, type: null }
   }
