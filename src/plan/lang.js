@@ -53,6 +53,12 @@ const DICT = {
     printed: 'Напечатано',
     changed: 'изменено',
     noData: 'В плане пока нет дней',
+    day: 'День',
+    menu: 'Меню',
+    comments: 'Комментарии',
+    guests: 'чел.',
+    allPlans: 'Все планы',
+    conflict: 'пересечение смен',
   },
   de: {
     plan: 'Plan',
@@ -74,6 +80,12 @@ const DICT = {
     printed: 'Gedruckt',
     changed: 'geändert',
     noData: 'Der Plan enthält noch keine Tage',
+    day: 'Tag',
+    menu: 'Menü',
+    comments: 'Kommentare',
+    guests: 'Pers.',
+    allPlans: 'Alle Pläne',
+    conflict: 'Schichtüberschneidung',
   },
 }
 

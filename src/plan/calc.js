@@ -1,4 +1,4 @@
-import { durationMinutes, parseHM } from './hours'
+import { durationMinutes, parseHM, formatDuration } from './hours'
 
 // Plan data shape (see ScheduleTab):
 //   planData/<planId>/<YYYY-MM-DD>/{ d, blocks:{id:{...}}, shifts:{id:{...}}, comments:{...} }
@@ -160,3 +160,60 @@ export function planRange(plan) {
 }
 
 export const inPlanRange = (range, date) => !range || (date >= range.from && date <= range.to)
+
+// Shifts of the same person that overlap in time. `list` items need
+// { id, staffId, staffName, start, end }; works across plans too.
+export function overlapIds(list) {
+  const iv = (s) => {
+    const a = parseHM(s.start)
+    const b = parseHM(s.end)
+    return a === null || b === null ? null : [a, b > a ? b : b + 1440]
+  }
+  const byPerson = new Map()
+  list.forEach((s) => {
+    const key = s.staffId || `n:${s.staffName}`
+    if (!byPerson.has(key)) byPerson.set(key, [])
+    byPerson.get(key).push(s)
+  })
+  const bad = new Set()
+  byPerson.forEach((group) => {
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const a = iv(group[i])
+        const b = iv(group[j])
+        if (a && b && a[0] < b[1] && b[0] < a[1]) { bad.add(group[i].id); bad.add(group[j].id) }
+      }
+    }
+  })
+  return bad
+}
+
+// Things worth a second look before putting someone on a shift: an overlap
+// with another shift of theirs (any plan) and going over the monthly norm.
+export function assignmentWarnings({ staff, shifts, date, start, end, planTitles = {}, ignoreId = null }) {
+  const out = []
+  const a = parseHM(start)
+  const b = parseHM(end)
+  if (a === null || b === null) return out
+  const wanted = [a, b > a ? b : b + 1440]
+  shifts
+    .filter((s) => s.id !== ignoreId && s.date === date && (s.staffId ? s.staffId === staff.id : s.staffName === staff.name))
+    .forEach((s) => {
+      const x = parseHM(s.start)
+      const y = parseHM(s.end)
+      if (x === null || y === null) return
+      const iv = [x, y > x ? y : y + 1440]
+      if (wanted[0] < iv[1] && iv[0] < wanted[1]) {
+        out.push(`${staff.name} уже занят(а) в это время: ${s.start}–${s.end}${planTitles[s.planId] ? ` («${planTitles[s.planId]}»)` : ''}`)
+      }
+    })
+  if (typeof staff.norm === 'number') {
+    const { from, to } = monthBounds(monthOf(date))
+    const planned = aggregateByStaff(shifts.filter((s) => s.id !== ignoreId), from, to).get(staff.id)
+    const after = (planned ? planned.planned : 0) + (durationMinutes(start, end) || 0)
+    if (after > Math.round(staff.norm * 60)) {
+      out.push(`Сверх месячной нормы: будет ${formatDuration(after)} из ${staff.norm} ч`)
+    }
+  }
+  return out
+}

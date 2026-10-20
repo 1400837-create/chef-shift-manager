@@ -235,8 +235,47 @@ function buildWorkPlanHtml(payload) {
   return `<h1 style="font-size:22px;">${escapeHtml(payload.title)}</h1>${weeks || `<p class="muted">${escapeHtml(L.noData)}</p>`}${summary}${cost}`
 }
 
+function buildWorkTableHtml(payload) {
+  const L = payload.labels
+  const guest = (n) => (n ? `<span style="display:inline-block;margin-left:6px;padding:0 5px;border:1.5px solid #000;border-radius:4px;font-weight:bold;font-size:11px;">${escapeHtml(n)} ${escapeHtml(payload.guests)}</span>` : '')
+  const flag = (changed) => (changed
+    ? `<span style="display:inline-block;border:1.5px solid #c00;color:#c00;font-weight:bold;width:11px;text-align:center;line-height:13px;margin-right:4px;" title="${escapeHtml(L.changed)}">!</span>`
+    : '')
+
+  const body = payload.weeks.map((w) => {
+    const rows = w.rows.map((r) => {
+      const menu = r.blocks.map((b) => `
+        <div style="margin-bottom:4px;">
+          ${b.tag ? `<div class="muted" style="font-size:10px;text-transform:uppercase;">${escapeHtml(b.tag)}</div>` : ''}
+          <b>${escapeHtml(b.time)} ${escapeHtml(b.name)}</b>${guest(b.persons)}
+          ${b.dishes.map((d) => `<div style="padding-left:8px;">${flag(d.changed)}${escapeHtml(d.text)}</div>`).join('')}
+        </div>`).join('')
+      const notes = r.notes.map((n) => `<div style="font-size:10px;margin-bottom:2px;">${escapeHtml(n)}</div>`).join('')
+      const staff = r.shifts.map((s) => `<div style="line-height:1.5;${s.warn ? 'color:#c00;font-weight:bold;' : ''}">${s.warn ? '&#9888; ' : ''}${escapeHtml(s.staff)} ${escapeHtml(s.time)}</div>`).join('')
+      const hours = r.shifts.map((s) => `<div style="line-height:1.5;text-align:right;font-weight:bold;">${escapeHtml(s.hours)}</div>`).join('')
+      return `<tr class="print-no-break">
+        <td style="white-space:nowrap;font-weight:bold;">${escapeHtml(r.day)}</td>
+        <td>${menu}</td><td>${notes}</td><td>${staff}</td><td style="width:70px;">${hours}</td>
+      </tr>`
+    }).join('')
+    return `<h2>${escapeHtml(w.title)}</h2>
+      <table>
+        <thead><tr>
+          <th style="width:80px;">${escapeHtml(L.day)}</th><th style="width:38%;">${escapeHtml(L.menu)}</th>
+          <th style="width:22%;">${escapeHtml(L.comments)}</th><th style="width:150px;">${escapeHtml(L.staff)}</th><th style="width:70px;">${escapeHtml(L.hours)}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`
+  }).join('')
+
+  return `<h1>${escapeHtml(payload.title)} <span class="muted" style="font-weight:normal;font-size:13px;">${escapeHtml(payload.period)}</span></h1>
+    ${body || `<p class="muted">${escapeHtml(L.noData)}</p>`}
+    <p style="text-align:right;font-weight:bold;">${escapeHtml(L.total)}: ${escapeHtml(payload.total)}</p>`
+}
+
 const BUILDERS = {
   'work-plan': buildWorkPlanHtml,
+  'work-table': buildWorkTableHtml,
   tasks: buildTasksHtml,
   menu: buildMenuHtml,
   recount: buildRecountHtml,
@@ -256,7 +295,7 @@ export function printReport(payload) {
 <meta charset="UTF-8">
 <title>Печать — LA CHEF</title>
 <style>
-  @page { size: A4; margin: 14mm; }
+  @page { size: A4 ${payload.landscape ? 'landscape' : 'portrait'}; margin: ${payload.landscape ? '9mm' : '14mm'}; }
   body { font-family: Arial, Helvetica, sans-serif; color: #000; font-size: 13px; }
   h1 { font-size: 18px; margin: 0 0 10px; }
   h2 { font-size: 14px; margin: 14px 0 6px; border-bottom: 1px solid #000; padding-bottom: 2px; }

@@ -1,6 +1,6 @@
 import { formatDuration, parseHM } from './hours'
 import {
-  isDateKey, dayTitle, weekTitle, mondayOf, shiftMinutes, aggregateByStaff,
+  isDateKey, dayTitle, weekTitle, mondayOf, shiftMinutes, aggregateByStaff, overlapIds,
 } from './calc'
 import { LOCALE, tr } from './lang'
 
@@ -368,4 +368,120 @@ export function parseRange(raw) {
   const a = parseTimeCell(parts[0])
   const b = parseTimeCell(parts[1])
   return a && b ? [a, b] : null
+}
+
+// ---------------------------------------------------------------------------
+// the table itself, as a landscape print
+// ---------------------------------------------------------------------------
+
+// `partsOf(date)` → [{ plan, day }] for that date (one plan, or all of them).
+// `showTags` adds the plan's name above its blocks (the all-plans view).
+export function buildTablePrint({ title, period, dates, partsOf, ctx, lang, showTags, hideEmpty }) {
+  const L = (ru, de) => (lang === 'both' ? (de && de !== ru ? `${ru} / ${de}` : ru) : lang === 'de' ? (de || ru) : ru)
+  const T = (key) => (lang === 'both' ? `${tr('ru', key)} / ${tr('de', key)}` : tr(lang, key))
+  const D = (fn) => (lang === 'both' ? `${fn('ru-RU')} / ${fn('de-DE')}` : fn(LOCALE[lang]))
+
+  const weeks = new Map()
+  dates.forEach((d) => {
+    const m = mondayOf(d)
+    if (!weeks.has(m)) weeks.set(m, [])
+    weeks.get(m).push(d)
+  })
+
+  let totalMin = 0
+  const outWeeks = []
+  weeks.forEach((days, monday) => {
+    const rows = []
+    days.forEach((date) => {
+      const parts = partsOf(date)
+      const empty = parts.every(({ day }) => !Object.keys(day.blocks || {}).length && !Object.keys(day.shifts || {}).length && !Object.keys(day.comments || {}).length)
+      if (empty && hideEmpty) return
+      const allShifts = parts.flatMap(({ day }) => shiftsOf(day))
+      const bad = overlapIds(allShifts)
+      const notes = []
+      const blocks = []
+      const shifts = []
+      parts.forEach(({ plan, day }) => {
+        blocksOf(day).forEach((b, idx) => {
+          blocks.push({
+            tag: showTags && idx === 0 ? plan.title || '' : '',
+            time: b.time || '',
+            name: b.name || '',
+            persons: b.persons || '',
+            dishes: dishesOf(b).map((d) => ({ text: L(d.text || '', ctx.recipeById[d.recipeId]?.de || ''), changed: !!d.changed })),
+          })
+          commentsOf(b).forEach((c) => notes.push(`${b.name || ''}: ${c.text} (${c.by})`))
+          dishesOf(b).forEach((d) => commentsOf(d).forEach((c) => notes.push(`${d.text}: ${c.text} (${c.by})`)))
+        })
+        commentsOf(day).forEach((c) => notes.push(`${c.text} (${c.by})`))
+        shiftsOf(day).forEach((s) => {
+          const rec = s.staffId ? ctx.staffById[s.staffId] : null
+          const p = shiftMinutes(s, 'planned')
+          const a = shiftMinutes(s, 'actual')
+          totalMin += p || 0
+          commentsOf(s).forEach((c) => notes.push(`${rec?.name || s.staffName || ''}: ${c.text} (${c.by})`))
+          shifts.push({
+            staff: L(rec?.name || s.staffName || '', rec?.nameDe || ''),
+            time: `${s.start || ''}–${s.end || ''}`,
+            hours: p === null ? '' : formatDuration(p) + (a ? ` (${formatDuration(a)})` : ''),
+            warn: bad.has(s.id),
+          })
+        })
+      })
+      rows.push({ day: D((loc) => dayTitle(date, loc)), blocks, notes, shifts })
+    })
+    if (rows.length) outWeeks.push({ title: `${T('week')} ${D((loc) => weekTitle(monday, loc))}`, rows })
+  })
+
+  return {
+    type: 'work-table',
+    landscape: true,
+    title,
+    period,
+    weeks: outWeeks,
+    total: formatDuration(totalMin),
+    guests: lang === 'both' ? `${tr('ru', 'guests')} / ${tr('de', 'guests')}` : tr(lang, 'guests'),
+    labels: { day: T('day'), menu: T('menu'), comments: T('comments'), staff: T('staff'), hours: T('hours'), total: T('totalMonth'), conflict: T('conflict'), noData: T('noData'), changed: T('changed') },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// copy a day / a week onto other dates of the same plan
+// ---------------------------------------------------------------------------
+
+const hasContent = (d) => !!d && (Object.keys(d.blocks || {}).length > 0 || Object.keys(d.shifts || {}).length > 0)
+
+// pairs: [{ from, to }]. Comments, "changed" flags and actual times are not
+// carried over — it is a fresh day built from the same menu and staffing.
+// A target day that already has meals or shifts is left alone.
+export function planCopyUpdates({ planId, data, pairs, what, makeId }) {
+  const base = `planData/${planId}`
+  const updates = {}
+  let copied = 0
+  let skipped = 0
+  pairs.forEach(({ from, to }) => {
+    const src = data[from]
+    if (!src) return
+    const hasMenu = what.menu && Object.keys(src.blocks || {}).length > 0
+    const hasShifts = what.shifts && Object.keys(src.shifts || {}).length > 0
+    if (!hasMenu && !hasShifts) return
+    if (hasContent(data[to])) { skipped += 1; return }
+    if (hasMenu) {
+      blocksOf(src).forEach((b) => {
+        const bid = makeId()
+        const bp = `${base}/${to}/blocks/${bid}`
+        updates[`${bp}/name`] = b.name || ''
+        updates[`${bp}/time`] = b.time || ''
+        if (b.persons) updates[`${bp}/persons`] = b.persons
+        dishesOf(b).forEach((d) => { updates[`${bp}/dishes/${makeId()}`] = { text: d.text, recipeId: d.recipeId || null } })
+      })
+    }
+    if (hasShifts) {
+      shiftsOf(src).forEach((s) => {
+        updates[`${base}/${to}/shifts/${makeId()}`] = { staffId: s.staffId || null, staffName: s.staffName || null, start: s.start, end: s.end }
+      })
+    }
+    copied += 1
+  })
+  return { updates, copied, skipped }
 }

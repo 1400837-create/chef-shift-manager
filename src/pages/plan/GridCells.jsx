@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Plus, X, BookOpen } from 'lucide-react'
 import { ConfirmDeleteButton } from '../../components/UI'
 import { writePaths, newId } from '../../plan/planStore'
+import { dayTitle, shiftMinutes, assignmentWarnings } from '../../plan/calc'
+import { formatDuration } from '../../plan/hours'
 import { getAuthor } from '../../plan/planRoom'
-import { dayTitle } from '../../plan/calc'
 import { staffLabel } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf } from '../../plan/exchange'
 import { DraftInput, TimeDraft, TimeInput, normalizeTime } from './shared'
@@ -180,6 +181,7 @@ export function ShiftCell({ coll, date, day, ctx }) {
   const [t2, setT2] = useState('')
   const [tpl, setTpl] = useState('')
   const [err, setErr] = useState(false)
+  const [guard, setGuard] = useState(null)
 
   const patch = (s, field, value) =>
     writePaths(coll, { [`${date}/shifts/${s.id}/${field}`]: value }, { action: 'update', entity: 'смену', id: date, label: `${lbl} · смена ${s.staffName || ''}`.trim() })
@@ -203,9 +205,16 @@ export function ShiftCell({ coll, date, day, ctx }) {
     }
     if (!rec || !times) { setErr(true); return }
     setErr(false)
+    const warnings = assignmentWarnings({ staff: rec, shifts: ctx.allShifts || [], date, start: times[0], end: times[1], planTitles: ctx.planTitles })
+    if (warnings.length) { setGuard({ rec, times, warnings }); return }
+    commit(rec, times)
+  }
+
+  function commit(rec, times) {
     writePaths(coll, { [`${date}/shifts/${newId(coll)}`]: { staffId: rec.id, staffName: rec.name, start: times[0], end: times[1] } }, {
       action: 'create', entity: 'смену', id: date, label: `${lbl} · ${rec.name} ${times[0]}–${times[1]}`,
     })
+    setGuard(null)
     setStaffId('')
     setT1('')
     setT2('')
@@ -232,6 +241,9 @@ export function ShiftCell({ coll, date, day, ctx }) {
             <div className="w-[3.8rem] shrink-0"><TimeDraft className={`${COMPACT} text-center`} value={s.start} onCommit={(v) => { if (v) patch(s, 'start', v) }} /></div>
             <span className="text-slate-400">–</span>
             <div className="w-[3.8rem] shrink-0"><TimeDraft className={`${COMPACT} text-center`} value={s.end} onCommit={(v) => { if (v) patch(s, 'end', v) }} /></div>
+            <span className="w-9 shrink-0 text-right text-xs font-semibold text-slate-500">
+              {shiftMinutes(s, 'planned') === null ? '' : formatDuration(shiftMinutes(s, 'planned'))}
+            </span>
             <button
               onClick={() => writePaths(coll, { [`${date}/shifts/${s.id}`]: null }, { action: 'delete', entity: 'смену', id: date, label: `${lbl} · смена ${s.staffName || ''}`.trim(), before: s })}
               className="shrink-0 w-7 h-8 flex items-center justify-center text-slate-400 hover:text-red-600"
@@ -261,6 +273,15 @@ export function ShiftCell({ coll, date, day, ctx }) {
             <Plus size={15} />
           </button>
         </div>
+        {guard && (
+          <div className="mt-1 rounded-lg border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-1.5 text-xs">
+            {guard.warnings.map((w) => <p key={w} className="text-slate-800 dark:text-slate-100 mb-1">⚠ {w}</p>)}
+            <div className="flex gap-1">
+              <button onClick={() => commit(guard.rec, guard.times)} className="px-2 min-h-[30px] rounded-md bg-orange-500 text-white font-semibold">Всё равно</button>
+              <button onClick={() => setGuard(null)} className="px-2 min-h-[30px] rounded-md bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 font-semibold text-slate-700 dark:text-slate-200">Отмена</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

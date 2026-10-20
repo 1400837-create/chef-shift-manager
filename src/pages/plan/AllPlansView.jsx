@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertTriangle, Printer, EyeOff, Eye } from 'lucide-react'
 import { formatDuration, parseHM } from '../../plan/hours'
 import {
   dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, shiftMonth, monthTitle, shiftMinutes,
 } from '../../plan/calc'
-import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
-import { blocksOf, dishesOf, shiftsOf } from '../../plan/exchange'
+import { LOCALE, staffLabel, dishLabel, tr } from '../../plan/lang'
+import { blocksOf, dishesOf, shiftsOf, buildTablePrint } from '../../plan/exchange'
+import { printReport } from '../../utils/printReport'
 import { todayKey } from '../../utils/dateUtils'
-import { TH, TD, gatherComments, daysBetween } from './GridView'
+import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText } from './GridView'
 
 const PALETTE = [
   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
@@ -63,6 +64,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
   const locale = LOCALE[ctx.lang]
   const [span, setSpan] = useState('week')
   const [anchor, setAnchor] = useState(today)
+  const [hideEmpty, setHideEmpty] = useState(false)
 
   const colorOf = useMemo(() => {
     const map = {}
@@ -100,6 +102,19 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
   const dayMinutes = (parts) => parts.reduce((sum, { day }) => sum + shiftsOf(day).reduce((a, s) => a + (shiftMinutes(s, 'planned') || 0), 0), 0)
   const periodTotal = dates.reduce((a, d) => a + dayMinutes(dayParts(d)), 0)
 
+  function printAll() {
+    printReport(buildTablePrint({
+      title: tr(ctx.lang, 'allPlans'),
+      period: title,
+      dates,
+      partsOf: dayParts,
+      ctx,
+      lang: ctx.lang,
+      showTags: true,
+      hideEmpty,
+    }))
+  }
+
   const Tag = ({ plan }) => (
     <button
       onClick={() => onOpenPlan(plan.id)}
@@ -125,12 +140,27 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
         {SPANS.map((s) => (
           <button
             key={s.key}
-            onClick={() => setSpan(s.key)}
+            onClick={() => { setSpan(s.key); setHideEmpty(s.key === 'month') }}
             className={`flex-1 min-h-[40px] ${span === s.key ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
           >
             {s.label}
           </button>
         ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <button
+          onClick={() => setHideEmpty((v) => !v)}
+          className="min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+        >
+          {hideEmpty ? <Eye size={16} /> : <EyeOff size={16} />}
+          {hideEmpty ? 'Показать пустые дни' : 'Скрыть пустые дни'}
+        </button>
+        <button
+          onClick={printAll}
+          className="min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+        >
+          <Printer size={16} /> Печать
+        </button>
       </div>
       <div className="flex flex-wrap gap-1.5 mb-3 items-center text-xs text-slate-500">
         <span>Планы:</span>
@@ -150,7 +180,10 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
             </tr>
           </thead>
           <tbody>
-            {weeks.map(([monday, list]) => [
+            {weeks.map(([monday, list0]) => {
+              const list = hideEmpty ? list0.filter((d) => dayParts(d).length > 0) : list0
+              if (!list.length) return null
+              return [
               span !== 'week' && (
                 <tr key={`w${monday}`} className="bg-slate-100 dark:bg-slate-900/60">
                   <td colSpan={5} className={`${TD} !py-1.5 text-xs font-bold uppercase tracking-wide text-slate-500`}>
@@ -162,7 +195,6 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                 const parts = dayParts(date)
                 const shifts = parts.flatMap(({ plan, day }) => shiftsOf(day).map((shift) => ({ plan, shift })))
                 const bad = conflictIds(shifts)
-                const total = dayMinutes(parts)
                 return (
                   <tr key={date} className={`align-top ${date === today ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}>
                     <td className={`${TD} font-bold whitespace-nowrap text-slate-800 dark:text-slate-100`}>{dayTitle(date, locale)}</td>
@@ -177,7 +209,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                               <div key={b.id} className="mt-1">
                                 <p className="font-semibold text-slate-800 dark:text-slate-100">
                                   {b.time ? `${b.time} ` : ''}{b.name || '—'}
-                                  {b.persons ? <span className="font-normal text-slate-500"> · {b.persons}</span> : null}
+                                  {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
                                 </p>
                                 {dishesOf(b).map((d) => (
                                   <p key={d.id} className={`pl-2 text-slate-600 dark:text-slate-300 ${d.changed ? '!text-red-600 font-semibold' : ''}`}>
@@ -204,7 +236,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                     </td>
                     <td className={`${TD} whitespace-nowrap`}>
                       {shifts.map(({ plan, shift }) => (
-                        <p key={`${plan.id}-${shift.id}`} className={bad.has(shift.id) ? 'text-red-600 font-semibold' : 'text-slate-700 dark:text-slate-200'}>
+                        <p key={`${plan.id}-${shift.id}`} className={`leading-6 ${bad.has(shift.id) ? 'text-red-600 font-semibold' : 'text-slate-700 dark:text-slate-200'}`}>
                           {bad.has(shift.id) && <AlertTriangle size={12} className="inline mr-1 -mt-0.5" title="Пересечение со второй сменой этого человека" />}
                           {staffLabel(ctx.staffById[shift.staffId], ctx.lang) || shift.staffName || '?'}
                           <span className={bad.has(shift.id) ? '' : 'text-slate-500'}> {shift.start}–{shift.end}</span>
@@ -213,12 +245,20 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                       ))}
                     </td>
                     <td className={`${TD} text-right whitespace-nowrap text-slate-700 dark:text-slate-200`}>
-                      {total > 0 && formatDuration(total)}
+                      {shifts.map(({ plan, shift }) => {
+                        const h = shiftHoursText(shift)
+                        return (
+                          <p key={`${plan.id}-${shift.id}`} className={`leading-6 font-semibold ${bad.has(shift.id) ? 'text-red-600' : ''}`}>
+                            {h.planned}
+                            {h.actual && <span className="ml-1 text-xs font-normal text-slate-500">(факт {h.actual})</span>}
+                          </p>
+                        )
+                      })}
                     </td>
                   </tr>
                 )
               }),
-            ])}
+            ]})}
           </tbody>
           <tfoot>
             <tr className="bg-slate-100 dark:bg-slate-900/60 font-bold text-slate-700 dark:text-slate-200">

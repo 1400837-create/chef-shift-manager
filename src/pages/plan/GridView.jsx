@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, X, Plus, Pencil } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer } from 'lucide-react'
 import { BigButton } from '../../components/UI'
 import { writePaths, commitChange } from '../../plan/planStore'
 import { formatDuration } from '../../plan/hours'
@@ -8,9 +8,11 @@ import {
   shiftMinutes,
 } from '../../plan/calc'
 import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
-import { blocksOf, dishesOf, shiftsOf, commentsOf } from '../../plan/exchange'
+import { blocksOf, dishesOf, shiftsOf, commentsOf, buildTablePrint } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
 import { MenuCell, ShiftCell, NoteCell } from './GridCells'
+import CopyModal from './CopyModal'
+import { printReport } from '../../utils/printReport'
 
 // Every cell gets a full border so the columns read as a table, not a list.
 export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
@@ -28,6 +30,23 @@ export function gatherComments(day, blocks, shifts, ctx) {
   })
   shifts.forEach((s) => add(s, staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || ''))
   return out
+}
+
+// "20 чел." as a clear orange chip, not a faint number after the name.
+export function Guests({ n, lang }) {
+  return (
+    <span className="ml-1.5 inline-block align-middle px-1.5 py-0.5 rounded-md bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 text-xs font-bold whitespace-nowrap">
+      {n} {lang === 'de' ? 'Pers.' : 'чел.'}
+    </span>
+  )
+}
+
+// One hours line per shift, so each person has their own figure; both
+// columns use the same line height so the lines stay level with the names.
+export function shiftHoursText(s) {
+  const p = shiftMinutes(s, 'planned')
+  const a = shiftMinutes(s, 'actual')
+  return { planned: p === null ? '—' : formatDuration(p), actual: a === null || a === 0 ? null : formatDuration(a) }
 }
 
 const SPANS = [
@@ -80,6 +99,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range?.from, range?.to])
   const [editing, setEditing] = useState(null)
+  const [copyOpen, setCopyOpen] = useState(false)
   const [editMode, setEditMode] = useState(() => {
     try { return localStorage.getItem('kitchenPlan_gridEdit') === '1' } catch { return false }
   })
@@ -123,6 +143,51 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
   const title = span === 'week'
     ? weekTitle(mondayOf(anchor), locale)
     : span === 'month' ? monthTitle(monthOf(anchor), locale) : plan.title || ''
+
+  // Days filled in outside this plan's period whose date a different plan covers.
+  const strays = useMemo(() => {
+    if (!range) return []
+    return existing
+      .filter((d) => !inPlanRange(range, d))
+      .filter((d) => {
+        const day = data[d]
+        if (!day || !(Object.keys(day.blocks || {}).length || Object.keys(day.shifts || {}).length || Object.keys(day.comments || {}).length)) return false
+        const target = findMoveTarget(plans, plan.id, d)
+        if (!target) return false
+        const there = tree[target.id]?.[d]
+        return !(there && (Object.keys(there.blocks || {}).length || Object.keys(there.shifts || {}).length || Object.keys(there.comments || {}).length))
+      })
+  }, [range, existing, data, plans, plan.id, tree])
+
+  function moveAllStrays() {
+    const updates = {}
+    strays.forEach((d) => {
+      const target = findMoveTarget(plans, plan.id, d)
+      updates[`planData/${plan.id}/${d}`] = null
+      updates[`planData/${target.id}/${d}`] = data[d]
+    })
+    commitChange({
+      coll: 'planData',
+      action: 'update',
+      entity: 'дни',
+      id: plan.id,
+      label: `${plan.title || 'план'}: перенесено ${strays.length} дн. в другие планы`,
+      updates,
+    })
+  }
+
+  function printTable() {
+    printReport(buildTablePrint({
+      title: plan.title || 'План',
+      period: title,
+      dates,
+      partsOf: (d) => (data[d] ? [{ plan, day: data[d] }] : []),
+      ctx,
+      lang: ctx.lang,
+      showTags: false,
+      hideEmpty: false,
+    }))
+  }
 
   // A day that was filled in outside this plan's period belongs to another
   // plan; move it there in one step (one journal line, nothing is copied twice).
@@ -176,17 +241,42 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         ))}
       </div>
 
-      <button
-        onClick={toggleEdit}
-        className={`w-full mb-3 min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border ${
-          editMode
-            ? 'bg-orange-500 border-orange-500 text-white'
-            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
-        }`}
-      >
-        <Pencil size={16} />
-        {editMode ? 'Правка в таблице включена — нажмите, чтобы выключить' : 'Редактировать прямо в таблице'}
-      </button>
+      <div className="grid grid-cols-[1fr_auto_auto] gap-2 mb-3">
+        <button
+          onClick={toggleEdit}
+          className={`min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border px-2 ${
+            editMode
+              ? 'bg-orange-500 border-orange-500 text-white'
+              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+          }`}
+        >
+          <Pencil size={16} />
+          {editMode ? 'Правка включена — выключить' : 'Править в таблице'}
+        </button>
+        <button
+          onClick={() => setCopyOpen(true)}
+          className="min-h-[44px] px-3.5 rounded-xl text-sm font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+        >
+          <Copy size={16} /> Копировать
+        </button>
+        <button
+          onClick={printTable}
+          className="min-h-[44px] px-3.5 rounded-xl text-sm font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+        >
+          <Printer size={16} /> Печать
+        </button>
+      </div>
+
+      {strays.length > 0 && (
+        <div className="mb-3 rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-3 text-sm text-slate-800 dark:text-slate-100">
+          Есть записи вне периода этого плана: <b>{strays.length}</b> дн. Они относятся к другим планам.
+          <div className="mt-2">
+            <button onClick={moveAllStrays} className="px-3 min-h-[40px] rounded-lg bg-orange-500 text-white font-semibold">
+              Перенести всё в подходящие планы
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
         <table className={`w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} border-collapse text-sm`}>
@@ -263,7 +353,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                             <div key={b.id} className="mb-1.5 last:mb-0">
                               <p className="font-semibold text-slate-800 dark:text-slate-100">
                                 {b.time ? `${b.time} ` : ''}{b.name || '—'}
-                                {b.persons ? <span className="font-normal text-slate-500"> · {b.persons}</span> : null}
+                                {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
                               </p>
                               {dishesOf(b).map((d) => (
                                 <p key={d.id} className={`pl-2 text-slate-600 dark:text-slate-300 ${d.changed ? '!text-red-600 font-semibold' : ''}`}>
@@ -288,15 +378,24 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                         {edit
                           ? <ShiftCell coll={coll} date={date} day={day || {}} ctx={ctx} />
                           : shifts.map((s) => (
-                            <p key={s.id} className="text-slate-700 dark:text-slate-200">
+                            <p key={s.id} className="leading-6 text-slate-700 dark:text-slate-200">
                               {staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || '?'}
                               <span className="text-slate-500"> {s.start}–{s.end}</span>
                             </p>
                           ))}
                       </td>
                       <td className={`${TD} text-right whitespace-nowrap text-slate-700 dark:text-slate-200`}>
-                        {shifts.length > 0 && formatDuration(planned)}
-                        {actual > 0 && <span className="block text-xs text-slate-500">факт {formatDuration(actual)}</span>}
+                        {edit
+                          ? (shifts.length > 0 && <span className="text-xs text-slate-500">всего {formatDuration(planned)}</span>)
+                          : shifts.map((s) => {
+                            const h = shiftHoursText(s)
+                            return (
+                              <p key={s.id} className="leading-6 font-semibold">
+                                {h.planned}
+                                {h.actual && <span className="ml-1 text-xs font-normal text-slate-500">(факт {h.actual})</span>}
+                              </p>
+                            )
+                          })}
                       </td>
                     </tr>
                   )
@@ -317,6 +416,10 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           )}
         </table>
       </div>
+
+      {copyOpen && (
+        <CopyModal plan={plan} data={data} range={range} defaultFrom={mondayOf(anchor)} onClose={() => setCopyOpen(false)} />
+      )}
 
       {editing && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={() => setEditing(null)}>

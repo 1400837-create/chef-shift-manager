@@ -5,7 +5,7 @@ import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
 import { usePlanCollection, createRecord, patchRecord, writePaths, newId, commitChange } from '../../plan/planStore'
 import { formatDuration, parseHM } from '../../plan/hours'
 import {
-  isDateKey, dayTitle, monthOf, monthTitle, shiftMinutes, sumMinutes, planRange,
+  isDateKey, dayTitle, monthOf, monthTitle, shiftMinutes, sumMinutes, planRange, assignmentWarnings,
   collectShifts, suggestStaff,
 } from '../../plan/calc'
 import { todayKey } from '../../utils/dateUtils'
@@ -410,13 +410,24 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
   const ns = normalizeTime(start)
   const ne = normalizeTime(end)
 
+  const [guard, setGuard] = useState(null)
+
+  // Overlap with the person's other shift (any plan) or going over their norm
+  // is allowed, but only after an explicit "add anyway".
+  function attempt(rec) {
+    const warnings = assignmentWarnings({ staff: rec, shifts: ctx.allShifts, date, start: ns, end: ne, planTitles: ctx.planTitles })
+    if (warnings.length) { setGuard({ rec, warnings }); return }
+    create(rec, ns, ne)
+    setStaffId('')
+  }
+
   function add() {
     const rec = ctx.staffList.find((s) => s.id === staffId)
     if (!rec) return setError('Выберите сотрудника.')
     if (!ns || !ne) return setError('Укажите начало и конец смены.')
     setError(null)
-    create(rec, ns, ne)
-    setStaffId('')
+    attempt(rec)
+    return undefined
   }
 
   const canSuggest = !!ns && !!ne
@@ -451,6 +462,22 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
         </button>
       </div>
       {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+      {guard && (
+        <div className="mt-2 rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-3 text-sm">
+          {guard.warnings.map((w) => <p key={w} className="text-slate-800 dark:text-slate-100 mb-1">⚠ {w}</p>)}
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => { create(guard.rec, ns, ne); setGuard(null); setStaffId('') }}
+              className="px-3 min-h-[40px] rounded-lg bg-orange-500 text-white font-semibold"
+            >
+              Всё равно добавить
+            </button>
+            <button onClick={() => setGuard(null)} className="px-3 min-h-[40px] rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-semibold">
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
       {pickOpen && !canSuggest && <p className="text-xs text-slate-500 mt-2">Сначала выберите типовую смену или укажите время начала и конца.</p>}
       {suggestions.length > 0 && (
         <div className="mt-2">
@@ -465,7 +492,7 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
                 </p>
               </div>
               <button
-                onClick={() => create(staff, ns, ne)}
+                onClick={() => attempt(staff)}
                 className={`shrink-0 px-3 min-h-[36px] rounded-lg text-xs font-semibold ${busy ? 'bg-slate-100 dark:bg-slate-700 text-slate-500' : 'bg-orange-500 text-white'}`}
               >
                 Назначить
@@ -736,8 +763,10 @@ export default function ScheduleTab({ menuBridge }) {
     recipeList.forEach((r) => { recipeById[r.id] = r })
     const staffById = {}
     staffList.forEach((s) => { staffById[s.id] = s })
-    return { staffList, staffById, templates, recipeList, recipeById, lang }
-  }, [staff.items, templatesCol.items, recipes.data, lang])
+    const planTitles = {}
+    sortedPlans.forEach((p) => { planTitles[p.id] = p.title || kindLabel(p.kind) })
+    return { staffList, staffById, templates, recipeList, recipeById, lang, planTitles, allShifts: collectShifts(allData) }
+  }, [staff.items, templatesCol.items, recipes.data, lang, sortedPlans, allData])
 
   const plan = sortedPlans.find((p) => p.id === selected)
 
