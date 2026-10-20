@@ -829,7 +829,7 @@ export default function ShoppingList({
                     : 'border-slate-200 dark:border-slate-700'
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   {selectionMode && (
                     <button
                       onClick={() => toggleSelected(p.id)}
@@ -841,7 +841,7 @@ export default function ShoppingList({
                     </button>
                   )}
                   <div
-                    className="flex-1 min-w-0"
+                    className="flex-1 min-w-[9rem]"
                     onClick={selectionMode ? () => toggleSelected(p.id) : undefined}
                   >
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
@@ -879,7 +879,7 @@ export default function ShoppingList({
                     )}
                   </div>
                   {!selectionMode && (
-                    <>
+                    <div className="flex items-center gap-0.5 ml-auto">
                       <button
                         onClick={() => toggleFlag(p.id)}
                         className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg ${
@@ -913,7 +913,7 @@ export default function ShoppingList({
                         onConfirm={() => markPurchased(p)}
                       />
                       <ConfirmDeleteButton onConfirm={() => remove(p.id)} />
-                    </>
+                    </div>
                   )}
                 </div>
                 {storeOpen && (
