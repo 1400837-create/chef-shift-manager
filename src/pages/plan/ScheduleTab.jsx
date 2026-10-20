@@ -554,7 +554,7 @@ function PlanView({ plan, ctx }) {
       {dates.length === 0 && <p className="text-sm text-slate-400 text-center py-4">В плане пока нет дней — добавьте первый.</p>}
       {weeks.map(([monday, list]) => (
         <div key={monday}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 mt-1">Неделя {weekTitle(monday, LOCALE[ctx.lang])}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 mt-1">{ctx.lang === 'de' ? 'Woche' : 'Неделя'} {weekTitle(monday, LOCALE[ctx.lang])}</p>
           {list.map((date) => (
             <DayCard
               key={date}
