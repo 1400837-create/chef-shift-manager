@@ -776,7 +776,10 @@ export default function ScheduleTab({ menuBridge }) {
         {BLOCK_NAMES.map((n) => <option key={n} value={n} />)}
       </datalist>
 
-      <div className="flex gap-1.5 overflow-x-auto mb-3 items-center">
+      <div
+        className="sticky z-20 -mx-3 md:-mx-6 lg:-mx-10 px-3 md:px-6 lg:px-10 py-2 mb-2 flex gap-1.5 overflow-x-auto items-center bg-slate-100 dark:bg-slate-950 shadow-[0_2px_4px_-2px_rgba(0,0,0,0.15)]"
+        style={{ top: "var(--app-header-h, 64px)" }}
+      >
         {sortedPlans.length > 1 && (
           <button
             onClick={() => { setSelected(ALL); setCreating(false) }}
