@@ -32,7 +32,7 @@ export default function MenuPlanner({
   // product doesn't exist yet in the nomenclature sends the user over to
   // Склад → Каталог to fill it in, which unmounts this page — persisting the
   // in-progress recipe means it's still there, untouched, when they come back.
-  const [menuTab, setMenuTab] = useLocalStorage('menuTab', 'calendar')
+  const [menuTab, setMenuTab] = useLocalStorage('menuTab', 'calendar', { localOnly: true })
   useBackableTab('menuTab', menuTab, setMenuTab)
 
   // Меню and Рецепты are separate entries on the bottom nav now (both render
@@ -52,7 +52,7 @@ export default function MenuPlanner({
   // toggle button's visibility and whether split mode actually applies, in
   // case the stored preference was turned on from a wider screen earlier.
   const isWideScreen = useMediaQuery('(min-width: 768px)')
-  const [splitView, setSplitView] = useLocalStorage('menuSplitView', false)
+  const [splitView, setSplitView] = useLocalStorage('menuSplitView', false, { localOnly: true })
   const showBothPanes = splitView && isWideScreen
 
   // Each pane needs its own bounded height to scroll independently instead
@@ -84,7 +84,7 @@ export default function MenuPlanner({
   const [recipeError, setRecipeError] = useState(null)
   const [missingProductPrompt, setMissingProductPrompt] = useState(null)
   const [showNewRecipeForm, setShowNewRecipeForm] = useLocalStorage('showNewRecipeFormDraft', false)
-  const [expandedRecipeId, setExpandedRecipeId] = useLocalStorage('expandedRecipeIdDraft', null)
+  const [expandedRecipeId, setExpandedRecipeId] = useLocalStorage('expandedRecipeIdDraft', null, { localOnly: true })
   // Recipes are written for one base yield (e.g. 10 порций) but a given day's
   // menu scales that by a coefficient (4 порции в меню = ×4 the base recipe)
   // — this scales the displayed ingredient amounts to match without ever
@@ -100,7 +100,7 @@ export default function MenuPlanner({
   // Меню (via the "Меню" button or system back), so switching back and
   // forth between a day's dishes and their ТК stays anchored on that day.
   const pendingDayScrollRef = useRef(null)
-  const [editingRecipeId, setEditingRecipeId] = useLocalStorage('editingRecipeIdDraft', null)
+  const [editingRecipeId, setEditingRecipeId] = useLocalStorage('editingRecipeIdDraft', null, { localOnly: true })
   const [recipePhotoProcessing, setRecipePhotoProcessing] = useState(false)
   const [recipePhotoError, setRecipePhotoError] = useState(null)
   const [recipePrintMode, setRecipePrintMode] = useState(false)

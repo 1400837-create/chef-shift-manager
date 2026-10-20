@@ -22,7 +22,13 @@ function readValue(key, initialValue) {
 // having to know sync exists, same way every call site already gets
 // localStorage persistence for free. When sync is off, subscribeToCloud is
 // a no-op (roomKeyRef returns null), so this behaves exactly as before.
-export function useLocalStorage(key, initialValue) {
+// options.localOnly: this value is per-device view state (which tab is open,
+// which card is expanded) — it must neither be sent to the cloud nor be
+// overwritten by a cloud echo. Without that, jumping to a recipe right after
+// a page mounts (Глобальный поиск) was undone a moment later when the
+// subscription delivered the other device's stale tab.
+export function useLocalStorage(key, initialValue, options = {}) {
+  const localOnly = !!options.localOnly
   const [value, setValue] = useState(() => readValue(key, initialValue))
   const firstRender = useRef(true)
   // Set right before applying a value that came FROM the cloud, so the
@@ -40,7 +46,7 @@ export function useLocalStorage(key, initialValue) {
   // local default. Starts false whenever sync is enabled, and only flips
   // true once subscribeToCloud confirms it's heard from Firebase for this
   // key (or confirms there's nothing to hear because sync is off).
-  const readyToPush = useRef(false)
+  const readyToPush = useRef(localOnly)
 
   useEffect(() => {
     if (firstRender.current) {
@@ -58,7 +64,7 @@ export function useLocalStorage(key, initialValue) {
     }
     if (skipNextPush.current) {
       skipNextPush.current = false
-    } else if (readyToPush.current) {
+    } else if (readyToPush.current && !localOnly) {
       pushToCloud(key, value)
     }
     // else: sync is on but we haven't confirmed the cloud's actual state for
@@ -68,6 +74,7 @@ export function useLocalStorage(key, initialValue) {
   }, [key, value])
 
   useEffect(() => {
+    if (localOnly) return undefined
     return subscribeToCloud(
       key,
       (remoteValue) => {
