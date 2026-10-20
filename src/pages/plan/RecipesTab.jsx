@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search, Check, X, Plus, CalendarPlus } from 'lucide-react'
 import { inputClass, BigButton } from '../../components/UI'
 import { RECIPE_CATEGORIES } from '../../utils/constants'
@@ -130,6 +130,19 @@ export default function RecipesTab() {
   const [picked, setPicked] = useState({})
   const [open, setOpen] = useState(false)
   const [note, setNote] = useState(null)
+  const barRef = useRef(null)
+  const [barH, setBarH] = useState(96)
+
+  // Category jumps must stop below the sticky bar, whose height depends on
+  // the screen width (chips can wrap the search row), so measure it.
+  useEffect(() => {
+    const el = barRef.current
+    if (!el) return undefined
+    const measure = () => setBarH(el.offsetHeight)
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  })
 
   // recipesSlim can arrive as an array with holes (small integer keys) — skip the empty slots.
   const recipes = useMemo(
@@ -177,12 +190,17 @@ export default function RecipesTab() {
 
   return (
     <div className="pb-24">
+      <div
+        ref={barRef}
+        className="sticky z-20 -mx-3 md:-mx-6 lg:-mx-10 px-3 md:px-6 lg:px-10 pt-1 pb-2 mb-1 bg-slate-100 dark:bg-slate-950 shadow-[0_2px_4px_-2px_rgba(0,0,0,0.15)]"
+        style={{ top: 'var(--app-header-h, 64px)' }}
+      >
       <div className="relative mb-2">
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input className={inputClass + ' pl-10'} placeholder={`Поиск по ${recipes.length} рецептам…`} value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto mb-3 pb-1">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
         {groups.map((g) => (
           <a
             key={g.key}
@@ -197,12 +215,13 @@ export default function RecipesTab() {
           </a>
         ))}
       </div>
+      </div>
 
       {note && <p className="text-sm text-green-700 dark:text-green-400 mb-2">{note}</p>}
       {groups.length === 0 && <p className="text-sm text-slate-400 text-center py-6">Ничего не найдено.</p>}
 
       {groups.map((g) => (
-        <section key={g.key} id={`plan-cat-${g.key}`} className="mb-4 scroll-mt-20">
+        <section key={g.key} id={`plan-cat-${g.key}`} className="mb-4" style={{ scrollMarginTop: `calc(var(--app-header-h, 64px) + ${barH}px + 6px)` }}>
           <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-1.5 px-1">{g.label} ({g.items.length})</h2>
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
             {g.items.map((r) => (
