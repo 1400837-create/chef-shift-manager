@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Wifi, WifiOff } from 'lucide-react'
 import { inputClass, Badge } from '../../components/UI'
-import { usePlanStatus } from '../../plan/planStore'
+import { usePlanStatus, flush } from '../../plan/planStore'
 
 // Commits on blur / Enter, not on every keystroke: each commit is a journal
 // entry and a network write, and typing "Larin" must not produce five of them.
@@ -103,6 +103,15 @@ export function StatusBar() {
         {s.online ? 'онлайн' : 'нет связи'}
       </span>
       {s.pending > 0 && <Badge color="orange">Не отправлено: {s.pending}</Badge>}
+      {s.pending > 0 && (
+        <button
+          onClick={() => flush()}
+          disabled={s.flushing}
+          className="px-2.5 min-h-[28px] rounded-lg bg-orange-500 text-white font-semibold disabled:opacity-50"
+        >
+          {s.flushing ? 'Отправляю…' : 'Отправить сейчас'}
+        </button>
+      )}
       {s.error && <span className="text-red-600 dark:text-red-400">{s.error}</span>}
     </div>
   )

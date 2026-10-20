@@ -270,6 +270,24 @@ function scheduleRetry() {
   }, 10000)
 }
 
+const FAILED_KEY = 'kitchenPlan_failedOps'
+
+// An edit the server will never accept (invalid data, not a connection
+// problem) must not sit at the head of the queue blocking everything behind
+// it: park it aside (kept in the browser for diagnosis) and carry on.
+function parkFailed(op, err) {
+  try {
+    const list = readJson(FAILED_KEY) || []
+    list.push({ at: Date.now(), message: String(err?.message || err), op })
+    localStorage.setItem(FAILED_KEY, JSON.stringify(list.slice(-20)))
+  } catch {
+    // diagnostics only
+  }
+  outbox = outbox.filter((o) => o.opId !== op.opId)
+  saveOutbox()
+  recomputeAll()
+}
+
 export async function flush() {
   if (flushing) return
   flushing = true
@@ -283,7 +301,16 @@ export async function flush() {
       const payload = { ...op.updates }
       payload[`journal/${op.day}/${op.opId}`] = { ...op.journal, clientTs: op.clientTs, ts: serverTimestamp() }
       payload[`journalDays/${op.day}`] = true
-      await withTimeout(update(ref(db, `rooms/${cfg.code}`), payload), 30000)
+      try {
+        await withTimeout(update(ref(db, `rooms/${cfg.code}`), payload), 30000)
+      } catch (err) {
+        const msg = String(err?.message || err)
+        const transient = msg === 'timeout' || /network|offline|disconnect|permission/i.test(msg)
+        if (transient) throw err
+        parkFailed(op, err)
+        setStatus({ error: `Одно изменение не удалось сохранить (${msg}). Остальные отправляются.` })
+        continue
+      }
       outbox = outbox.filter((o) => o.opId !== op.opId)
       saveOutbox()
       recomputeAll()

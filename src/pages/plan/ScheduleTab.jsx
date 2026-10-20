@@ -14,6 +14,7 @@ import { usePlanLang, LOCALE, staffLabel } from '../../plan/lang'
 import ExchangePanel from './Exchange'
 import CostPanel from './Cost'
 import GridView from './GridView'
+import AllPlansView from './AllPlansView'
 import { RecipePickerModal } from './RecipeBrowser'
 
 const PLAN_KINDS = [
@@ -694,6 +695,8 @@ function NewPlanForm({ onCreated, onCancel }) {
   )
 }
 
+const ALL = '__all'
+
 export default function ScheduleTab({ menuBridge }) {
   const { config } = usePlanDeviceState()
   const code = config?.code
@@ -702,6 +705,7 @@ export default function ScheduleTab({ menuBridge }) {
   const templatesCol = usePlanCollection('shiftTemplates')
   const recipes = usePlanCollection('recipesSlim')
   const lang = usePlanLang()
+  const allData = usePlanCollection('planData').data
 
   const sortedPlans = useMemo(() => [...plans.items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [plans.items])
   const selKey = `kitchenPlan_selectedPlan:${code}`
@@ -712,7 +716,7 @@ export default function ScheduleTab({ menuBridge }) {
 
   useEffect(() => {
     if (!plans.ready) return
-    if (!sortedPlans.some((p) => p.id === selected)) setSelected(sortedPlans[0]?.id || '')
+    if (selected !== ALL && !sortedPlans.some((p) => p.id === selected)) setSelected(sortedPlans[0]?.id || '')
   }, [plans.ready, sortedPlans, selected])
 
   useEffect(() => {
@@ -744,6 +748,16 @@ export default function ScheduleTab({ menuBridge }) {
       </datalist>
 
       <div className="flex gap-1.5 overflow-x-auto mb-3 items-center">
+        {sortedPlans.length > 1 && (
+          <button
+            onClick={() => { setSelected(ALL); setCreating(false) }}
+            className={`shrink-0 min-h-[40px] px-3.5 rounded-full text-sm font-semibold whitespace-nowrap ${
+              selected === ALL && !creating ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'
+            }`}
+          >
+            Все планы
+          </button>
+        )}
         {sortedPlans.map((p) => (
           <button
             key={p.id}
@@ -769,8 +783,11 @@ export default function ScheduleTab({ menuBridge }) {
           onCancel={() => setCreating(false)}
         />
       )}
-      {!creating && !plan && plans.ready && (
+      {!creating && !plan && selected !== ALL && plans.ready && (
         <p className="text-sm text-slate-400 text-center py-6">Планов пока нет. Создайте первый — например, «Октябрь 2026».</p>
+      )}
+      {!creating && selected === ALL && sortedPlans.length > 0 && (
+        <AllPlansView plans={sortedPlans} tree={allData} ctx={ctx} onOpenPlan={(id) => setSelected(id)} />
       )}
       {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} menuBridge={menuBridge} plans={sortedPlans} />}
     </div>

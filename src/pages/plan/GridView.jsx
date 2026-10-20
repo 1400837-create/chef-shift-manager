@@ -13,12 +13,12 @@ import { todayKey } from '../../utils/dateUtils'
 import { MenuCell, ShiftCell, NoteCell } from './GridCells'
 
 // Every cell gets a full border so the columns read as a table, not a list.
-const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
-const TD = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
+export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
+export const TD = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
 
 // All comments of a day in one place — on the day itself, on a meal, on a
 // dish or on a shift — each tagged with what it is about.
-function gatherComments(day, blocks, shifts, ctx) {
+export function gatherComments(day, blocks, shifts, ctx) {
   const out = []
   const add = (node, where) => commentsOf(node).forEach((c) => out.push({ where, text: c.text, by: c.by }))
   add(day, '')
@@ -43,7 +43,7 @@ function findMoveTarget(plans, currentId, date) {
 }
 
 
-function daysBetween(from, to) {
+export function daysBetween(from, to) {
   const out = []
   for (let d = from; d <= to; d = addDaysKey(d, 1)) out.push(d)
   return out

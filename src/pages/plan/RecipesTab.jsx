@@ -14,7 +14,7 @@ import { TimeInput, normalizeTime } from './shared'
 // Adds the chosen recipes to one day of one plan, into an existing meal or a
 // new one. Dishes are stored the same way as hand-picked ones (text + link).
 function AddToDay({ picked, plans, defaultPlanId, onRemove, onClose, onDone }) {
-  const [planId, setPlanId] = useState(defaultPlanId || plans[0]?.id || '')
+  const [planId, setPlanId] = useState(plans.some((p) => p.id === defaultPlanId) ? defaultPlanId : plans[0]?.id || '')
   const [date, setDate] = useState(todayKey())
   const [blockId, setBlockId] = useState('__new')
   const [blockName, setBlockName] = useState('')
