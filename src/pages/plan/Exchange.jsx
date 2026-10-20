@@ -7,9 +7,11 @@ import { mondayOf, addDaysKey, weekTitle } from '../../plan/calc'
 import { LOCALE } from '../../plan/lang'
 import {
   planDates, shiftsTsv, dishesTsv, hoursTsv, parsePaste, buildImportUpdates, buildPrintPayload,
+  buildMenuTransfer, applyMenuTransfer,
 } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
 import { Message } from './shared'
+import { coursesForDay } from '../../utils/menuCourses'
 
 async function copyText(text) {
   try {
@@ -35,7 +37,7 @@ const LANG_OPTIONS = [
   { key: 'both', label: 'Русский + Deutsch' },
 ]
 
-export default function ExchangePanel({ plan, data, ctx, shifts }) {
+export default function ExchangePanel({ plan, data, ctx, shifts, menuBridge }) {
   const [open, setOpen] = useState(false)
   const [period, setPeriod] = useState('all')
   const [printLang, setPrintLang] = useState('')
@@ -43,6 +45,8 @@ export default function ExchangePanel({ plan, data, ctx, shifts }) {
   const [kind, setKind] = useState('shifts')
   const [text, setText] = useState('')
   const [parsed, setParsed] = useState(null)
+  const [transfer, setTransfer] = useState(null)
+  const [transferMode, setTransferMode] = useState('skip')
 
   const weeks = useMemo(() => {
     const set = new Set(planDates(data).map(mondayOf))
@@ -76,6 +80,20 @@ export default function ExchangePanel({ plan, data, ctx, shifts }) {
     setParsed(parsePaste(kind, text, { staffList: ctx.staffList, recipeList: ctx.recipeList, defaultYear }))
   }
 
+  function previewTransfer() {
+    setMsg(null)
+    setTransfer(buildMenuTransfer(data, ctx, range.from, range.to, menuBridge.menuData))
+  }
+
+  function doTransfer() {
+    const days = transfer
+    const mode = transferMode
+    menuBridge.setMenuData((prev) => applyMenuTransfer(prev, days, mode, coursesForDay))
+    const done = days.filter((d) => !(d.hasExisting && mode === 'skip')).length
+    setMsg({ type: 'ok', text: `Перенесено дней: ${done}. Откройте Меню, чтобы проверить.` })
+    setTransfer(null)
+  }
+
   function doImport() {
     if (!parsed || !parsed.ok.length) return
     const coll = `planData/${plan.id}`
@@ -106,7 +124,7 @@ export default function ExchangePanel({ plan, data, ctx, shifts }) {
       {open && (
         <div className="p-3">
           <div className="grid grid-cols-2 gap-2 mb-2">
-            <select className={inputClass} value={period} onChange={(e) => setPeriod(e.target.value)}>
+            <select className={inputClass} value={period} onChange={(e) => { setPeriod(e.target.value); setTransfer(null) }}>
               <option value="all">Весь план</option>
               {weeks.map((w) => <option key={w} value={w}>Неделя {weekTitle(w, LOCALE.ru)}</option>)}
             </select>
@@ -132,6 +150,42 @@ export default function ExchangePanel({ plan, data, ctx, shifts }) {
               Часы
             </BigButton>
           </div>
+
+          {menuBridge && (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mt-4 mb-1.5">Перенос в Меню</p>
+              <p className="text-xs text-slate-500 mb-2">
+                Блюда выбранного периода попадут в Меню по дням: название приёма — подпись, блюдо — по названию рецепта,
+                количество — коэффициент (персон ÷ 10). Дальше их можно выгрузить в закупку обычным импортом из меню.
+              </p>
+              <select className={inputClass + ' mb-2'} value={transferMode} onChange={(e) => { setTransferMode(e.target.value); setTransfer(null) }}>
+                <option value="skip">Не трогать дни, где в Меню уже есть блюда</option>
+                <option value="append">Добавить к уже имеющимся блюдам</option>
+                <option value="replace">Заменить блюда в этих днях</option>
+              </select>
+              <BigButton color="outline" icon={ClipboardPaste} onClick={previewTransfer}>Показать, что перенесётся</BigButton>
+              {transfer && (
+                <div className="mt-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                  {transfer.length === 0 && <p className="text-sm text-slate-500">В этом периоде нет блюд для переноса.</p>}
+                  {transfer.map((d) => (
+                    <div key={d.date} className="text-sm py-1 border-b border-slate-100 dark:border-slate-700 last:border-0 text-slate-700 dark:text-slate-200">
+                      <b>{d.date.slice(8)}.{d.date.slice(5, 7)}</b> — {d.courses.length} блюд
+                      {d.hasExisting && (
+                        <span className={transferMode === 'skip' ? 'text-orange-600' : 'text-slate-400'}>
+                          {' '}· в Меню уже заполнено{transferMode === 'skip' ? ' — будет пропущено' : ''}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {transfer.length > 0 && (
+                    <div className="mt-2">
+                      <BigButton onClick={doTransfer}>Перенести в Меню</BigButton>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mt-4 mb-1.5">Вставить из таблицы</p>
           <p className="text-xs text-slate-500 mb-2">

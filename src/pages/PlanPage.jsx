@@ -517,7 +517,7 @@ function ChangesBanner({ onShow }) {
   )
 }
 
-export default function PlanPage() {
+export default function PlanPage({ menuBridge }) {
   const { config } = usePlanDeviceState()
   const isOwner = !config || config.role === 'owner'
   const [sub, setSub] = useState(config ? 'schedule' : 'access')
@@ -559,7 +559,7 @@ export default function PlanPage() {
         </>
       )}
       {(!config || sub === 'access') && <AccessPanel config={config} />}
-      {config && sub === 'schedule' && <ScheduleTab />}
+      {config && sub === 'schedule' && <ScheduleTab menuBridge={menuBridge} />}
       {config && sub === 'hours' && <HoursTab />}
       {config && sub === 'dir' && (
         <>

@@ -311,3 +311,51 @@ export function buildPrintPayload({ plan, data, ctx, shifts, lang, from, to }) {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// plan → Меню
+// ---------------------------------------------------------------------------
+
+// Menu stores, per month and day number, a list of courses {id,label,dish,qty}.
+// `qty` doubles as the recipe coefficient there (a recipe is written for 10
+// portions), so persons/10 is what makes the plan's ТК scale come out right.
+export function buildMenuTransfer(data, ctx, from, to, menuData) {
+  const days = []
+  planDates(data, from, to).forEach((date) => {
+    const courses = []
+    blocksOf(data[date]).forEach((b) => {
+      const persons = Number(b.persons)
+      const qty = Number.isFinite(persons) && persons > 0 ? String(Math.round((persons / 10) * 100) / 100) : ''
+      dishesOf(b).forEach((d) => {
+        const recipe = d.recipeId ? ctx.recipeById[d.recipeId] : null
+        const dish = (recipe ? recipe.name : d.text || '').trim()
+        if (dish) courses.push({ label: b.name || '', dish, qty })
+      })
+    })
+    if (!courses.length) return
+    const monthKey = date.slice(0, 7)
+    const day = Number(date.slice(8, 10))
+    const existing = menuData?.[monthKey]?.[day]
+    const hasExisting = !!(existing && Array.isArray(existing.courses)
+      ? existing.courses.some((c) => c.dish)
+      : existing && Object.keys(existing).some((k) => /^(soup|main|side|salad)$/.test(k) && existing[k]))
+    days.push({ date, monthKey, day, courses, hasExisting })
+  })
+  return days
+}
+
+// mode: 'skip' (leave filled days alone) | 'replace' | 'append'
+export function applyMenuTransfer(prev, days, mode, coursesForDay) {
+  const next = { ...prev }
+  let stamp = Date.now()
+  days.forEach((d) => {
+    if (d.hasExisting && mode === 'skip') return
+    const month = { ...(next[d.monthKey] || {}) }
+    const cur = month[d.day] || {}
+    const fresh = d.courses.map((c) => ({ id: `p-${stamp++}`, label: c.label, dish: c.dish, qty: c.qty, kosher: false }))
+    const keep = d.hasExisting && mode === 'append' ? coursesForDay(cur).filter((c) => c.dish) : []
+    month[d.day] = { ...cur, courses: [...keep, ...fresh] }
+    next[d.monthKey] = month
+  })
+  return next
+}

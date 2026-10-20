@@ -496,7 +496,7 @@ function defaultDate(plan) {
   return today
 }
 
-function PlanView({ plan, ctx }) {
+function PlanView({ plan, ctx, menuBridge }) {
   const coll = `planData/${plan.id}`
   const { data } = usePlanCollection(coll)
   const tree = usePlanCollection('planData').data
@@ -549,7 +549,7 @@ function PlanView({ plan, ctx }) {
         </div>
       </Section>
 
-      <ExchangePanel plan={plan} data={data} ctx={ctx} shifts={allShifts} />
+      <ExchangePanel plan={plan} data={data} ctx={ctx} shifts={allShifts} menuBridge={menuBridge} />
 
       {dates.length === 0 && <p className="text-sm text-slate-400 text-center py-4">В плане пока нет дней — добавьте первый.</p>}
       {weeks.map(([monday, list]) => (
@@ -605,7 +605,7 @@ function NewPlanForm({ onCreated, onCancel }) {
   )
 }
 
-export default function ScheduleTab() {
+export default function ScheduleTab({ menuBridge }) {
   const { config } = usePlanDeviceState()
   const code = config?.code
   const plans = usePlanCollection('plans')
@@ -681,7 +681,7 @@ export default function ScheduleTab() {
       {!creating && !plan && plans.ready && (
         <p className="text-sm text-slate-400 text-center py-6">Планов пока нет. Создайте первый — например, «Октябрь 2026».</p>
       )}
-      {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} />}
+      {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} menuBridge={menuBridge} />}
     </div>
   )
 }
