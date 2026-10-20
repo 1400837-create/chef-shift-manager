@@ -4,6 +4,9 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      // A mouse-driven wide screen (desktop) — touch tablets keep the bottom bar
+      // however wide they are, since that's what feels right under a thumb.
+      screens: { desk: { raw: '(min-width: 1024px) and (hover: hover) and (pointer: fine)' } },
       colors: {
         urgent: '#dc2626',
         warn: '#eab308',

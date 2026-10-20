@@ -805,7 +805,7 @@ export default function ScheduleTab({ menuBridge }) {
       </datalist>
 
       <div
-        className="sticky z-20 -mx-3 md:-mx-6 lg:-mx-8 px-3 md:px-6 lg:px-8 py-2 mb-2 flex gap-1.5 overflow-x-auto items-center bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-md shadow-[0_6px_12px_-8px_rgba(15,23,42,0.25)]"
+        className="sticky z-20 -mx-3 md:-mx-6 lg:-mx-8 px-3 md:px-6 lg:px-8 py-2 mb-2 flex gap-1.5 overflow-x-auto items-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-md shadow-[0_6px_12px_-8px_rgba(15,23,42,0.25)]"
         style={{ top: "var(--app-header-h, 64px)" }}
       >
         {sortedPlans.length > 1 && (

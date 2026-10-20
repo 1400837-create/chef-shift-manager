@@ -251,3 +251,8 @@ button:disabled {
     transform: none;
   }
 }
+
+/* Sheets and dialogs float above their backdrop. */
+.fixed.inset-0:not(.bg-white) > div {
+  box-shadow: var(--sh-xl);
+}

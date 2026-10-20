@@ -416,7 +416,7 @@ export default function App() {
         onSelectRecipe={(id) => { goToRecipe(id); setSearchOpen(false) }}
       />
 
-      <main className="px-3 md:px-6 lg:px-8 pt-3 pb-24 lg:pb-10 lg:ml-[92px]">
+      <main className="px-3 md:px-6 lg:px-8 pt-3 pb-24 desk:pb-10 desk:ml-[92px]">
         <div
           key={tab === 'recipes' ? 'menu' : tab}
           className={`page-enter mx-auto w-full max-w-lg md:max-w-none ${tab === 'plan' ? 'lg:max-w-[1680px]' : 'lg:max-w-[1180px]'}`}
