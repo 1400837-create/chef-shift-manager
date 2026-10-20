@@ -2,6 +2,12 @@ const SUBJECT = {
   staff: 'сотрудника',
   shiftTemplates: 'типовую смену',
   users: 'пользователя',
+  plans: 'план',
+}
+
+// Schedule edits carry an explicit `entity` already in the accusative.
+const ENTITY_SUBJECT = {
+  'комментарий': 'комментарий',
 }
 
 const FIELD = {
@@ -11,16 +17,32 @@ const FIELD = {
   label: 'название',
   start: 'начало',
   end: 'конец',
+  actStart: 'факт: начало',
+  actEnd: 'факт: конец',
+  staffId: 'сотрудник',
+  staffName: 'сотрудник',
+  blockId: 'приём',
+  text: 'текст',
+  time: 'время',
+  persons: 'персон',
+  changed: 'пометка «изменено»',
+  recipeId: 'рецепт',
+  title: 'название',
 }
 
 function fmt(v) {
   return v === null || v === undefined || v === '' ? '—' : String(v)
 }
 
+function subjectOf(e) {
+  if (e.entity) return ENTITY_SUBJECT[e.entity] || e.entity
+  return SUBJECT[e.coll] || 'запись'
+}
+
 // One human-readable line per journal entry. Genderless verb forms ("изменил(а)")
 // because both people using the plan read these.
 export function describeEntry(e) {
-  const subject = SUBJECT[e.coll] || 'запись'
+  const subject = subjectOf(e)
   const name = e.label ? `«${e.label}»` : ''
   switch (e.action) {
     case 'create':

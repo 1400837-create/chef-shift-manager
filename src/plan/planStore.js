@@ -6,7 +6,7 @@ import { getPlanConfig, onPlanConfigChanged, planRoomRef, getAuthor, localDayKey
 // Collections that make up "the plan" — what snapshots, the file export and
 // restore all cover. recipesSlim/users/journal/backups are deliberately not
 // in here: the first is derived, the rest are infrastructure.
-export const PLAN_COLLECTIONS = ['staff', 'shiftTemplates']
+export const PLAN_COLLECTIONS = ['staff', 'shiftTemplates', 'plans', 'planData']
 
 // ---------------------------------------------------------------------------
 // Why this isn't useLocalStorage + whole-key sync
@@ -162,12 +162,20 @@ const EMPTY_VIEW = { data: {}, ready: false }
 function applyPending(coll, base) {
   const code = getPlanConfig()?.code
   const data = clone(base) || {}
+  // `coll` may itself be a path ("planData/abc"), and an op may write either
+  // below it, exactly at it (deleting a whole plan), or in a collection that
+  // sits above it — so match on path prefix, not on the first segment.
+  const prefix = `${coll}/`
   for (const op of outbox) {
     if (op.code !== code) continue
     for (const [path, value] of Object.entries(op.updates)) {
-      const parts = path.split('/')
-      if (parts[0] !== coll) continue
-      setDeep(data, parts.slice(1), value === null ? null : clone(value))
+      if (path === coll) {
+        if (value === null) Object.keys(data).forEach((k) => delete data[k])
+        else Object.assign(data, clone(value))
+        continue
+      }
+      if (!path.startsWith(prefix)) continue
+      setDeep(data, path.slice(prefix.length).split('/'), value === null ? null : clone(value))
     }
   }
   return data
@@ -321,12 +329,54 @@ function requireRoom() {
   return cfg
 }
 
-function commit({ coll, action, id, label, updates, changes, before }) {
+export function commitChange(args) {
+  commit(args)
+}
+
+// A fresh unique id (push key) for a record that will live under `coll`.
+export function newId(coll) {
+  const cfg = requireRoom()
+  return push(ref(db, `rooms/${cfg.code}/${coll}`)).key
+}
+
+// General nested edit: `rel` maps paths RELATIVE to `coll` to new values
+// (null deletes). Unchanged scalar values are skipped so re-saving a field
+// with the same text writes and journals nothing.
+//   meta: { action: 'create'|'update'|'delete', entity, label, id, changes?, before? }
+export function writePaths(coll, rel, meta = {}) {
+  const action = meta.action || 'update'
+  const view = getView(coll).data
+  const updates = {}
+  const changes = []
+  for (const [p, raw] of Object.entries(rel)) {
+    const value = norm(cleanDeep(raw))
+    const prev = norm(getDeep(view, p.split('/')))
+    const scalar = value === null || typeof value !== 'object'
+    if (action === 'update' && scalar && prev === value) continue
+    updates[`${coll}/${p}`] = value
+    if (action === 'update') changes.push({ f: p.split('/').pop(), from: scalar ? prev : null, to: scalar ? value : null })
+  }
+  if (!Object.keys(updates).length) return false
+  commit({
+    coll,
+    action,
+    entity: meta.entity,
+    id: meta.id,
+    label: meta.label,
+    updates,
+    changes: meta.changes || (action === 'update' ? changes : null),
+    before: meta.before,
+  })
+  return true
+}
+
+function commit({ coll, action, entity, id, label, updates, changes, before }) {
   const cfg = requireRoom()
   const author = getAuthor()
   const day = localDayKey()
   const opId = push(ref(db, `rooms/${cfg.code}/journal/${day}`)).key
   const journal = { coll, action, id: id || null, label: label || '', by: author.name, byId: author.id }
+  if (entity) journal.entity = entity
   if (changes && changes.length) journal.changes = changes
   if (before !== undefined && before !== null) journal.before = before
   outbox.push({ opId, code: cfg.code, clientTs: Date.now(), day, updates: cleanDeep(updates), journal: cleanDeep(journal) })

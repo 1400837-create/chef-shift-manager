@@ -1,120 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
-  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Wifi, WifiOff, Clock, UserPlus, Lock,
+  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../components/UI'
 import { usePlanDeviceState } from '../plan/planRoom'
-import { usePlanCollection, usePlanStatus, createRecord, patchRecord, deleteRecord } from '../plan/planStore'
+import { usePlanCollection, createRecord, patchRecord, deleteRecord } from '../plan/planStore'
 import {
   usePlanUsers, addUser, setUserPassword, setUserDisabled, deleteUser, createPlanRoom, joinPlanRoomAsOwner,
   setOwnerName, useJournal, useBackups, createSnapshot, restoreSnapshot, exportPlanFile, parsePlanFile, importPlanFile,
 } from '../plan/planAdmin'
 import { durationMinutes, formatDuration, parseHM } from '../plan/hours'
 import { describeEntry } from '../plan/journalText'
-
-// ---------------------------------------------------------------------------
-// small shared pieces
-// ---------------------------------------------------------------------------
-
-// Commits on blur / Enter, not on every keystroke: each commit is a journal
-// entry and a network write, and typing "Larin" must not produce five of them.
-// Only commits if the user actually edited the field, so a value that changed
-// remotely while the field was focused isn't overwritten by a stale draft.
-function DraftInput({ value, onCommit, type = 'text', inputMode, placeholder, className = '' }) {
-  const str = value === null || value === undefined ? '' : String(value)
-  const [draft, setDraft] = useState(str)
-  const [editing, setEditing] = useState(false)
-  const base = useRef(str)
-
-  useEffect(() => {
-    if (!editing) setDraft(str)
-  }, [str, editing])
-
-  return (
-    <input
-      type={type}
-      inputMode={inputMode}
-      placeholder={placeholder}
-      className={`${inputClass} ${className}`}
-      value={draft}
-      onFocus={() => { base.current = str; setEditing(true) }}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        setEditing(false)
-        if (draft !== base.current) onCommit(draft)
-      }}
-      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-    />
-  )
-}
-
-function ConfirmButton({ onConfirm, children, confirmLabel = 'Точно?', className = '', disabled }) {
-  const [armed, setArmed] = useState(false)
-  const timer = useRef(null)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  function click() {
-    if (armed) {
-      clearTimeout(timer.current)
-      setArmed(false)
-      onConfirm()
-      return
-    }
-    setArmed(true)
-    timer.current = setTimeout(() => setArmed(false), 3500)
-  }
-  return (
-    <button onClick={click} disabled={disabled} className={`${className} ${armed ? '!bg-red-600 !text-white !border-red-600' : ''}`}>
-      {armed ? confirmLabel : children}
-    </button>
-  )
-}
-
-function useAction() {
-  const [msg, setMsg] = useState(null)
-  const [busy, setBusy] = useState(false)
-  async function run(fn, okText) {
-    setBusy(true)
-    setMsg(null)
-    try {
-      await fn()
-      if (okText) setMsg({ type: 'ok', text: okText })
-    } catch (err) {
-      setMsg({ type: 'error', text: err?.message || 'Не получилось' })
-    } finally {
-      setBusy(false)
-    }
-  }
-  return { msg, setMsg, busy, run }
-}
-
-function Message({ msg }) {
-  if (!msg) return null
-  const cls = msg.type === 'error'
-    ? 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
-    : 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800'
-  return <p className={`text-sm border rounded-xl px-3 py-2 mt-2 ${cls}`}>{msg.text}</p>
-}
-
-function StatusBar() {
-  const s = usePlanStatus()
-  return (
-    <div className="flex flex-wrap items-center gap-2 text-xs mb-3">
-      <span className={`flex items-center gap-1 font-semibold ${s.online ? 'text-green-600' : 'text-slate-400'}`}>
-        {s.online ? <Wifi size={14} /> : <WifiOff size={14} />}
-        {s.online ? 'онлайн' : 'нет связи'}
-      </span>
-      {s.pending > 0 && <Badge color="orange">Не отправлено: {s.pending}</Badge>}
-      {s.error && <span className="text-red-600 dark:text-red-400">{s.error}</span>}
-    </div>
-  )
-}
-
-function parseNorm(v) {
-  const n = parseFloat(String(v).replace(',', '.'))
-  return Number.isFinite(n) && n >= 0 ? n : null
-}
-
-const byName = (a, b) => (a.name || a.label || '').localeCompare(b.name || b.label || '', 'ru')
+import { DraftInput, ConfirmButton, useAction, Message, StatusBar, parseNorm, byName } from './plan/shared'
+import ScheduleTab from './plan/ScheduleTab'
+import HoursTab from './plan/HoursTab'
 
 // ---------------------------------------------------------------------------
 // Справочники: сотрудники и типовые смены
@@ -349,7 +248,7 @@ function BackupsPanel({ isOwner }) {
   }
 
   const importCounts = pendingImport
-    ? `сотрудников: ${Object.keys(pendingImport.collections.staff || {}).length}, типовых смен: ${Object.keys(pendingImport.collections.shiftTemplates || {}).length}`
+    ? `сотрудников: ${Object.keys(pendingImport.collections.staff || {}).length}, типовых смен: ${Object.keys(pendingImport.collections.shiftTemplates || {}).length}, планов: ${Object.keys(pendingImport.collections.plans || {}).length}`
     : ''
 
   return (
@@ -411,7 +310,7 @@ function BackupsPanel({ isOwner }) {
                 {' · '}{KIND_LABEL[b.kind] || b.kind}
               </p>
               <p className="text-xs text-slate-400">
-                {b.by ? `${b.by} · ` : ''}сотрудников: {b.counts?.staff || 0}, смен: {b.counts?.shiftTemplates || 0}
+                {b.by ? `${b.by} · ` : ''}сотрудников: {b.counts?.staff || 0}, типовых смен: {b.counts?.shiftTemplates || 0}, планов: {b.counts?.plans || 0}
               </p>
             </div>
             {isOwner && (
@@ -578,10 +477,12 @@ function AccessPanel({ config }) {
 export default function PlanPage() {
   const { config } = usePlanDeviceState()
   const isOwner = !config || config.role === 'owner'
-  const [sub, setSub] = useState(config ? 'dir' : 'access')
+  const [sub, setSub] = useState(config ? 'schedule' : 'access')
 
   const tabs = config
     ? [
+        { key: 'schedule', label: 'График', icon: CalendarDays },
+        { key: 'hours', label: 'Часы', icon: Timer },
         { key: 'dir', label: 'Справочники', icon: Users },
         { key: 'journal', label: 'Журнал', icon: History },
         { key: 'copies', label: 'Копии', icon: Archive },
@@ -611,6 +512,8 @@ export default function PlanPage() {
         </>
       )}
       {(!config || sub === 'access') && <AccessPanel config={config} />}
+      {config && sub === 'schedule' && <ScheduleTab />}
+      {config && sub === 'hours' && <HoursTab />}
       {config && sub === 'dir' && (
         <>
           <StaffDirectory />
