@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Wifi, WifiOff } from 'lucide-react'
 import { inputClass, Badge } from '../../components/UI'
-import { usePlanStatus, flush } from '../../plan/planStore'
+import { usePlanStatus, flush, usePlanUndo, undoLast } from '../../plan/planStore'
 
 // Commits on blur / Enter, not on every keystroke: each commit is a journal
 // entry and a network write, and typing "Larin" must not produce five of them.
@@ -96,6 +96,7 @@ export function Message({ msg }) {
 
 export function StatusBar() {
   const s = usePlanStatus()
+  const undo = usePlanUndo()
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs mb-3">
       <span className={`flex items-center gap-1 font-semibold ${s.online ? 'text-green-600' : 'text-slate-400'}`}>
@@ -110,6 +111,15 @@ export function StatusBar() {
           className="px-2.5 min-h-[28px] rounded-lg bg-orange-500 text-white font-semibold disabled:opacity-50"
         >
           {s.flushing ? 'Отправляю…' : 'Отправить сейчас'}
+        </button>
+      )}
+      {undo.count > 0 && (
+        <button
+          onClick={() => undoLast()}
+          className="px-2.5 min-h-[28px] rounded-lg bg-slate-700 text-white font-semibold max-w-[16rem] truncate"
+          title={undo.label}
+        >
+          ↶ Отменить: {undo.label}
         </button>
       )}
       {s.error && <span className="text-red-600 dark:text-red-400">{s.error}</span>}

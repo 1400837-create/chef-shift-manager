@@ -8,9 +8,10 @@ import { LOCALE, staffLabel, dishLabel, tr } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf, buildTablePrint } from '../../plan/exchange'
 import { printReport } from '../../utils/printReport'
 import { todayKey } from '../../utils/dateUtils'
-import { mealColor, loadPos, savePos } from '../../plan/ui'
+import { mealColor, loadPos, savePos, useNarrow } from '../../plan/ui'
+import DayCards from './DayCards'
 import { usePlanDeviceState } from '../../plan/planRoom'
-import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText } from './GridView'
+import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText } from './gridShared'
 
 const PALETTE = [
   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
@@ -72,6 +73,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
   const [anchor, setAnchor] = useState(() => (isDateKey(saved?.anchor || "") ? saved.anchor : today))
   useEffect(() => { savePos(code, ALL_POS, { span, anchor }) }, [code, span, anchor])
   const [hideEmpty, setHideEmpty] = useState(false)
+  const narrow = useNarrow()
 
   const colorOf = useMemo(() => {
     const map = {}
@@ -187,6 +189,19 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
         <span className="basis-full">Здесь всё из всех планов за период. Правится в самом плане: нажмите на его метку.</span>
       </div>
 
+      {narrow ? (
+        <DayCards
+          weeks={weeks}
+          getParts={dayParts}
+          ctx={ctx}
+          locale={locale}
+          today={today}
+          span={span}
+          showTags
+          onOpenPlan={onOpenPlan}
+          hideEmpty={hideEmpty}
+        />
+      ) : (
       <div className="overflow-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 max-h-[calc(100dvh-var(--app-header-h,64px)-9.5rem)]">
         <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
@@ -287,6 +302,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
           </tfoot>
         </table>
       </div>
+      )}
     </div>
   )
 }

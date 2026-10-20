@@ -2,6 +2,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { onValue, update, push, serverTimestamp, ref } from 'firebase/database'
 import { db } from '../firebase'
 import { getPlanConfig, onPlanConfigChanged, planRoomRef, getAuthor, localDayKey } from './planRoom'
+import { describeEntry } from './journalText'
 
 // Collections that make up "the plan" — what snapshots, the file export and
 // restore all cover. recipesSlim/users/journal/backups are deliberately not
@@ -356,6 +357,45 @@ function requireRoom() {
   return cfg
 }
 
+// ---- undo (this device, this session) ------------------------------------------
+// Every edit remembers what its paths held just before, so the last few can be
+// taken back. Only for edits made here since the page opened; it writes the old
+// values back as a new journaled edit (so the other person sees it too).
+
+const undoStack = []
+const undoListeners = new Set()
+let undoSnap = { count: 0, label: '' }
+
+function notifyUndo() {
+  const top = undoStack[undoStack.length - 1]
+  undoSnap = { count: undoStack.length, label: top ? top.label : '' }
+  undoListeners.forEach((fn) => fn())
+}
+
+export function usePlanUndo() {
+  return useSyncExternalStore((cb) => { undoListeners.add(cb); return () => undoListeners.delete(cb) }, () => undoSnap)
+}
+
+function buildInverse(coll, updates) {
+  const v = views[coll]
+  if (!v || !serverReady[coll]) return null // never guess from a view that hasn't loaded
+  const inv = {}
+  for (const p of Object.keys(updates)) {
+    if (p === coll) inv[p] = norm(clone(Object.keys(v.data).length ? v.data : null))
+    else if (p.startsWith(`${coll}/`)) inv[p] = norm(clone(getDeep(v.data, p.slice(coll.length + 1).split('/'))))
+    else return null
+  }
+  return inv
+}
+
+export function undoLast() {
+  const e = undoStack.pop()
+  if (!e) return false
+  notifyUndo()
+  commit({ coll: e.coll, action: 'undo', id: e.id, label: e.label, updates: e.inverse, noUndo: true })
+  return true
+}
+
 export function commitChange(args) {
   commit(args)
 }
@@ -397,16 +437,22 @@ export function writePaths(coll, rel, meta = {}) {
   return true
 }
 
-function commit({ coll, action, entity, id, label, updates, changes, before }) {
+function commit({ coll, action, entity, id, label, updates, changes, before, noUndo }) {
   const cfg = requireRoom()
   const author = getAuthor()
   const day = localDayKey()
   const opId = push(ref(db, `rooms/${cfg.code}/journal/${day}`)).key
+  const inverse = noUndo ? null : buildInverse(coll, updates)
   const journal = { coll, action, id: id || null, label: label || '', by: author.name, byId: author.id }
   if (entity) journal.entity = entity
   if (changes && changes.length) journal.changes = changes
   if (before !== undefined && before !== null) journal.before = before
   outbox.push({ opId, code: cfg.code, clientTs: Date.now(), day, updates: cleanDeep(updates), journal: cleanDeep(journal) })
+  if (inverse && action !== 'undo') {
+    undoStack.push({ coll, id: id || null, inverse, label: describeEntry({ coll, action, entity, label, changes }) })
+    if (undoStack.length > 30) undoStack.shift()
+    notifyUndo()
+  }
   saveOutbox()
   recomputeAll()
   flush()

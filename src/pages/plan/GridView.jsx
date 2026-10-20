@@ -10,46 +10,15 @@ import {
 import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf, commentsOf, buildTablePrint } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
-import { mealColor, loadPos, savePos } from '../../plan/ui'
+import { mealColor, loadPos, savePos, useNarrow } from '../../plan/ui'
 import { usePlanDeviceState } from '../../plan/planRoom'
 import { MenuCell, ShiftCell, NoteCell } from './GridCells'
 import CopyModal from './CopyModal'
+import DayCards from './DayCards'
+import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween } from './gridShared'
+
+export { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween }
 import { printReport } from '../../utils/printReport'
-
-// Every cell gets a full border so the columns read as a table, not a list.
-export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600 sticky top-0 z-20 bg-slate-200 dark:bg-slate-900'
-export const TD = 'px-2 py-[var(--cell-py,0.5rem)] border border-slate-300 dark:border-slate-600 text-[length:var(--cell-fs,0.875rem)]'
-
-// All comments of a day in one place — on the day itself, on a meal, on a
-// dish or on a shift — each tagged with what it is about.
-export function gatherComments(day, blocks, shifts, ctx) {
-  const out = []
-  const add = (node, where) => commentsOf(node).forEach((c) => out.push({ where, text: c.text, by: c.by }))
-  add(day, '')
-  blocks.forEach((b) => {
-    add(b, b.name || 'приём')
-    dishesOf(b).forEach((d) => add(d, dishLabel(d, ctx.recipeById, ctx.lang)))
-  })
-  shifts.forEach((s) => add(s, staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || ''))
-  return out
-}
-
-// "20 чел." as a clear orange chip, not a faint number after the name.
-export function Guests({ n, lang }) {
-  return (
-    <span className="ml-1.5 inline-block align-middle px-1.5 py-0.5 rounded-md bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 text-xs font-bold whitespace-nowrap">
-      {n} {lang === 'de' ? 'Pers.' : 'чел.'}
-    </span>
-  )
-}
-
-// One hours line per shift, so each person has their own figure; both
-// columns use the same line height so the lines stay level with the names.
-export function shiftHoursText(s) {
-  const p = shiftMinutes(s, 'planned')
-  const a = shiftMinutes(s, 'actual')
-  return { planned: p === null ? '—' : formatDuration(p), actual: a === null || a === 0 ? null : formatDuration(a) }
-}
 
 const SPANS = [
   { key: 'week', label: 'Неделя' },
@@ -64,11 +33,6 @@ function findMoveTarget(plans, currentId, date) {
 }
 
 
-export function daysBetween(from, to) {
-  const out = []
-  for (let d = from; d <= to; d = addDaysKey(d, 1)) out.push(d)
-  return out
-}
 
 function totals(data, dates) {
   let planned = 0
@@ -107,10 +71,13 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
   }, [range?.from, range?.to])
   const [editing, setEditing] = useState(null)
   const [copyOpen, setCopyOpen] = useState(false)
-  const [editMode, setEditMode] = useState(() => {
+  const narrow = useNarrow()
+  const [editRaw, setEditMode] = useState(() => {
     try { return localStorage.getItem('kitchenPlan_gridEdit') === '1' } catch { return false }
   })
   const coll = `planData/${plan.id}`
+
+  const editMode = editRaw && !narrow
 
   function toggleEdit() {
     const next = !editMode
@@ -267,7 +234,8 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         ))}
       </div>
 
-      <div className="grid grid-cols-[1fr_auto_auto] gap-2 mb-3">
+      <div className={`grid ${narrow ? "grid-cols-2" : "grid-cols-[1fr_auto_auto]"} gap-2 mb-3`}>
+        {!narrow && (
         <button
           onClick={toggleEdit}
           className={`min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border px-2 ${
@@ -279,6 +247,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           <Pencil size={16} />
           {editMode ? 'Правка включена — выключить' : 'Править в таблице'}
         </button>
+        )}
         <button
           onClick={() => setCopyOpen(true)}
           className="min-h-[44px] px-3.5 rounded-xl text-sm font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
@@ -304,6 +273,27 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         </div>
       )}
 
+      {narrow ? (
+        <DayCards
+          weeks={weeks}
+          getParts={(d) => (data[d] ? [{ plan, day: data[d] }] : [])}
+          ctx={ctx}
+          locale={locale}
+          today={today}
+          span={span}
+          showTags={false}
+          onOpenDay={setEditing}
+          isOutside={(d) => !inPlanRange(range, d)}
+          outsideNote={(d) => {
+            const target = data[d] ? findMoveTarget(plans, plan.id, d) : null
+            return target ? (
+              <button onClick={(e) => { e.stopPropagation(); moveDay(d, target) }} className="mb-1.5 text-xs font-semibold text-orange-600 underline">
+                перенести в «{target.title}»
+              </button>
+            ) : null
+          }}
+        />
+      ) : (
       <div className="overflow-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 max-h-[calc(100dvh-var(--app-header-h,64px)-9.5rem)]">
         <table className={`w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} border-collapse text-sm`}>
           <thead>
@@ -442,6 +432,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           )}
         </table>
       </div>
+      )}
 
       {copyOpen && (
         <CopyModal plan={plan} data={data} range={range} defaultFrom={mondayOf(anchor)} onClose={() => setCopyOpen(false)} />

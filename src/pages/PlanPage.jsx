@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer, BookOpen,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../components/UI'
 import { usePlanDeviceState, getAuthor } from '../plan/planRoom'
-import { usePlanCollection, createRecord, patchRecord, deleteRecord } from '../plan/planStore'
+import { usePlanCollection, createRecord, patchRecord, deleteRecord, undoLast } from '../plan/planStore'
 import {
   usePlanUsers, addUser, setUserPassword, setUserDisabled, deleteUser, createPlanRoom, joinPlanRoomAsOwner,
   setOwnerName, setOwnerPassword, useJournal, useUnseenChanges, markChangesSeen, useBackups, createSnapshot, restoreSnapshot, exportPlanFile, parsePlanFile, importPlanFile,
@@ -580,6 +580,19 @@ export default function PlanPage({ menuBridge }) {
     setSubState(key)
     try { localStorage.setItem(subKey, key) } catch { /* preference only */ }
   }
+
+  // Ctrl/Cmd+Z takes back the last edit made on this device (not while typing
+  // in a field — there it keeps its normal text-undo meaning).
+  useEffect(() => {
+    function onKey(e) {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return
+      const el = e.target
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
+      if (undoLast()) e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const tabs = config
     ? [
