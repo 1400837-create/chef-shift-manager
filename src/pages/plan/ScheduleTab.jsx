@@ -5,7 +5,7 @@ import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
 import { usePlanCollection, createRecord, patchRecord, writePaths, newId, commitChange } from '../../plan/planStore'
 import { formatDuration, parseHM } from '../../plan/hours'
 import {
-  isDateKey, dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, monthTitle, shiftMinutes, sumMinutes,
+  isDateKey, dayTitle, mondayOf, addDaysKey, monthOf, monthBounds, monthTitle, shiftMinutes, sumMinutes,
   collectShifts, suggestStaff,
 } from '../../plan/calc'
 import { todayKey } from '../../utils/dateUtils'
@@ -561,27 +561,7 @@ function PlanView({ plan, ctx, menuBridge }) {
   const dates = useMemo(() => Object.keys(data).filter(isDateKey).sort(), [data])
   const [newDate, setNewDate] = useState(() => defaultDate(plan))
   const [addMode, setAddMode] = useState(plan.kind === 'month' ? 'month' : 'day')
-  const [toggled, setToggled] = useState({})
-  const [view, setView] = useState(() => {
-    try { return localStorage.getItem('kitchenPlan_view') === 'cards' ? 'cards' : 'grid' } catch { return 'grid' }
-  })
   const [note, setNote] = useState(null)
-  const today = todayKey()
-
-  function chooseView(v) {
-    setView(v)
-    try { localStorage.setItem('kitchenPlan_view', v) } catch { /* preference only */ }
-  }
-
-  const weeks = useMemo(() => {
-    const map = new Map()
-    dates.forEach((d) => {
-      const m = mondayOf(d)
-      if (!map.has(m)) map.set(m, [])
-      map.get(m).push(d)
-    })
-    return [...map.entries()]
-  }, [dates])
 
   // One write for the whole batch, so adding a month is one journal entry
   // rather than thirty.
@@ -609,7 +589,6 @@ function PlanView({ plan, ctx, menuBridge }) {
       label: fresh.length > 1 ? `${plan.title || 'план'}: ${fresh.length} дн. (${fresh[0]} — ${fresh[fresh.length - 1]})` : dayTitle(fresh[0]),
     })
     setNote(`Добавлено дней: ${fresh.length}.`)
-    if (fresh.length === 1) setToggled((t) => ({ ...t, [fresh[0]]: true }))
   }
 
   const emptyDays = dates.filter((d) => isEmptyDay(data[d]))
@@ -629,6 +608,8 @@ function PlanView({ plan, ctx, menuBridge }) {
 
   return (
     <>
+      <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} />
+
       <Section title={plan.title || 'План'} icon={Clock} right={<Badge color="slate">{kindLabel(plan.kind)}</Badge>}>
         <div className="grid grid-cols-1 gap-2 mb-3">
           <DraftInput value={plan.title} placeholder="Название плана" onCommit={(v) => { if (v.trim()) patchRecord('plans', plan.id, { title: v.trim() }) }} />
@@ -670,43 +651,6 @@ function PlanView({ plan, ctx, menuBridge }) {
           />
         </div>
       </Section>
-
-      <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-sm font-semibold mb-3">
-        {[['grid', 'Таблица'], ['cards', 'По дням']].map(([k, l]) => (
-          <button
-            key={k}
-            onClick={() => chooseView(k)}
-            className={`flex-1 min-h-[40px] ${view === k ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-          >
-            {l}
-          </button>
-        ))}
-      </div>
-
-      {view === 'grid' && <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} />}
-
-      {view === 'cards' && (
-        <>
-          {dates.length === 0 && <p className="text-sm text-slate-400 text-center py-4">В плане пока нет дней — добавьте первый.</p>}
-          {weeks.map(([monday, list]) => (
-            <div key={monday}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 mt-1">{ctx.lang === 'de' ? 'Woche' : 'Неделя'} {weekTitle(monday, LOCALE[ctx.lang])}</p>
-              {list.map((date) => (
-                <DayCard
-                  key={date}
-                  coll={coll}
-                  date={date}
-                  day={data[date]}
-                  ctx={ctx}
-                  allShifts={allShifts}
-                  open={toggled[date] ?? date >= addDaysKey(today, -1)}
-                  onToggle={() => setToggled((t) => ({ ...t, [date]: !(t[date] ?? date >= addDaysKey(today, -1)) }))}
-                />
-              ))}
-            </div>
-          ))}
-        </>
-      )}
 
       <ExchangePanel plan={plan} data={data} ctx={ctx} shifts={allShifts} menuBridge={menuBridge} />
       {isOwner && <CostPanel plan={plan} data={data} />}

@@ -165,7 +165,7 @@ export default function GridView({ plan, data, ctx, renderDay }) {
           </thead>
           <tbody>
             {dates.length === 0 && (
-              <tr><td colSpan={5} className={`${TD} py-6 text-center text-slate-400`}>В плане пока нет дней. Добавьте день, неделю или месяц выше.</td></tr>
+              <tr><td colSpan={5} className={`${TD} py-6 text-center text-slate-400`}>В плане пока нет дней. Добавьте день, неделю или месяц ниже, в блоке плана.</td></tr>
             )}
             {weeks.map(([monday, list]) => {
               const wt = totals(data, list)
