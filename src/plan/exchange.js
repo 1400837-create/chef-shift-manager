@@ -7,6 +7,11 @@ import { LOCALE, tr } from './lang'
 // Everything here is pure: plan data in, text / print payload / write-set out.
 // `data` is one plan's tree: { [YYYY-MM-DD]: { blocks, shifts, comments } }.
 
+// Firebase push ids are ordered by plain character codes (uppercase before
+// lowercase) — localeCompare would sort them case-insensitively and shuffle
+// dishes/meals that were added within the same second.
+export const cmpId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+
 export function sortedEntries(obj, cmp) {
   return Object.entries(obj || {})
     .filter(([, v]) => v && typeof v === 'object')
@@ -15,10 +20,10 @@ export function sortedEntries(obj, cmp) {
 }
 
 export const blocksOf = (day) =>
-  sortedEntries(day.blocks, (a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || a.id.localeCompare(b.id))
+  sortedEntries(day.blocks, (a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || cmpId(a, b))
 export const shiftsOf = (day) =>
   sortedEntries(day.shifts, (a, b) => (a.start || '99:99').localeCompare(b.start || '99:99') || (a.staffName || '').localeCompare(b.staffName || '', 'ru'))
-export const dishesOf = (block) => sortedEntries(block.dishes, (a, b) => a.id.localeCompare(b.id))
+export const dishesOf = (block) => sortedEntries(block.dishes, (a, b) => cmpId(a, b))
 export const commentsOf = (node) => sortedEntries(node.comments, (a, b) => (a.ts || 0) - (b.ts || 0))
 
 export function planDates(data, from, to) {

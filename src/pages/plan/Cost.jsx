@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Calculator, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 import { inputClass, ConfirmDeleteButton } from '../../components/UI'
 import { writePaths, newId } from '../../plan/planStore'
-import { sortedEntries, planDates, blocksOf, dishesOf } from '../../plan/exchange'
+import { sortedEntries, planDates, blocksOf, dishesOf, cmpId } from '../../plan/exchange'
 import { DraftInput, parseNorm } from './shared'
 
 const UNITS = ['кг', 'шт', 'порц', 'л', 'упак']
@@ -11,7 +11,7 @@ export const money = (n) =>
   (Math.round((Number.isFinite(n) ? n : 0) * 100) / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export function costRows(data) {
-  return sortedEntries(data.costs, (a, b) => (a.ts || 0) - (b.ts || 0) || a.id.localeCompare(b.id)).map((r) => ({
+  return sortedEntries(data.costs, (a, b) => (a.ts || 0) - (b.ts || 0) || cmpId(a, b)).map((r) => ({
     ...r,
     sum: (Number(r.qty) || 0) * (Number(r.price) || 0),
   }))

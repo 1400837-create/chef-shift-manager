@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock, BookOpen, Bookmark, Settings } from 'lucide-react'
+import { cmpId } from '../../plan/exchange'
 import { dishesFromLines, templateFromBlock, templatePaths } from '../../plan/templates'
 import { Section, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../../components/UI'
 import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
@@ -168,7 +169,7 @@ function DishAdder({ recipeList, onAdd, onPasteLines }) {
 function BlockCard({ coll, date, block, ctx }) {
   const base = `${date}/blocks/${block.id}`
   const label = `${dayTitle(date)} · ${block.name || 'приём'}`
-  const dishes = sortedEntries(block.dishes, (a, b) => a.id.localeCompare(b.id))
+  const dishes = sortedEntries(block.dishes, (a, b) => cmpId(a, b))
   const [cOpen, setCOpen] = useState({})
   const [picker, setPicker] = useState(false)
   const persons = Number(block.persons)
@@ -534,7 +535,7 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
 // ---------------------------------------------------------------------------
 
 function DayCard({ coll, date, day, ctx, allShifts, open, onToggle, onDeleted }) {
-  const blocks = sortedEntries(day.blocks, (a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || a.id.localeCompare(b.id))
+  const blocks = sortedEntries(day.blocks, (a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || cmpId(a, b))
   const shifts = sortedEntries(day.shifts, (a, b) => (a.start || '99:99').localeCompare(b.start || '99:99') || (a.staffName || '').localeCompare(b.staffName || '', 'ru'))
   const plannedMin = sumMinutes(shifts, 'planned')
   const actualMin = sumMinutes(shifts, 'actual')

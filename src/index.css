@@ -256,3 +256,8 @@ button:disabled {
 .fixed.inset-0:not(.bg-white) > div {
   box-shadow: var(--sh-xl);
 }
+
+/* Wide buttons press in less than small ones. */
+button.w-full:not(:disabled):active {
+  transform: scale(0.99);
+}

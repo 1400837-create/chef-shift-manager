@@ -223,10 +223,10 @@ export default function Dashboard({
       )}
 
       {dashTab === 'overview' && (
-      <>
+      <div className="desk:grid desk:grid-cols-2 desk:gap-x-5 desk:items-start">
       <button
         onClick={() => onNavigate('plan')}
-        className="w-full mb-4 rounded-2xl shadow-md bg-slate-800 dark:bg-slate-700 active:bg-slate-900 text-white px-4 py-4 flex items-center gap-3 text-left"
+        className="w-full desk:col-span-2 mb-4 rounded-2xl shadow-md bg-slate-800 dark:bg-slate-700 active:bg-slate-900 text-white px-4 py-4 flex items-center gap-3 text-left"
       >
         <span className="shrink-0 w-11 h-11 rounded-xl bg-orange-500 flex items-center justify-center">
           <CalendarClock size={24} />
@@ -513,7 +513,7 @@ export default function Dashboard({
           </p>
         )}
       </Section>
-      </>
+      </div>
       )}
     </div>
   )
