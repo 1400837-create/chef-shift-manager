@@ -3,10 +3,14 @@ import { Check, Printer, Trash2, Undo2, Redo2, Search } from 'lucide-react'
 
 export function Section({ title, icon: Icon, children, right }) {
   return (
-    <section className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mb-4 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40">
-        <div className="flex items-center gap-2">
-          {Icon && <Icon size={18} className="text-slate-500 dark:text-slate-400" />}
+    <section className="bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 mb-4 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-gradient-to-b from-slate-50 to-white dark:from-slate-900/50 dark:to-slate-800">
+        <div className="flex items-center gap-2.5">
+          {Icon && (
+            <span className="w-8 h-8 shrink-0 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100 dark:from-slate-700 dark:to-slate-700 text-orange-600 dark:text-orange-300 shadow-sm">
+              <Icon size={17} />
+            </span>
+          )}
           <h2 className="font-semibold text-slate-800 dark:text-slate-100 text-[15px]">{title}</h2>
         </div>
         {right}
@@ -25,7 +29,7 @@ export function CheckRow({ label, checked, onChange, tone = 'default', sublabel 
 
   return (
     <label
-      className={`flex items-center gap-3 w-full min-h-[52px] px-3 py-2.5 mb-2 rounded-xl border cursor-pointer select-none active:scale-[0.99] transition-all ${toneClasses}`}
+      className={`flex items-center gap-3 w-full min-h-[52px] px-3 py-2.5 mb-2 rounded-xl border cursor-pointer select-none shadow-sm active:scale-[0.99] transition-all duration-200 ${toneClasses}`}
     >
       <input
         type="checkbox"
@@ -71,7 +75,7 @@ export function BigButton({ children, onClick, color = 'orange', icon: Icon, typ
     slate: 'bg-slate-700 active:bg-slate-800 text-white',
     green: 'bg-green-600 active:bg-green-700 text-white',
     red: 'bg-red-600 active:bg-red-700 text-white',
-    outline: 'bg-white border-2 border-slate-300 active:bg-slate-100 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:active:bg-slate-700 dark:text-slate-200',
+    outline: 'bg-white border-2 border-slate-300 active:bg-slate-100 text-slate-700 shadow-sm dark:bg-slate-800 dark:border-slate-600 dark:active:bg-slate-700 dark:text-slate-200',
   }
   return (
     <button
@@ -84,6 +88,12 @@ export function BigButton({ children, onClick, color = 'orange', icon: Icon, typ
       {children}
     </button>
   )
+}
+
+// Wraps what a tab shows: give it `key={tab}` and it eases in each time the
+// tab changes (a short fade + 8px rise — no looping, no layout shift).
+export function PageFade({ children, className = '' }) {
+  return <div className={`page-enter ${className}`}>{children}</div>
 }
 
 export function Field({ label, children }) {

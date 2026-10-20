@@ -805,7 +805,7 @@ export default function ScheduleTab({ menuBridge }) {
       </datalist>
 
       <div
-        className="sticky z-20 -mx-3 md:-mx-6 lg:-mx-10 px-3 md:px-6 lg:px-10 py-2 mb-2 flex gap-1.5 overflow-x-auto items-center bg-slate-100 dark:bg-slate-950 shadow-[0_2px_4px_-2px_rgba(0,0,0,0.15)]"
+        className="sticky z-20 -mx-3 md:-mx-6 lg:-mx-8 px-3 md:px-6 lg:px-8 py-2 mb-2 flex gap-1.5 overflow-x-auto items-center bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-md shadow-[0_6px_12px_-8px_rgba(15,23,42,0.25)]"
         style={{ top: "var(--app-header-h, 64px)" }}
       >
         {sortedPlans.length > 1 && (
@@ -823,7 +823,7 @@ export default function ScheduleTab({ menuBridge }) {
             key={p.id}
             onClick={() => { setSelected(p.id); setCreating(false) }}
             className={`shrink-0 min-h-[40px] px-3.5 rounded-full text-sm font-semibold whitespace-nowrap ${
-              p.id === selected && !creating ? 'bg-orange-500 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+              p.id === selected && !creating ? 'bg-orange-500 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-sm'
             }`}
           >
             {p.title || kindLabel(p.kind)}

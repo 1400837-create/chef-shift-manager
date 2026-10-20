@@ -751,7 +751,7 @@ export default function MenuPlanner({
     <div className="pb-4">
       <div
         ref={tabBarRef}
-        className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100 dark:bg-slate-950"
+        className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-md"
         style={{ top: 'var(--app-header-h, 64px)' }}
       >
         <div className="flex items-center gap-2">

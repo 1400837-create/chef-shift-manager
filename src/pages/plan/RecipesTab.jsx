@@ -151,7 +151,7 @@ export default function RecipesTab() {
         picked={picked}
         onToggle={toggle}
         topOffset="var(--app-header-h, 64px)"
-        barClass="-mx-3 md:-mx-6 lg:-mx-10 px-3 md:px-6 lg:px-10 bg-slate-100 dark:bg-slate-950"
+        barClass="-mx-3 md:-mx-6 lg:-mx-8 px-3 md:px-6 lg:px-8 bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-md"
       />
 
       {count > 0 && (

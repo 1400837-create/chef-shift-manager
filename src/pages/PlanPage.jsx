@@ -783,7 +783,7 @@ export default function PlanPage({ menuBridge }) {
                 key={key}
                 onClick={() => setSub(key)}
                 className={`shrink-0 min-h-[44px] px-3.5 rounded-xl font-semibold flex items-center gap-1.5 text-sm whitespace-nowrap ${
-                  sub === key ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                  sub === key ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-sm'
                 }`}
               >
                 <Icon size={16} /> {label}
@@ -792,21 +792,23 @@ export default function PlanPage({ menuBridge }) {
           </div>
         </>
       )}
-      {(!config || sub === 'access') && <AccessPanel config={config} />}
-      {config && sub === 'dash' && <DashboardTab code={config.code} openSchedule={() => setSub('schedule')} />}
-      {config && sub === 'schedule' && <ScheduleTab menuBridge={menuBridge} />}
-      {config && sub === 'menu' && <RecipesTab />}
-      {config && sub === 'hours' && <HoursTab />}
-      {config && sub === 'dir' && (
-        <>
-          <StaffDirectory />
-          <ShiftTemplates />
-          <MealTemplateList />
-          <MealTypesEditor />
-        </>
-      )}
-      {config && sub === 'journal' && <JournalPanel />}
-      {config && sub === 'copies' && <BackupsPanel isOwner={isOwner} />}
+      <div key={config ? sub : 'access'} className="page-enter">
+        {(!config || sub === 'access') && <AccessPanel config={config} />}
+        {config && sub === 'dash' && <DashboardTab code={config.code} openSchedule={() => setSub('schedule')} />}
+        {config && sub === 'schedule' && <ScheduleTab menuBridge={menuBridge} />}
+        {config && sub === 'menu' && <RecipesTab />}
+        {config && sub === 'hours' && <HoursTab />}
+        {config && sub === 'dir' && (
+          <>
+            <StaffDirectory />
+            <ShiftTemplates />
+            <MealTemplateList />
+            <MealTypesEditor />
+          </>
+        )}
+        {config && sub === 'journal' && <JournalPanel />}
+        {config && sub === 'copies' && <BackupsPanel isOwner={isOwner} />}
+      </div>
     </div>
     </RecipeBridgeProvider>
   )

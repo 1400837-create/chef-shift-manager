@@ -345,14 +345,16 @@ export default function App() {
   }, [notificationsEnabled, alerts.shopping, alerts.finances, myTasks])
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+    <div className="min-h-screen app-bg">
       <header
         ref={headerRef}
-        className="safe-top sticky top-0 z-30 bg-slate-900 text-white px-3 py-3 flex items-center gap-1 shadow-md"
+        className="safe-top sticky top-0 z-30 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 text-white px-3 lg:px-6 py-2.5 flex items-center gap-1 shadow-lg border-b border-white/5"
       >
-        <ChefHat size={20} className="text-orange-400 shrink-0 mr-1" />
+        <span className="shrink-0 mr-2 w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-400 to-orange-600 shadow-glow">
+          <ChefHat size={19} className="text-white" />
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="font-bold leading-tight truncate text-[15px]">LA CHEF</p>
+          <p className="font-bold leading-tight truncate text-[15px] tracking-wide">LA CHEF</p>
           <p className="text-[10px] text-slate-400 leading-tight truncate">
             {now.toLocaleDateString('ru-RU', { weekday: 'long', day: '2-digit', month: 'long' })}
             {' · сборка '}
@@ -414,7 +416,11 @@ export default function App() {
         onSelectRecipe={(id) => { goToRecipe(id); setSearchOpen(false) }}
       />
 
-      <main className="max-w-lg md:max-w-none mx-auto px-3 md:px-6 lg:px-10 pt-3 pb-24">
+      <main className="px-3 md:px-6 lg:px-8 pt-3 pb-24 lg:pb-10 lg:ml-[92px]">
+        <div
+          key={tab === 'recipes' ? 'menu' : tab}
+          className={`page-enter mx-auto w-full max-w-lg md:max-w-none ${tab === 'plan' ? 'lg:max-w-[1680px]' : 'lg:max-w-[1180px]'}`}
+        >
         {tab === 'dashboard' && (
           <Dashboard
             myTasks={myTasks}
@@ -519,6 +525,7 @@ export default function App() {
             />
           </>
         )}
+        </div>
       </main>
 
       <BottomNav active={tab} onChange={setTab} alerts={alerts} />

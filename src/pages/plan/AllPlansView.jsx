@@ -200,7 +200,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
           focusStaff={focus}
         />
       ) : (
-      <div className="overflow-x-auto min-[960px]:overflow-visible rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="overflow-x-auto min-[960px]:overflow-visible rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-md">
         <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">

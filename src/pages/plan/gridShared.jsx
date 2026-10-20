@@ -5,8 +5,8 @@ import { dishesOf, commentsOf } from '../../plan/exchange'
 import { MEAL_PALETTE, OTHER_MEAL_COLOR } from '../../plan/ui'
 
 // Every cell gets a full border so the columns read as a table, not a list.
-export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600 bg-slate-200 dark:bg-slate-900'
-export const TD = 'px-2 py-[var(--cell-py,0.5rem)] border border-slate-300 dark:border-slate-600 text-[length:var(--cell-fs,0.875rem)]'
+export const TH = 'px-2 py-2.5 border border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-slate-200/80 dark:from-slate-800 dark:to-slate-900 text-slate-600 dark:text-slate-300'
+export const TD = 'px-2 py-[var(--cell-py,0.5rem)] border border-slate-200 dark:border-slate-700 text-[length:var(--cell-fs,0.875rem)]'
 
 // All comments of a day in one place — on the day itself, on a meal, on a
 // dish or on a shift — each tagged with what it is about.

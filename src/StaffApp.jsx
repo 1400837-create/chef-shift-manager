@@ -32,12 +32,14 @@ export default function StaffApp() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+    <div className="min-h-screen app-bg">
       <header
         ref={headerRef}
-        className="safe-top sticky top-0 z-30 bg-slate-900 text-white px-3 py-3 flex items-center gap-2 shadow-md"
+        className="safe-top sticky top-0 z-30 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 text-white px-3 lg:px-6 py-2.5 flex items-center gap-2 shadow-lg border-b border-white/5"
       >
-        <ChefHat size={20} className="text-orange-400 shrink-0" />
+        <span className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-400 to-orange-600 shadow-glow">
+          <ChefHat size={19} className="text-white" />
+        </span>
         <p className="font-bold leading-tight truncate text-[15px] flex-1 min-w-0">LA CHEF · План</p>
         <span className="flex items-center gap-1 text-xs text-slate-300 shrink-0">
           <User size={13} /> {session?.name}
@@ -56,7 +58,7 @@ export default function StaffApp() {
           <LogOut size={16} />
         </button>
       </header>
-      <main className="max-w-lg md:max-w-none mx-auto px-3 md:px-6 lg:px-10 pt-3 pb-12">
+      <main className="max-w-lg md:max-w-none lg:max-w-[1680px] mx-auto px-3 md:px-6 lg:px-8 pt-3 pb-12">
         <PlanPage />
       </main>
     </div>

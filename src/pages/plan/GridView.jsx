@@ -269,7 +269,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           }}
         />
       ) : (
-      <div className={`overflow-x-auto ${editMode ? "min-[1240px]:overflow-visible" : "min-[960px]:overflow-visible"} rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800`}>
+      <div className={`overflow-x-auto ${editMode ? "min-[1240px]:overflow-visible" : "min-[960px]:overflow-visible"} rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-md`}>
         <table className={`w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} border-collapse text-sm`}>
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">

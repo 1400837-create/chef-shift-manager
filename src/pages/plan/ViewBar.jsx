@@ -12,7 +12,7 @@ import { MealLegend } from './gridShared'
 export default function ViewBar({ title, onStep, span, spans, onSpan, actions, ctx, focus, onFocus }) {
   const [legend, setLegend] = useState(false)
   const btn = 'w-9 h-9 shrink-0 flex items-center justify-center rounded-lg border'
-  const idle = 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+  const idle = 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-sm'
 
   return (
     <div className="mb-3">

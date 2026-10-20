@@ -6,13 +6,13 @@ import { setDeviceChoice } from '../plan/planRoom'
 
 function Shell({ children }) {
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex items-center justify-center px-4 py-8">
+    <div className="min-h-screen app-bg flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-2 mb-5">
           <ChefHat size={28} className="text-orange-500" />
           <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">LA CHEF</span>
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 animate-pop-in">
           {children}
         </div>
       </div>

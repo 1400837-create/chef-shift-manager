@@ -1141,7 +1141,7 @@ export default function Inventory({
   return (
     <div className="pb-4">
       <div
-        className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100 dark:bg-slate-950 flex gap-1.5 overflow-x-auto"
+        className="sticky z-20 -mx-3 px-3 pt-2 pb-1.5 mb-2 bg-slate-100/85 dark:bg-slate-950/85 backdrop-blur-md flex gap-1.5 overflow-x-auto"
         style={{ top: 'var(--app-header-h, 64px)' }}
       >
         <button

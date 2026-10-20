@@ -25,7 +25,7 @@ export default function DayCards({
                 <div
                   key={date}
                   onClick={onOpenDay && !outside ? () => onOpenDay(date) : undefined}
-                  className={`mb-2 rounded-xl border p-3 ${
+                  className={`mb-2 rounded-2xl border p-3 shadow-sm ${
                     outside
                       ? 'bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700'
                       : `bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${onOpenDay ? 'active:bg-orange-50 dark:active:bg-slate-700 cursor-pointer' : ''}`

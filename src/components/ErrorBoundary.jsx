@@ -24,7 +24,7 @@ export default class ErrorBoundary extends Component {
   render() {
     if (!this.state.hasError) return this.props.children
     return (
-      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex items-center justify-center px-6">
+      <div className="min-h-screen app-bg flex items-center justify-center px-6">
         <div className="max-w-sm w-full bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 text-center">
           <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-3">
             <AlertTriangle size={26} className="text-red-600 dark:text-red-400" />
