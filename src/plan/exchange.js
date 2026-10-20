@@ -485,3 +485,59 @@ export function planCopyUpdates({ planId, data, pairs, what, makeId }) {
   })
   return { updates, copied, skipped }
 }
+
+// ---------------------------------------------------------------------------
+// plain text for messengers (WhatsApp / Telegram): a day, or a whole period
+// ---------------------------------------------------------------------------
+
+export function dayText({ date, parts, ctx, lang }) {
+  const loc = LOCALE[lang === 'de' ? 'de' : 'ru']
+  const L = (staff, rec) => (lang === 'de' && rec?.nameDe ? rec.nameDe : staff)
+  const lines = [dayTitle(date, loc)]
+  const multi = parts.length > 1
+  parts.forEach(({ plan, day }) => {
+    if (multi && (blocksOf(day).length || shiftsOf(day).length)) lines.push(`[${plan.title || ''}]`)
+    blocksOf(day).forEach((b) => {
+      const guests = b.persons ? ` — ${b.persons} ${tr(lang, 'guests')}` : ''
+      lines.push(`${b.time ? `${b.time} ` : ''}${b.name || '—'}${guests}`)
+      dishesOf(b).forEach((d) => {
+        const rec = d.recipeId ? ctx.recipeById[d.recipeId] : null
+        lines.push(`  • ${lang === 'de' && rec?.de ? rec.de : d.text}`)
+      })
+    })
+  })
+  const shifts = parts.flatMap(({ day }) => shiftsOf(day))
+  if (shifts.length) {
+    lines.push(`${tr(lang, 'shifts')}:`)
+    shifts.forEach((s) => {
+      const rec = s.staffId ? ctx.staffById[s.staffId] : null
+      const p = shiftMinutes(s, 'planned')
+      lines.push(`  ${L(rec?.name || s.staffName || '?', rec)} ${s.start || ''}–${s.end || ''}${p === null ? '' : ` (${formatDuration(p)})`}`)
+    })
+  }
+  const notes = []
+  parts.forEach(({ day }) => {
+    commentsOf(day).forEach((c) => notes.push(`${c.text} (${c.by})`))
+    blocksOf(day).forEach((b) => {
+      commentsOf(b).forEach((c) => notes.push(`${b.name || ''}: ${c.text} (${c.by})`))
+      dishesOf(b).forEach((d) => commentsOf(d).forEach((c) => notes.push(`${d.text}: ${c.text} (${c.by})`)))
+    })
+    shiftsOf(day).forEach((s) => commentsOf(s).forEach((c) => notes.push(`${s.staffName || ''}: ${c.text} (${c.by})`)))
+  })
+  if (notes.length) {
+    lines.push(`${tr(lang, 'comments')}:`)
+    notes.forEach((n) => lines.push(`  ${n}`))
+  }
+  return lines.join('\n')
+}
+
+export function periodText({ title, dates, partsOf, ctx, lang, hideEmpty = true }) {
+  const blocks = []
+  dates.forEach((date) => {
+    const parts = partsOf(date)
+    const has = parts.some(({ day }) => Object.keys(day.blocks || {}).length || Object.keys(day.shifts || {}).length)
+    if (!has && hideEmpty) return
+    blocks.push(dayText({ date, parts, ctx, lang }))
+  })
+  return `${title}\n\n${blocks.join('\n\n') || tr(lang, 'noData')}`
+}

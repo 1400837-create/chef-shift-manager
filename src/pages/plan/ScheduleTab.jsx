@@ -14,6 +14,7 @@ import { usePlanLang, LOCALE, staffLabel } from '../../plan/lang'
 import ExchangePanel from './Exchange'
 import CostPanel from './Cost'
 import GridView from './GridView'
+import { usePlanCtx } from './usePlanCtx'
 import AllPlansView from './AllPlansView'
 import { RecipePickerModal } from './RecipeBrowser'
 
@@ -727,14 +728,8 @@ const ALL = '__all'
 export default function ScheduleTab({ menuBridge }) {
   const { config } = usePlanDeviceState()
   const code = config?.code
-  const plans = usePlanCollection('plans')
-  const staff = usePlanCollection('staff')
-  const templatesCol = usePlanCollection('shiftTemplates')
-  const recipes = usePlanCollection('recipesSlim')
-  const lang = usePlanLang()
-  const allData = usePlanCollection('planData').data
+  const { ctx, sortedPlans, allData, plansReady } = usePlanCtx()
 
-  const sortedPlans = useMemo(() => [...plans.items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [plans.items])
   const selKey = `kitchenPlan_selectedPlan:${code}`
   const [selected, setSelected] = useState(() => {
     try { return localStorage.getItem(selKey) || '' } catch { return '' }
@@ -742,31 +737,13 @@ export default function ScheduleTab({ menuBridge }) {
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    if (!plans.ready) return
+    if (!plansReady) return
     if (selected !== ALL && !sortedPlans.some((p) => p.id === selected)) setSelected(sortedPlans[0]?.id || '')
-  }, [plans.ready, sortedPlans, selected])
+  }, [plansReady, sortedPlans, selected])
 
   useEffect(() => {
     try { if (selected) localStorage.setItem(selKey, selected) } catch { /* preference only */ }
   }, [selected, selKey])
-
-  const ctx = useMemo(() => {
-    const staffList = [...staff.items].filter((s) => s.name).sort(byName)
-    const templates = [...templatesCol.items].sort((a, b) => (parseHM(a.start) ?? 0) - (parseHM(b.start) ?? 0))
-    // recipesSlim can come back as an array with holes (Firebase turns small
-    // integer keys into one) — skip the empty slots.
-    const recipeList = Object.entries(recipes.data || {})
-      .map(([id, r]) => (r && r.n ? { id, name: r.n, de: r.d || '', cat: r.c || 'other', desc: r.m || '' } : null))
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-    const recipeById = {}
-    recipeList.forEach((r) => { recipeById[r.id] = r })
-    const staffById = {}
-    staffList.forEach((s) => { staffById[s.id] = s })
-    const planTitles = {}
-    sortedPlans.forEach((p) => { planTitles[p.id] = p.title || kindLabel(p.kind) })
-    return { staffList, staffById, templates, recipeList, recipeById, lang, planTitles, allShifts: collectShifts(allData) }
-  }, [staff.items, templatesCol.items, recipes.data, lang, sortedPlans, allData])
 
   const plan = sortedPlans.find((p) => p.id === selected)
 
@@ -815,7 +792,7 @@ export default function ScheduleTab({ menuBridge }) {
           onCancel={() => setCreating(false)}
         />
       )}
-      {!creating && !plan && selected !== ALL && plans.ready && (
+      {!creating && !plan && selected !== ALL && plansReady && (
         <p className="text-sm text-slate-400 text-center py-6">Планов пока нет. Создайте первый — например, «Октябрь 2026».</p>
       )}
       {!creating && selected === ALL && sortedPlans.length > 0 && (

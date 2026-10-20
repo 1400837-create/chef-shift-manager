@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, AlertTriangle, Printer, EyeOff, Eye } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertTriangle, Printer, EyeOff, Eye, FileText } from 'lucide-react'
 import { formatDuration, parseHM } from '../../plan/hours'
 import {
   dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, shiftMonth, monthTitle, shiftMinutes, isDateKey,
 } from '../../plan/calc'
 import { LOCALE, staffLabel, dishLabel, tr } from '../../plan/lang'
-import { blocksOf, dishesOf, shiftsOf, buildTablePrint } from '../../plan/exchange'
+import { blocksOf, dishesOf, shiftsOf, buildTablePrint, periodText, dayText } from '../../plan/exchange'
+import { copyText } from './Exchange'
 import { printReport } from '../../utils/printReport'
 import { todayKey } from '../../utils/dateUtils'
 import { mealColor, loadPos, savePos, useNarrow } from '../../plan/ui'
@@ -123,6 +124,20 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
   const dayMinutes = (parts) => parts.reduce((sum, { day }) => sum + shiftsOf(day).reduce((a, s) => a + (shiftMinutes(s, 'planned') || 0), 0), 0)
   const periodTotal = dates.reduce((a, d) => a + dayMinutes(dayParts(d)), 0)
 
+  const [copied, setCopied] = useState(false)
+  async function copyPeriod() {
+    try {
+      await copyText(periodText({ title: `${tr(ctx.lang, 'allPlans')} · ${title}`, dates, partsOf: dayParts, ctx, lang: ctx.lang }))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      window.alert(err?.message || 'Не удалось скопировать')
+    }
+  }
+  async function copyDay(date) {
+    try { await copyText(dayText({ date, parts: dayParts(date), ctx, lang: ctx.lang })) } catch (err) { window.alert(err?.message || 'Не удалось скопировать') }
+  }
+
   function printAll() {
     printReport(buildTablePrint({
       title: tr(ctx.lang, 'allPlans'),
@@ -168,13 +183,19 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-2 mb-3">
+      <div className="grid grid-cols-3 gap-2 mb-3">
         <button
           onClick={() => setHideEmpty((v) => !v)}
           className="min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
         >
           {hideEmpty ? <Eye size={16} /> : <EyeOff size={16} />}
           {hideEmpty ? 'Показать пустые дни' : 'Скрыть пустые дни'}
+        </button>
+        <button
+          onClick={copyPeriod}
+          className="min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+        >
+          <FileText size={16} /> {copied ? 'Скопировано' : 'Текстом'}
         </button>
         <button
           onClick={printAll}
@@ -200,6 +221,8 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
           showTags
           onOpenPlan={onOpenPlan}
           hideEmpty={hideEmpty}
+          onCopyDay={copyDay}
+          repeats={ctx.repeatNote}
         />
       ) : (
       <div className="overflow-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 max-h-[calc(100dvh-var(--app-header-h,64px)-9.5rem)]">

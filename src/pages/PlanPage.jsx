@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer, BookOpen,
+  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer, BookOpen, LayoutDashboard,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../components/UI'
 import { usePlanDeviceState, getAuthor } from '../plan/planRoom'
@@ -15,6 +15,8 @@ import { DraftInput, ConfirmButton, TimeInput, TimeDraft, normalizeTime, useActi
 import { usePlanLang, setPlanLang } from '../plan/lang'
 import { useDensity, setDensity, densityVars, DENSITIES } from '../plan/ui'
 import ScheduleTab from './plan/ScheduleTab'
+import PlanDashboard from './plan/PlanDashboard'
+import { usePlanCtx } from './plan/usePlanCtx'
 import HoursTab from './plan/HoursTab'
 import RecipesTab from './plan/RecipesTab'
 
@@ -564,6 +566,21 @@ function ChangesBanner({ onShow }) {
   )
 }
 
+function DashboardTab({ code, openSchedule }) {
+  const { ctx, sortedPlans, allData } = usePlanCtx()
+  return (
+    <PlanDashboard
+      ctx={ctx}
+      plans={sortedPlans}
+      tree={allData}
+      onOpenPlan={(id) => {
+        try { localStorage.setItem(`kitchenPlan_selectedPlan:${code}`, id) } catch { /* preference only */ }
+        openSchedule()
+      }}
+    />
+  )
+}
+
 export default function PlanPage({ menuBridge }) {
   const { config } = usePlanDeviceState()
   const isOwner = !config || config.role === 'owner'
@@ -572,9 +589,9 @@ export default function PlanPage({ menuBridge }) {
   const [sub, setSubState] = useState(() => {
     if (!config) return 'access'
     try {
-      const v = localStorage.getItem(subKey) || 'schedule'
+      const v = localStorage.getItem(subKey) || 'dash'
       return v === 'access' && config.role !== 'owner' ? 'schedule' : v
-    } catch { return 'schedule' }
+    } catch { return 'dash' }
   })
   const setSub = (key) => {
     setSubState(key)
@@ -596,6 +613,7 @@ export default function PlanPage({ menuBridge }) {
 
   const tabs = config
     ? [
+        { key: 'dash', label: 'Дашборд', icon: LayoutDashboard },
         { key: 'schedule', label: 'График', icon: CalendarDays },
         { key: 'menu', label: 'Меню', icon: BookOpen },
         { key: 'hours', label: 'Часы', icon: Timer },
@@ -637,6 +655,7 @@ export default function PlanPage({ menuBridge }) {
         </>
       )}
       {(!config || sub === 'access') && <AccessPanel config={config} />}
+      {config && sub === 'dash' && <DashboardTab code={config.code} openSchedule={() => setSub('schedule')} />}
       {config && sub === 'schedule' && <ScheduleTab menuBridge={menuBridge} />}
       {config && sub === 'menu' && <RecipesTab />}
       {config && sub === 'hours' && <HoursTab />}

@@ -14,7 +14,7 @@ import { Message } from './shared'
 import { costSummary, money } from './Cost'
 import { coursesForDay } from '../../utils/menuCourses'
 
-async function copyText(text) {
+export async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text)
     return

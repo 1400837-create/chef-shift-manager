@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer, FileText } from 'lucide-react'
 import { BigButton } from '../../components/UI'
 import { writePaths, commitChange } from '../../plan/planStore'
 import { formatDuration } from '../../plan/hours'
@@ -8,12 +8,13 @@ import {
   shiftMinutes,
 } from '../../plan/calc'
 import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
-import { blocksOf, dishesOf, shiftsOf, commentsOf, buildTablePrint } from '../../plan/exchange'
+import { blocksOf, dishesOf, shiftsOf, commentsOf, buildTablePrint, periodText, dayText } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
 import { mealColor, loadPos, savePos, useNarrow } from '../../plan/ui'
 import { usePlanDeviceState } from '../../plan/planRoom'
 import { MenuCell, ShiftCell, NoteCell } from './GridCells'
 import CopyModal from './CopyModal'
+import { copyText } from './Exchange'
 import DayCards from './DayCards'
 import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween } from './gridShared'
 
@@ -169,6 +170,35 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
     })
   }
 
+  const [copiedText, setCopiedText] = useState(false)
+
+  const [toast, setToast] = useState(null)
+  async function copyDay(date) {
+    try {
+      await copyText(dayText({ date, parts: data[date] ? [{ plan, day: data[date] }] : [], ctx, lang: ctx.lang }))
+      setToast(`Скопировано: ${dayTitle(date, LOCALE.ru)}`)
+      setTimeout(() => setToast(null), 2000)
+    } catch (err) {
+      window.alert(err?.message || 'Не удалось скопировать')
+    }
+  }
+
+  async function copyPeriod() {
+    try {
+      await copyText(periodText({
+        title: `${plan.title || 'План'} · ${title}`,
+        dates,
+        partsOf: (d) => (data[d] ? [{ plan, day: data[d] }] : []),
+        ctx,
+        lang: ctx.lang,
+      }))
+      setCopiedText(true)
+      setTimeout(() => setCopiedText(false), 2000)
+    } catch (err) {
+      window.alert(err?.message || 'Не удалось скопировать')
+    }
+  }
+
   function printTable() {
     printReport(buildTablePrint({
       title: plan.title || 'План',
@@ -234,7 +264,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         ))}
       </div>
 
-      <div className={`grid ${narrow ? "grid-cols-2" : "grid-cols-[1fr_auto_auto]"} gap-2 mb-3`}>
+      <div className={`grid ${narrow ? "grid-cols-3" : "grid-cols-[1fr_auto_auto_auto]"} gap-2 mb-3`}>
         {!narrow && (
         <button
           onClick={toggleEdit}
@@ -253,6 +283,13 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           className="min-h-[44px] px-3.5 rounded-xl text-sm font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
         >
           <Copy size={16} /> Копировать
+        </button>
+        <button
+          onClick={copyPeriod}
+          className="min-h-[44px] px-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+          title="Скопировать период текстом для мессенджера"
+        >
+          <FileText size={16} /> {copiedText ? 'Скопировано' : 'Текстом'}
         </button>
         <button
           onClick={printTable}
@@ -283,6 +320,8 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           span={span}
           showTags={false}
           onOpenDay={setEditing}
+          onCopyDay={copyDay}
+          repeats={ctx.repeatNote}
           isOutside={(d) => !inPlanRange(range, d)}
           outsideNote={(d) => {
             const target = data[d] ? findMoveTarget(plans, plan.id, d) : null
@@ -361,6 +400,15 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                             подробно
                           </button>
                         )}
+                        {hasData && !outside && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); copyDay(date) }}
+                            className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-slate-500"
+                            title="Скопировать день текстом для мессенджера"
+                          >
+                            <FileText size={12} /> текст
+                          </button>
+                        )}
                       </td>
                       <td className={TD}>
                         {edit
@@ -432,6 +480,10 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           )}
         </table>
       </div>
+      )}
+
+      {toast && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50 px-4 py-2 rounded-full bg-slate-800 text-white text-sm shadow-lg">{toast}</div>
       )}
 
       {copyOpen && (

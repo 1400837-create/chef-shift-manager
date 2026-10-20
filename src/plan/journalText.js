@@ -3,6 +3,9 @@ const SUBJECT = {
   shiftTemplates: 'типовую смену',
   users: 'пользователя',
   plans: 'план',
+  tasks: 'задачу',
+  dayTasks: 'задачу на день',
+  mealTemplates: 'шаблон приёма',
 }
 
 // Schedule edits carry an explicit `entity` already in the accusative.

@@ -1,10 +1,11 @@
+import { FileText } from 'lucide-react'
 import { weekTitle, dayTitle } from '../../plan/calc'
 import DaySummary from './DaySummary'
 
 // The phone version of the table: one card per day, grouped by week. Tapping a
 // card opens that day's editor (when `onOpenDay` is given).
 export default function DayCards({
-  weeks, getParts, ctx, locale, today, span, showTags, onOpenPlan, onOpenDay, isOutside, outsideNote, hideEmpty, repeats, onDish, focusStaff,
+  weeks, getParts, ctx, locale, today, span, showTags, onOpenPlan, onOpenDay, isOutside, outsideNote, hideEmpty, repeats, onDish, focusStaff, onCopyDay,
 }) {
   return (
     <div>
@@ -31,11 +32,21 @@ export default function DayCards({
                       : `bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${onOpenDay ? 'active:bg-orange-50 dark:active:bg-slate-700 cursor-pointer' : ''}`
                   } ${date === today ? 'ring-2 ring-orange-300' : ''}`}
                 >
-                  <p className="font-bold text-slate-800 dark:text-slate-100 mb-1.5">
-                    {dayTitle(date, locale)}
-                    {date === today && <span className="ml-2 text-xs font-semibold text-orange-600">сегодня</span>}
-                    {outside && <span className="ml-2 text-xs font-normal text-slate-500">вне периода плана</span>}
-                  </p>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <p className="font-bold text-slate-800 dark:text-slate-100">
+                      {dayTitle(date, locale)}
+                      {date === today && <span className="ml-2 text-xs font-semibold text-orange-600">сегодня</span>}
+                      {outside && <span className="ml-2 text-xs font-normal text-slate-500">вне периода плана</span>}
+                    </p>
+                    {onCopyDay && parts.length > 0 && !outside && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onCopyDay(date) }}
+                        className="shrink-0 flex items-center gap-1 px-2 min-h-[30px] rounded-lg bg-slate-100 dark:bg-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300"
+                      >
+                        <FileText size={13} /> текст
+                      </button>
+                    )}
+                  </div>
                   {outside && outsideNote ? outsideNote(date) : null}
                   <DaySummary date={date} parts={parts} ctx={ctx} showTags={showTags} onOpenPlan={onOpenPlan} repeats={repeats} onDish={onDish} focusStaff={focusStaff} />
                 </div>

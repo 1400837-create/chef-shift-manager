@@ -7,7 +7,7 @@ import { describeEntry } from './journalText'
 // Collections that make up "the plan" — what snapshots, the file export and
 // restore all cover. recipesSlim/users/journal/backups are deliberately not
 // in here: the first is derived, the rest are infrastructure.
-export const PLAN_COLLECTIONS = ['staff', 'shiftTemplates', 'plans', 'planData']
+export const PLAN_COLLECTIONS = ['staff', 'shiftTemplates', 'plans', 'planData', 'tasks', 'dayTasks', 'mealTemplates']
 
 // ---------------------------------------------------------------------------
 // Why this isn't useLocalStorage + whole-key sync
@@ -459,7 +459,7 @@ function commit({ coll, action, entity, id, label, updates, changes, before, noU
 }
 
 function displayLabel(rec) {
-  return (rec && (rec.name || rec.label || rec.title)) || ''
+  return (rec && (rec.name || rec.label || rec.title || rec.text)) || ''
 }
 
 export function createRecord(coll, record) {
