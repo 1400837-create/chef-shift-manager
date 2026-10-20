@@ -131,7 +131,7 @@ export default function ExchangePanel({ plan, data, ctx, shifts, menuBridge }) {
         <span className="font-semibold text-slate-800 dark:text-slate-100 text-[15px]">Печать и обмен с таблицами</span>
       </button>
       {open && (
-        <div className="p-3">
+        <div className="p-3 animate-fade-up">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Период</p>
           <PeriodPicker
             from={period?.from || bounds?.from || ''}

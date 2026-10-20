@@ -569,7 +569,7 @@ function DayCard({ coll, date, day, ctx, allShifts, open, onToggle, onDeleted })
         </div>
       </div>
       {open && (
-        <div className="p-3">
+        <div className="p-3 animate-fade-up">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Приёмы и блюда</p>
           {blocks.map((b) => <BlockCard key={b.id} coll={coll} date={date} block={b} ctx={ctx} />)}
           <button onClick={addBlock} className="w-full min-h-[44px] mb-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 text-sm font-semibold flex items-center justify-center gap-1.5">

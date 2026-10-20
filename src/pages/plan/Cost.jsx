@@ -71,7 +71,7 @@ export default function CostPanel({ plan, data }) {
         {s.rows.length > 0 && <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{money(s.total)}</span>}
       </button>
       {open && (
-        <div className="p-3">
+        <div className="p-3 animate-fade-up">
           <datalist id="plan-cost-dishes">{dishNames.map((n) => <option key={n} value={n} />)}</datalist>
           <p className="text-xs text-slate-500 mb-3">
             Вручную: что, сколько и по какой цене за единицу (например, «Курица — 12 кг × 6,50»). Сумма и стоимость на гостя считаются сами.
