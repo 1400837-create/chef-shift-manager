@@ -447,14 +447,21 @@ function djb2(str) {
 // The staff device never receives the real recipes (ingredients, photos,
 // prices). The owner's device publishes just names + type, one-way, so dishes
 // can still be picked from a list in the plan.
-export async function publishRecipesSlim(recipes) {
+export async function publishRecipesSlim(recipes, catalog) {
   const cfg = getPlanConfig()
   if (!cfg || cfg.role !== 'owner' || !db || !Array.isArray(recipes) || recipes.length === 0) return
   const map = {}
+  const nameById = new Map((catalog || []).map((p) => [String(p.id), (p.name || '').trim()]))
   recipes.forEach((r) => {
     const key = String(r.id).replace(/[.#$\/\[\]]/g, '_')
     map[key] = { n: r.name || '', c: r.category || 'other' }
     if (r.nameDe && r.nameDe.trim()) map[key].d = r.nameDe.trim()
+    // The recipe's own text is cooking method, not a summary — a short
+    // "what's in it" line from the first ingredients reads better in a list.
+    const names = (r.ingredients || [])
+      .map((ing) => nameById.get(String(ing.productId)))
+      .filter(Boolean)
+    if (names.length) map[key].m = `${names.slice(0, 6).join(', ')}${names.length > 6 ? '…' : ''}`
   })
   const json = JSON.stringify(map)
   const marker = `kitchenPlan_slimHash:${cfg.code}`
@@ -466,7 +473,7 @@ export async function publishRecipesSlim(recipes) {
 
 // ---- background upkeep ---------------------------------------------------------------------
 
-export function usePlanMaintenance(recipes) {
+export function usePlanMaintenance(recipes, catalog) {
   const { config } = usePlanDeviceState()
   const code = config?.code
   const role = config?.role
@@ -480,9 +487,9 @@ export function usePlanMaintenance(recipes) {
 
   useEffect(() => {
     if (role !== 'owner' || !code || !recipes?.length) return undefined
-    const t = setTimeout(() => publishRecipesSlim(recipes).catch(() => {}), 3000)
+    const t = setTimeout(() => publishRecipesSlim(recipes, catalog).catch(() => {}), 3000)
     return () => clearTimeout(t)
-  }, [code, role, recipes])
+  }, [code, role, recipes, catalog])
 }
 
 // ---- "what changed since I last looked" ----------------------------------------------------

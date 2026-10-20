@@ -22,7 +22,7 @@ const PLAN_KINDS = [
   { key: 'other', label: 'Другое' },
 ]
 
-const BLOCK_NAMES = [
+export const BLOCK_NAMES = [
   'Frühstück', 'Mittagessen', 'Imbiss', 'Abendessen', "G'ttesdeinst", 'Lunchpakete', 'Einkaufen + vorbereitung',
   'Завтрак', 'Обед', 'Полдник', 'Ужин', 'Закупка + подготовка',
 ]

@@ -110,7 +110,7 @@ export default function App() {
 
   // Work-plan upkeep (send queued edits, daily snapshot, prune old journal,
   // publish the slim recipe list). No-op until a plan room is set up here.
-  usePlanMaintenance(recipes)
+  usePlanMaintenance(recipes, recountCatalog)
 
   // One undo/redo stack per tab, except Склад+Закупка share a single stack —
   // they edit the same underlying catalog/purchase data (catalog auto-create

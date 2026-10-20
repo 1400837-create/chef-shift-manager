@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer,
+  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer, BookOpen,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../components/UI'
 import { usePlanDeviceState, getAuthor } from '../plan/planRoom'
@@ -15,6 +15,7 @@ import { DraftInput, ConfirmButton, useAction, Message, StatusBar, parseNorm, by
 import { usePlanLang, setPlanLang } from '../plan/lang'
 import ScheduleTab from './plan/ScheduleTab'
 import HoursTab from './plan/HoursTab'
+import RecipesTab from './plan/RecipesTab'
 
 // ---------------------------------------------------------------------------
 // Справочники: сотрудники и типовые смены
@@ -550,6 +551,7 @@ export default function PlanPage({ menuBridge }) {
   const tabs = config
     ? [
         { key: 'schedule', label: 'График', icon: CalendarDays },
+        { key: 'menu', label: 'Меню', icon: BookOpen },
         { key: 'hours', label: 'Часы', icon: Timer },
         { key: 'dir', label: 'Справочники', icon: Users },
         { key: 'journal', label: 'Журнал', icon: History },
@@ -585,6 +587,7 @@ export default function PlanPage({ menuBridge }) {
       )}
       {(!config || sub === 'access') && <AccessPanel config={config} />}
       {config && sub === 'schedule' && <ScheduleTab menuBridge={menuBridge} />}
+      {config && sub === 'menu' && <RecipesTab />}
       {config && sub === 'hours' && <HoursTab />}
       {config && sub === 'dir' && (
         <>
