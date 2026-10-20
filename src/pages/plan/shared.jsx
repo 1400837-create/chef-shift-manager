@@ -12,10 +12,20 @@ export function DraftInput({ value, onCommit, type = 'text', inputMode, placehol
   const [draft, setDraft] = useState(str)
   const [editing, setEditing] = useState(false)
   const base = useRef(str)
+  const latest = useRef({ draft, editing, onCommit })
+  latest.current = { draft, editing, onCommit }
 
   useEffect(() => {
     if (!editing) setDraft(str)
   }, [str, editing])
+
+  // Closing the editor window or switching tab while a field is still focused
+  // removes it without a blur event (iOS in particular doesn't blur on a tap
+  // outside) — save what was typed instead of silently dropping it.
+  useEffect(() => () => {
+    const { draft: d, editing: e, onCommit: commit } = latest.current
+    if (e && d !== base.current) commit(d)
+  }, [])
 
   return (
     <input
@@ -28,6 +38,7 @@ export function DraftInput({ value, onCommit, type = 'text', inputMode, placehol
       onFocus={() => { base.current = str; setEditing(true) }}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
+        latest.current.editing = false
         setEditing(false)
         if (draft !== base.current) onCommit(draft)
       }}

@@ -196,26 +196,24 @@ function BlockCard({ coll, date, block, ctx }) {
 
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 mb-2">
-      <div className="grid grid-cols-6 gap-2">
-        <div className="col-span-6 sm:col-span-3">
-          <p className="text-[11px] text-slate-400 mb-0.5">Приём / мероприятие</p>
-          <DraftInput value={block.name} onCommit={(v) => patch('name', v.trim())} list="plan-block-names" placeholder="Например: Mittagessen" />
-        </div>
-        <div className="col-span-3 sm:col-span-1">
+      <div>
+        <p className="text-[11px] text-slate-400 mb-0.5">Приём / мероприятие</p>
+        <DraftInput value={block.name} onCommit={(v) => patch('name', v.trim())} list="plan-block-names" placeholder="Например: Mittagessen" />
+      </div>
+      <div className="grid grid-cols-[minmax(7.5rem,1fr)_minmax(5rem,1fr)_auto] gap-2 mt-2 items-end">
+        <div>
           <p className="text-[11px] text-slate-400 mb-0.5">Время</p>
           <DraftInput type="time" value={block.time} onCommit={(v) => patch('time', v)} />
         </div>
-        <div className="col-span-3 sm:col-span-1">
+        <div>
           <p className="text-[11px] text-slate-400 mb-0.5">Персон</p>
           <DraftInput inputMode="numeric" value={block.persons} onCommit={(v) => { const n = parseInt(v, 10); patch('persons', Number.isFinite(n) && n > 0 ? n : null) }} />
         </div>
-        <div className="col-span-6 sm:col-span-1 flex items-end justify-end">
-          <ConfirmDeleteButton
-            onConfirm={() => writePaths(coll, { [base]: null }, { action: 'delete', entity: 'блок', id: date, label, before: block })}
-            size="w-11 h-11"
-            iconSize={18}
-          />
-        </div>
+        <ConfirmDeleteButton
+          onConfirm={() => writePaths(coll, { [base]: null }, { action: 'delete', entity: 'блок', id: date, label, before: block })}
+          size="w-11 h-11"
+          iconSize={18}
+        />
       </div>
 
       <div className="mt-2">
@@ -755,7 +753,9 @@ export default function ScheduleTab({ menuBridge }) {
 
   const sortedPlans = useMemo(() => [...plans.items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [plans.items])
   const selKey = `kitchenPlan_selectedPlan:${code}`
-  const [selected, setSelected] = useState(() => localStorage.getItem(selKey) || '')
+  const [selected, setSelected] = useState(() => {
+    try { return localStorage.getItem(selKey) || '' } catch { return '' }
+  })
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
@@ -764,7 +764,7 @@ export default function ScheduleTab({ menuBridge }) {
   }, [plans.ready, sortedPlans, selected])
 
   useEffect(() => {
-    if (selected) localStorage.setItem(selKey, selected)
+    try { if (selected) localStorage.setItem(selKey, selected) } catch { /* preference only */ }
   }, [selected, selKey])
 
   const ctx = useMemo(() => {
