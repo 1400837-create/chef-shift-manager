@@ -5,7 +5,7 @@ import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
 import { usePlanCollection, createRecord, patchRecord, writePaths, newId, commitChange } from '../../plan/planStore'
 import { formatDuration, parseHM } from '../../plan/hours'
 import {
-  isDateKey, dayTitle, mondayOf, addDaysKey, monthOf, monthBounds, monthTitle, shiftMinutes, sumMinutes,
+  isDateKey, dayTitle, monthOf, monthTitle, shiftMinutes, sumMinutes, planRange,
   collectShifts, suggestStaff,
 } from '../../plan/calc'
 import { todayKey } from '../../utils/dateUtils'
@@ -546,50 +546,14 @@ const isEmptyDay = (day) =>
 // one plan
 // ---------------------------------------------------------------------------
 
-function defaultDate(plan) {
-  const today = todayKey()
-  if (plan.kind === 'month' && plan.month) return monthOf(today) === plan.month ? today : `${plan.month}-01`
-  return today
-}
-
-function PlanView({ plan, ctx, menuBridge }) {
+function PlanView({ plan, ctx, menuBridge, plans }) {
   const isOwner = usePlanDeviceState().config?.role === 'owner'
   const coll = `planData/${plan.id}`
   const { data } = usePlanCollection(coll)
   const tree = usePlanCollection('planData').data
   const allShifts = useMemo(() => collectShifts(tree), [tree])
   const dates = useMemo(() => Object.keys(data).filter(isDateKey).sort(), [data])
-  const [newDate, setNewDate] = useState(() => defaultDate(plan))
-  const [addMode, setAddMode] = useState(plan.kind === 'month' ? 'month' : 'day')
   const [note, setNote] = useState(null)
-
-  // One write for the whole batch, so adding a month is one journal entry
-  // rather than thirty.
-  function addDays() {
-    if (!isDateKey(newDate)) return
-    let list
-    if (addMode === 'day') list = [newDate]
-    else if (addMode === 'week') {
-      const m = mondayOf(newDate)
-      list = Array.from({ length: 7 }, (_, i) => addDaysKey(m, i))
-    } else {
-      const { from, to } = monthBounds(monthOf(newDate))
-      list = []
-      for (let d = from; d <= to; d = addDaysKey(d, 1)) list.push(d)
-    }
-    const fresh = list.filter((d) => !data[d])
-    if (!fresh.length) {
-      setNote('Эти дни уже есть в плане.')
-      return
-    }
-    const rel = {}
-    fresh.forEach((d) => { rel[`${d}/d`] = 1 })
-    writePaths(coll, rel, {
-      action: 'create', entity: fresh.length > 1 ? 'дни' : 'день', id: plan.id,
-      label: fresh.length > 1 ? `${plan.title || 'план'}: ${fresh.length} дн. (${fresh[0]} — ${fresh[fresh.length - 1]})` : dayTitle(fresh[0]),
-    })
-    setNote(`Добавлено дней: ${fresh.length}.`)
-  }
 
   const emptyDays = dates.filter((d) => isEmptyDay(data[d]))
 
@@ -606,28 +570,41 @@ function PlanView({ plan, ctx, menuBridge }) {
     <DayCard coll={coll} date={date} day={data[date]} ctx={ctx} allShifts={allShifts} open onToggle={close} onDeleted={close} />
   )
 
+  const range = planRange(plan)
+
   return (
     <>
-      <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} />
+      <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} plans={plans} tree={tree} />
 
       <Section title={plan.title || 'План'} icon={Clock} right={<Badge color="slate">{kindLabel(plan.kind)}</Badge>}>
         <div className="grid grid-cols-1 gap-2 mb-3">
           <DraftInput value={plan.title} placeholder="Название плана" onCommit={(v) => { if (v.trim()) patchRecord('plans', plan.id, { title: v.trim() }) }} />
         </div>
-        <p className="text-[11px] text-slate-400 mb-1">Добавить в план</p>
-        <div className="grid grid-cols-[1fr_1fr] sm:grid-cols-[8rem_1fr_auto] gap-2">
-          <select className={inputClass} value={addMode} onChange={(e) => setAddMode(e.target.value)}>
-            <option value="day">День</option>
-            <option value="week">Неделю</option>
-            <option value="month">Месяц</option>
-          </select>
-          <input type="date" className={inputClass} value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-          <button onClick={addDays} className="col-span-2 sm:col-span-1 px-4 min-h-[48px] rounded-xl bg-orange-500 active:bg-orange-600 text-white font-semibold flex items-center justify-center gap-1.5">
-            <Plus size={18} /> Добавить
-          </button>
-        </div>
+
+        <p className="text-[11px] text-slate-400 mb-1">Период плана</p>
+        {plan.kind === 'month' ? (
+          <input
+            type="month"
+            className={inputClass}
+            value={plan.month || ''}
+            onChange={(e) => { if (e.target.value) patchRecord('plans', plan.id, { month: e.target.value }) }}
+          />
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-[11px] text-slate-400 mb-0.5">С</p>
+              <input type="date" className={inputClass} value={plan.dateFrom || ''} onChange={(e) => patchRecord('plans', plan.id, { dateFrom: e.target.value || null })} />
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-400 mb-0.5">По</p>
+              <input type="date" className={inputClass} value={plan.dateTo || ''} onChange={(e) => patchRecord('plans', plan.id, { dateTo: e.target.value || null })} />
+            </div>
+          </div>
+        )}
         <p className="text-xs text-slate-500 mt-1.5">
-          Неделя — с понедельника по воскресенье, месяц — все дни месяца выбранной даты. Уже существующие дни не затрагиваются.
+          {range
+            ? 'В таблице показаны все дни этого периода. Дни вне периода серые и не редактируются: они относятся к другому плану.'
+            : 'Укажите даты «С» и «По» — тогда в таблице появятся все дни лагеря или мероприятия, в том числе пустые.'}
         </p>
         {note && <p className="text-sm text-green-700 dark:text-green-400 mt-1.5">{note}</p>}
         <div className="flex items-center justify-between mt-3">
@@ -638,7 +615,7 @@ function PlanView({ plan, ctx, menuBridge }) {
                 confirmLabel={`Удалить ${emptyDays.length}?`}
                 className="px-3 min-h-[36px] rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold"
               >
-                Удалить пустые дни ({emptyDays.length})
+                Убрать служебные пустые дни ({emptyDays.length})
               </ConfirmButton>
             )
             : <span />}
@@ -666,10 +643,24 @@ function NewPlanForm({ onCreated, onCancel }) {
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState('month')
   const [month, setMonth] = useState(() => monthOf(todayKey()))
+  const [dateFrom, setDateFrom] = useState(() => todayKey())
+  const [dateTo, setDateTo] = useState(() => todayKey())
+  const [error, setError] = useState(null)
 
   function create() {
+    if (kind !== 'month' && (!dateFrom || !dateTo || dateFrom > dateTo)) {
+      setError('Укажите даты: «С» не может быть позже «По».')
+      return
+    }
     const finalTitle = title.trim() || (kind === 'month' ? monthTitle(month) : kindLabel(kind))
-    const id = createRecord('plans', { title: finalTitle, kind, month: kind === 'month' ? month : null, createdAt: Date.now() })
+    const id = createRecord('plans', {
+      title: finalTitle,
+      kind,
+      month: kind === 'month' ? month : null,
+      dateFrom: kind === 'month' ? null : dateFrom,
+      dateTo: kind === 'month' ? null : dateTo,
+      createdAt: Date.now(),
+    })
     onCreated(id)
   }
 
@@ -682,6 +673,19 @@ function NewPlanForm({ onCreated, onCancel }) {
         {kind === 'month'
           ? <input type="month" className={inputClass} value={month} onChange={(e) => setMonth(e.target.value)} />
           : <span />}
+        {kind !== 'month' && (
+          <>
+            <div>
+              <p className="text-[11px] text-slate-400 mb-0.5">Начало</p>
+              <input type="date" className={inputClass} value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); if (!dateTo || e.target.value > dateTo) setDateTo(e.target.value) }} />
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-400 mb-0.5">Конец</p>
+              <input type="date" className={inputClass} value={dateTo} min={dateFrom} onChange={(e) => setDateTo(e.target.value)} />
+            </div>
+          </>
+        )}
+        {error && <p className="col-span-2 text-sm text-red-600">{error}</p>}
         <input className={inputClass + ' col-span-2'} placeholder="Название (необязательно)" value={title} onChange={(e) => setTitle(e.target.value)} />
         <BigButton onClick={create} icon={Plus}>Создать</BigButton>
         <button onClick={onCancel} className="min-h-[52px] rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Отмена</button>
@@ -768,7 +772,7 @@ export default function ScheduleTab({ menuBridge }) {
       {!creating && !plan && plans.ready && (
         <p className="text-sm text-slate-400 text-center py-6">Планов пока нет. Создайте первый — например, «Октябрь 2026».</p>
       )}
-      {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} menuBridge={menuBridge} />}
+      {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} menuBridge={menuBridge} plans={sortedPlans} />}
     </div>
   )
 }

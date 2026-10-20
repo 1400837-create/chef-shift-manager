@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, X, Plus, Pencil } from 'lucide-react'
 import { BigButton } from '../../components/UI'
-import { writePaths } from '../../plan/planStore'
+import { writePaths, commitChange } from '../../plan/planStore'
 import { formatDuration } from '../../plan/hours'
 import {
-  isDateKey, dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, shiftMonth, monthTitle,
+  isDateKey, dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, shiftMonth, monthTitle, planRange, inPlanRange,
   shiftMinutes,
 } from '../../plan/calc'
 import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
@@ -36,6 +36,13 @@ const SPANS = [
   { key: 'all', label: 'Весь план' },
 ]
 
+// Which other plan covers this date (a month plan wins over a free-range one).
+function findMoveTarget(plans, currentId, date) {
+  const candidates = plans.filter((p) => p.id !== currentId && planRange(p) && inPlanRange(planRange(p), date))
+  return candidates.find((p) => p.kind === 'month') || candidates[0] || null
+}
+
+
 function daysBetween(from, to) {
   const out = []
   for (let d = from; d <= to; d = addDaysKey(d, 1)) out.push(d)
@@ -57,14 +64,21 @@ function totals(data, dates) {
 // The whole period on one screen, spreadsheet-style: one row per day with the
 // meals and dishes, who works and when, and the day's hours. Tapping a row
 // opens the full editor for that day.
-export default function GridView({ plan, data, ctx, renderDay }) {
+export default function GridView({ plan, data, ctx, renderDay, plans = [], tree = {} }) {
   const today = todayKey()
+  const range = useMemo(() => planRange(plan), [plan])
   const existing = useMemo(() => Object.keys(data).filter(isDateKey).sort(), [data])
   const [span, setSpan] = useState('week')
   const [anchor, setAnchor] = useState(() => {
-    if (plan.kind === 'month' && plan.month && monthOf(today) !== plan.month) return `${plan.month}-01`
+    if (range) return inPlanRange(range, today) ? today : range.from
     return existing.includes(today) || !existing.length ? today : existing[0]
   })
+
+  // The period was just set or changed: bring the table to it.
+  useEffect(() => {
+    if (range && !inPlanRange(range, anchor)) setAnchor(inPlanRange(range, today) ? today : range.from)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range?.from, range?.to])
   const [editing, setEditing] = useState(null)
   const [editMode, setEditMode] = useState(() => {
     try { return localStorage.getItem('kitchenPlan_gridEdit') === '1' } catch { return false }
@@ -87,6 +101,7 @@ export default function GridView({ plan, data, ctx, renderDay }) {
       const { from, to } = monthBounds(monthOf(anchor))
       return daysBetween(from, to)
     }
+    if (range) return [...new Set([...daysBetween(range.from, range.to), ...existing])].sort()
     return existing
   }, [span, anchor, existing])
 
@@ -108,6 +123,27 @@ export default function GridView({ plan, data, ctx, renderDay }) {
   const title = span === 'week'
     ? weekTitle(mondayOf(anchor), locale)
     : span === 'month' ? monthTitle(monthOf(anchor), locale) : plan.title || ''
+
+  // A day that was filled in outside this plan's period belongs to another
+  // plan; move it there in one step (one journal line, nothing is copied twice).
+  function moveDay(date, target) {
+    const src = data[date]
+    if (!src) return
+    const there = tree[target.id]?.[date]
+    const thereHasData = there && (Object.keys(there.blocks || {}).length || Object.keys(there.shifts || {}).length || Object.keys(there.comments || {}).length)
+    if (thereHasData) {
+      window.alert(`В плане «${target.title}» на ${dayTitle(date)} уже есть записи. Сначала освободите этот день там.`)
+      return
+    }
+    commitChange({
+      coll: 'planData',
+      action: 'update',
+      entity: 'день',
+      id: date,
+      label: `${dayTitle(date)}: из «${plan.title}» в «${target.title}»`,
+      updates: { [`planData/${plan.id}/${date}`]: null, [`planData/${target.id}/${date}`]: src },
+    })
+  }
 
   function createDay(date) {
     writePaths(`planData/${plan.id}`, { [`${date}/d`]: 1 }, { action: 'create', entity: 'день', id: date, label: dayTitle(date) })
@@ -186,15 +222,31 @@ export default function GridView({ plan, data, ctx, renderDay }) {
                   const actual = shifts.reduce((a, s) => a + (shiftMinutes(s, 'actual') || 0), 0)
                   const notes = day ? gatherComments(day, blocks, shifts, ctx) : []
                   const isToday = date === today
+                  const outside = !inPlanRange(range, date)
+                  const edit = editMode && !outside
+                  const hasData = !!day && (blocks.length > 0 || shifts.length > 0 || notes.length > 0)
+                  const moveTo = outside && hasData ? findMoveTarget(plans, plan.id, date) : null
                   return (
                     <tr
                       key={date}
-                      onClick={editMode ? undefined : () => setEditing(date)}
-                      className={`align-top ${editMode ? '' : 'cursor-pointer active:bg-orange-50 dark:active:bg-slate-700'} ${!day && !editMode ? 'text-slate-400' : ''} ${isToday ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}
+                      onClick={edit || outside ? undefined : () => setEditing(date)}
+                      className={`align-top ${edit || outside ? '' : 'cursor-pointer active:bg-orange-50 dark:active:bg-slate-700'} ${!day && !edit ? 'text-slate-400' : ''} ${outside ? 'bg-slate-100 dark:bg-slate-900/60 text-slate-400' : ''} ${isToday ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}
                     >
                       <td className={`${TD} font-bold whitespace-nowrap text-slate-800 dark:text-slate-100`}>
                         {dayTitle(date, locale)}
-                        {editMode && (
+                        {outside && (
+                          <span className="block text-[11px] font-normal leading-tight text-slate-500">
+                            вне периода плана
+                            {hasData && (moveTo
+                              ? (
+                                <button onClick={() => moveDay(date, moveTo)} className="block mt-0.5 font-semibold text-orange-600 underline text-left">
+                                  перенести в «{moveTo.title}»
+                                </button>
+                              )
+                              : <span className="block text-red-600">нет плана на эту дату</span>)}
+                          </span>
+                        )}
+                        {edit && (
                           <button
                             onClick={() => setEditing(date)}
                             className="mt-1 block text-[11px] font-semibold text-orange-600 underline"
@@ -205,7 +257,7 @@ export default function GridView({ plan, data, ctx, renderDay }) {
                         )}
                       </td>
                       <td className={TD}>
-                        {editMode
+                        {edit
                           ? <MenuCell coll={coll} date={date} day={day || {}} ctx={ctx} />
                           : blocks.map((b) => (
                             <div key={b.id} className="mb-1.5 last:mb-0">
@@ -222,7 +274,7 @@ export default function GridView({ plan, data, ctx, renderDay }) {
                           ))}
                       </td>
                       <td className={`${TD} text-xs`}>
-                        {editMode
+                        {edit
                           ? <NoteCell coll={coll} date={date} notes={notes} />
                           : notes.map((n, i) => (
                             <p key={i} className="mb-1 last:mb-0 text-slate-700 dark:text-slate-200">
@@ -232,8 +284,8 @@ export default function GridView({ plan, data, ctx, renderDay }) {
                             </p>
                           ))}
                       </td>
-                      <td className={`${TD} ${editMode ? '' : 'whitespace-nowrap'}`}>
-                        {editMode
+                      <td className={`${TD} ${edit ? '' : 'whitespace-nowrap'}`}>
+                        {edit
                           ? <ShiftCell coll={coll} date={date} day={day || {}} ctx={ctx} />
                           : shifts.map((s) => (
                             <p key={s.id} className="text-slate-700 dark:text-slate-200">

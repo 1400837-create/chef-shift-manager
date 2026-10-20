@@ -148,3 +148,15 @@ export function suggestStaff({ staff, shifts, date, start, end }) {
       return (a.staff.name || '').localeCompare(b.staff.name || '', 'ru')
     })
 }
+
+// The dates a plan covers: its month, or its own start/end for a camp or
+// event. null when none is set (older plans) — then every day is fair game.
+export function planRange(plan) {
+  if (plan.kind === 'month' && plan.month) return monthBounds(plan.month)
+  if (isDateKey(plan.dateFrom || '') && isDateKey(plan.dateTo || '') && plan.dateFrom <= plan.dateTo) {
+    return { from: plan.dateFrom, to: plan.dateTo }
+  }
+  return null
+}
+
+export const inPlanRange = (range, date) => !range || (date >= range.from && date <= range.to)

@@ -28,6 +28,9 @@ const FIELD = {
   changed: 'пометка «изменено»',
   recipeId: 'рецепт',
   title: 'название',
+  month: 'месяц',
+  dateFrom: 'начало периода',
+  dateTo: 'конец периода',
 }
 
 function fmt(v) {
