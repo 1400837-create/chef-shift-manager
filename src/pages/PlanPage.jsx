@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer, BookOpen, LayoutDashboard, Bookmark,
+  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer, BookOpen, LayoutDashboard, Bookmark, Palette, Pencil,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../components/UI'
 import { usePlanDeviceState, getAuthor } from '../plan/planRoom'
@@ -13,7 +13,7 @@ import { durationMinutes, formatDuration, parseHM } from '../plan/hours'
 import { describeEntry } from '../plan/journalText'
 import { DraftInput, ConfirmButton, TimeInput, TimeDraft, normalizeTime, useAction, Message, StatusBar, StatusIcons, parseNorm, byName } from './plan/shared'
 import { usePlanLang, setPlanLang } from '../plan/lang'
-import { useDensity, setDensity, densityVars, DENSITIES } from '../plan/ui'
+import { useDensity, setDensity, densityVars, DENSITIES, MEAL_PALETTE, DEFAULT_MEAL_TYPES } from '../plan/ui'
 import ScheduleTab from './plan/ScheduleTab'
 import PlanDashboard from './plan/PlanDashboard'
 import { RecipeBridgeProvider } from './plan/recipeBridge'
@@ -159,6 +159,109 @@ function ShiftTemplates() {
           </div>
         </div>
       ))}
+    </Section>
+  )
+}
+
+function MealTypesEditor() {
+  const { items, ready } = usePlanCollection('mealTypes')
+  const custom = useMemo(
+    () => [...items].filter((t) => t.name).sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name, 'ru')),
+    [items]
+  )
+  const [newName, setNewName] = useState('')
+
+  const materialize = () => DEFAULT_MEAL_TYPES.forEach((t, i) => createRecord('mealTypes', {
+    name: t.name, nameDe: t.nameDe, keywords: t.keywords, color: t.color, order: i,
+  }))
+  const resetAll = () => custom.forEach((t) => deleteRecord('mealTypes', t.id))
+  const addType = () => {
+    if (!newName.trim()) return
+    createRecord('mealTypes', { name: newName.trim(), nameDe: '', keywords: '', color: 'sky', order: custom.length + 1 })
+    setNewName('')
+  }
+
+  return (
+    <Section title="Типы приёмов (список и цвета полосок)" icon={Palette}>
+      <p className="text-xs text-slate-500 mb-3">
+        Эти названия подсказываются в поле «Приём / мероприятие», а цвет полоски слева у приёма берётся отсюда: если в
+        названии приёма встречается название типа или любое из «слов для поиска», он получает цвет типа. Остальные
+        приёмы остаются светло-оранжевыми («Другое»).
+      </p>
+      {!ready && custom.length === 0 && <p className="text-sm text-slate-400 text-center py-2">Загрузка…</p>}
+
+      {ready && custom.length === 0 && (
+        <>
+          {DEFAULT_MEAL_TYPES.map((t) => (
+            <div key={t.id} className="flex items-center gap-2 py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-0 text-sm text-slate-700 dark:text-slate-200">
+              <span className={`inline-block w-3 h-3 rounded-sm ${MEAL_PALETTE[t.color].dot}`} />
+              <span className="font-semibold">{t.name}</span>
+              <span className="text-slate-400">{t.nameDe}</span>
+            </div>
+          ))}
+          <div className="mt-3">
+            <BigButton onClick={materialize} icon={Pencil} color="outline">Изменить этот список</BigButton>
+          </div>
+        </>
+      )}
+
+      {custom.map((t) => (
+        <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 mb-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-[11px] text-slate-400 mb-0.5">Название</p>
+              <DraftInput value={t.name} onCommit={(v) => { if (v.trim()) patchRecord('mealTypes', t.id, { name: v.trim() }) }} />
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-400 mb-0.5">Название (DE)</p>
+              <DraftInput value={t.nameDe} onCommit={(v) => patchRecord('mealTypes', t.id, { nameDe: v.trim() })} />
+            </div>
+            <div className="col-span-2">
+              <p className="text-[11px] text-slate-400 mb-0.5">Слова для поиска в названии приёма (через запятую)</p>
+              <DraftInput value={t.keywords} placeholder="завтрак, frühstück, breakfast" onCommit={(v) => patchRecord('mealTypes', t.id, { keywords: v.trim() })} />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+            {Object.entries(MEAL_PALETTE).map(([key, c]) => (
+              <button
+                key={key}
+                onClick={() => patchRecord('mealTypes', t.id, { color: key })}
+                className={`w-8 h-8 rounded-lg ${c.dot} ${t.color === key ? 'ring-2 ring-offset-2 ring-slate-800 dark:ring-white dark:ring-offset-slate-800' : ''}`}
+                title={c.label}
+                aria-label={c.label}
+              />
+            ))}
+            <span className="flex-1" />
+            <ConfirmDeleteButton onConfirm={() => deleteRecord('mealTypes', t.id)} size="w-10 h-10" iconSize={18} />
+          </div>
+        </div>
+      ))}
+
+      {custom.length > 0 && (
+        <>
+          <div className="flex gap-2 mt-3">
+            <input
+              className={inputClass}
+              placeholder="Новый тип, например «Лагерь»"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addType() }}
+            />
+            <button onClick={addType} disabled={!newName.trim()} className="shrink-0 px-4 min-h-[48px] rounded-xl bg-orange-500 text-white font-semibold disabled:opacity-40">
+              Добавить
+            </button>
+          </div>
+          <div className="mt-3">
+            <ConfirmButton
+              onConfirm={resetAll}
+              confirmLabel="Точно вернуть стандартный список?"
+              className="px-3 min-h-[36px] rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+            >
+              Вернуть стандартный список
+            </ConfirmButton>
+          </div>
+        </>
+      )}
     </Section>
   )
 }
@@ -699,6 +802,7 @@ export default function PlanPage({ menuBridge }) {
           <StaffDirectory />
           <ShiftTemplates />
           <MealTemplateList />
+          <MealTypesEditor />
         </>
       )}
       {config && sub === 'journal' && <JournalPanel />}

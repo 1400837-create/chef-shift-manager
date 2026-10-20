@@ -320,11 +320,15 @@ export function buildPrintPayload({ plan, data, ctx, shifts, lang, from, to }) {
 // Menu stores, per month and day number, a list of courses {id,label,dish,qty}.
 // `qty` doubles as the recipe coefficient there (a recipe is written for 10
 // portions), so persons/10 is what makes the plan's ТК scale come out right.
-export function buildMenuTransfer(data, ctx, from, to, menuData) {
+// `partsOf(date)` → [{ day }] — one plan's day, or the same date from several
+// plans (all of them go into the Menu's day, meals in time order).
+export function buildMenuTransferFromParts({ dates, partsOf, ctx, menuData }) {
   const days = []
-  planDates(data, from, to).forEach((date) => {
+  dates.forEach((date) => {
+    const blocks = partsOf(date).flatMap(({ day }) => blocksOf(day))
+    blocks.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'))
     const courses = []
-    blocksOf(data[date]).forEach((b) => {
+    blocks.forEach((b) => {
       const persons = Number(b.persons)
       const qty = Number.isFinite(persons) && persons > 0 ? String(Math.round((persons / 10) * 100) / 100) : ''
       dishesOf(b).forEach((d) => {
@@ -343,6 +347,15 @@ export function buildMenuTransfer(data, ctx, from, to, menuData) {
     days.push({ date, monthKey, day, courses, hasExisting })
   })
   return days
+}
+
+export function buildMenuTransfer(data, ctx, from, to, menuData) {
+  return buildMenuTransferFromParts({
+    dates: planDates(data, from, to),
+    partsOf: (d) => [{ day: data[d] }],
+    ctx,
+    menuData,
+  })
 }
 
 // mode: 'skip' (leave filled days alone) | 'replace' | 'append'

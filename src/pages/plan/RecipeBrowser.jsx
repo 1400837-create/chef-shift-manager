@@ -87,28 +87,12 @@ export default function RecipeBrowser({ recipes, lang, picked, onToggle, topOffs
       }))
       .filter((g) => g.items.length)
 
-    // Quick lists on top: starred ones, and what was served around now.
+    // Starred recipes get their own section on top.
     const fav = recipes.filter((r) => favs.has(r.id) && matches(r)).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-    const nearness = (r) => {
-      const dates = usageDates[r.id] || []
-      let best = null
-      dates.forEach((d) => {
-        const diff = Math.round((parseDate(d) - parseDate(today)) / MS_DAY)
-        if (diff >= -30 && diff <= 14 && (best === null || Math.abs(diff) < best)) best = Math.abs(diff)
-      })
-      return best
-    }
-    const recent = recipes
-      .map((r) => ({ r, n: nearness(r) }))
-      .filter((x) => x.n !== null && matches(x.r))
-      .sort((a, b) => a.n - b.n)
-      .slice(0, 12)
-      .map((x) => x.r)
     const extra = []
     if (fav.length) extra.push({ key: '__fav', label: '★ Избранные', items: fav })
-    if (recent.length) extra.push({ key: '__recent', label: 'Недавние', items: recent })
     return [...extra, ...byCat]
-  }, [recipes, needle, favs, usageDates, today])
+  }, [recipes, needle, favs])
 
   const sectionId = (key) => `rb-${uid}-${key}`
 
@@ -166,19 +150,19 @@ export default function RecipeBrowser({ recipes, lang, picked, onToggle, topOffs
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input className={inputClass + ' pl-10'} placeholder={`Поиск по ${recipes.length} рецептам…`} value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-        <div ref={chipsRef} className="flex gap-1.5 overflow-x-auto pb-1">
+        <div ref={chipsRef} className="flex flex-wrap gap-1">
           {groups.map((g) => (
             <button
               key={g.key}
               data-cat={g.key}
               onClick={() => jump(g.key)}
-              className={`shrink-0 px-3 min-h-[34px] inline-flex items-center rounded-full text-xs font-semibold whitespace-nowrap border transition-colors ${
+              className={`flex-1 min-w-fit px-2 min-h-[32px] inline-flex items-center justify-center rounded-full text-[11px] font-semibold whitespace-nowrap border transition-colors ${
                 active === g.key
                   ? 'bg-orange-500 border-orange-500 text-white'
                   : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
               }`}
             >
-              {g.label} · {g.items.length}
+              {g.label}<span className="ml-1 opacity-60">{g.items.length}</span>
             </button>
           ))}
         </div>

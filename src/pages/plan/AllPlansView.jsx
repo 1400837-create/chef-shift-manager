@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, AlertTriangle, Printer, EyeOff, Eye } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertTriangle, Printer, EyeOff, Eye, Upload } from 'lucide-react'
 import { formatDuration, parseHM } from '../../plan/hours'
 import {
   dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, shiftMonth, monthTitle, shiftMinutes, isDateKey,
@@ -8,8 +8,9 @@ import { LOCALE, staffLabel, dishLabel, tr } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf, buildTablePrint } from '../../plan/exchange'
 import { printReport } from '../../utils/printReport'
 import { todayKey } from '../../utils/dateUtils'
-import { mealColor, loadPos, savePos, useNarrow } from '../../plan/ui'
+import { loadPos, savePos, useNarrow } from '../../plan/ui'
 import DayCards from './DayCards'
+import MenuTransferModal from './MenuTransferModal'
 import { StaffSelect, StaffSummary, useFocusState } from './StaffFocus'
 import { usePlanDeviceState } from '../../plan/planRoom'
 import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText, DishLine, MealLegend } from './gridShared'
@@ -66,7 +67,8 @@ function conflictIds(entries) {
 // Everything that happens on each day, from every plan at once: the month,
 // camps, events. Read-only — each item carries its plan's tag; tap the tag
 // to open that plan and edit there.
-export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
+export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge }) {
+  const [menuOpen, setMenuOpen] = useState(false)
   const today = todayKey()
   const locale = LOCALE[ctx.lang]
   const code = usePlanDeviceState().config?.code
@@ -180,6 +182,15 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
           {hideEmpty ? <Eye size={14} /> : <EyeOff size={14} />}
           {hideEmpty ? 'Показать пустые' : 'Скрыть пустые'}
         </button>
+        {menuBridge && (
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+            title="Отправить блюда этого периода в раздел «Меню» основной программы"
+          >
+            <Upload size={14} /> В Меню
+          </button>
+        )}
         <button
           onClick={printAll}
           className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
@@ -189,7 +200,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
         <StaffSelect ctx={ctx} value={focus} onChange={setFocus} />
       </div>
       <StaffSummary ctx={ctx} value={focus} dates={dates} />
-      <MealLegend />
+      <MealLegend ctx={ctx} />
 
       <div className="flex flex-wrap gap-1.5 mb-3 items-center text-xs text-slate-500">
         <span>Планы:</span>
@@ -250,7 +261,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                           <div key={plan.id} className="mb-2 last:mb-0">
                             <Tag plan={plan} />
                             {blocks.map((b) => (
-                              <div key={b.id} className={`mt-1 border-l-4 pl-2 ${mealColor(b.name).bar}`}>
+                              <div key={b.id} className={`mt-1 border-l-4 pl-2 ${ctx.mealColor(b.name).bar}`}>
                                 <p className="font-semibold text-slate-800 dark:text-slate-100">
                                   {b.time ? `${b.time} ` : ''}{b.name || '—'}
                                   {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
@@ -308,6 +319,16 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
           </tfoot>
         </table>
       </div>
+      )}
+      {menuOpen && menuBridge && (
+        <MenuTransferModal
+          title={`${tr(ctx.lang, 'allPlans')} · ${title}`}
+          dates={dates}
+          partsOf={dayParts}
+          ctx={ctx}
+          menuBridge={menuBridge}
+          onClose={() => setMenuOpen(false)}
+        />
       )}
     </div>
   )

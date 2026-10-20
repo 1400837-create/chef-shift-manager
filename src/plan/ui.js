@@ -71,19 +71,53 @@ export function savePos(code, id, pos) {
   try { localStorage.setItem(posKey(code, id), JSON.stringify(pos)) } catch { /* preference only */ }
 }
 
-// ---- meals get a colour so a day reads at a glance -------------------------------
+// ---- meal types: the list of meal names and the colour of each ----------------------
+// A meal's coloured bar comes from its name: the first type whose name or
+// keywords appear in it wins. The list is editable (Справочники → Типы приёмов);
+// until it is edited, DEFAULT_MEAL_TYPES is used.
 
-const MEALS = [
-  { re: /завтрак|fr[uü]hst[uü]ck|breakfast/i, bar: 'border-amber-400', dot: 'bg-amber-400' },
-  { re: /обед|mittag|lunch/i, bar: 'border-emerald-500', dot: 'bg-emerald-500' },
-  { re: /полдник|imbiss|snack|перекус/i, bar: 'border-pink-400', dot: 'bg-pink-400' },
-  { re: /ужин|abend|dinner|g.?ttesdi?enst|g.?ttesdeinst|шаббат|kiddusch/i, bar: 'border-indigo-500', dot: 'bg-indigo-500' },
-  { re: /закупк|einkauf|vorbereit|подготов/i, bar: 'border-slate-400', dot: 'bg-slate-400' },
+// Static class strings so Tailwind keeps them.
+export const MEAL_PALETTE = {
+  amber: { bar: 'border-amber-400', dot: 'bg-amber-400', label: 'Жёлтый' },
+  emerald: { bar: 'border-emerald-500', dot: 'bg-emerald-500', label: 'Зелёный' },
+  pink: { bar: 'border-pink-400', dot: 'bg-pink-400', label: 'Розовый' },
+  indigo: { bar: 'border-indigo-500', dot: 'bg-indigo-500', label: 'Синий' },
+  slate: { bar: 'border-slate-400', dot: 'bg-slate-400', label: 'Серый' },
+  orange: { bar: 'border-orange-400', dot: 'bg-orange-400', label: 'Оранжевый' },
+  sky: { bar: 'border-sky-400', dot: 'bg-sky-400', label: 'Голубой' },
+  rose: { bar: 'border-rose-500', dot: 'bg-rose-500', label: 'Красный' },
+  violet: { bar: 'border-violet-500', dot: 'bg-violet-500', label: 'Фиолетовый' },
+  teal: { bar: 'border-teal-500', dot: 'bg-teal-500', label: 'Бирюзовый' },
+  lime: { bar: 'border-lime-500', dot: 'bg-lime-500', label: 'Салатовый' },
+  stone: { bar: 'border-stone-600', dot: 'bg-stone-600', label: 'Коричневый' },
+}
+
+export const DEFAULT_MEAL_TYPES = [
+  { id: 'd-breakfast', name: 'Завтрак', nameDe: 'Frühstück', keywords: 'завтрак, frühstück, fruehstueck, breakfast', color: 'amber' },
+  { id: 'd-lunch', name: 'Обед', nameDe: 'Mittagessen', keywords: 'обед, mittag, lunch', color: 'emerald' },
+  { id: 'd-snack', name: 'Полдник', nameDe: 'Imbiss', keywords: 'полдник, перекус, imbiss, snack', color: 'pink' },
+  { id: 'd-dinner', name: 'Ужин', nameDe: 'Abendessen', keywords: "ужин, abend, dinner, шаббат, kiddusch, g'ttesdienst, g'ttesdeinst", color: 'indigo' },
+  { id: 'd-prep', name: 'Закупка + подготовка', nameDe: 'Einkaufen + vorbereitung', keywords: 'закупк, подготов, einkauf, vorbereit', color: 'slate' },
 ]
 
-export function mealColor(name) {
-  const hit = MEALS.find((m) => m.re.test(name || ''))
-  return hit || { bar: 'border-orange-300', dot: 'bg-orange-300' }
+export const OTHER_MEAL_COLOR = MEAL_PALETTE.orange
+
+const keysOf = (t) =>
+  [t.name, t.nameDe, ...String(t.keywords || '').split(',')]
+    .map((s) => String(s || '').trim().toLowerCase())
+    .filter(Boolean)
+
+// Returns a function: meal name → { bar, dot, type }.
+export function makeMealColor(types) {
+  const list = (types && types.length ? types : DEFAULT_MEAL_TYPES).map((t) => ({ t, keys: keysOf(t) }))
+  return (name) => {
+    const n = String(name || '').toLowerCase()
+    if (n) {
+      const hit = list.find((x) => x.keys.some((k) => n.includes(k)))
+      if (hit) return { ...(MEAL_PALETTE[hit.t.color] || OTHER_MEAL_COLOR), type: hit.t }
+    }
+    return { ...OTHER_MEAL_COLOR, type: null }
+  }
 }
 
 // Esc closes a window; capture phase so a window opened on top of another one

@@ -9,12 +9,11 @@ import { usePlanLang } from '../../plan/lang'
 import { dayTitle, isDateKey } from '../../plan/calc'
 import { blocksOf } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
-import { BLOCK_NAMES } from './ScheduleTab'
 import { TimeInput, normalizeTime } from './shared'
 
 // Adds the chosen recipes to one day of one plan, into an existing meal or a
 // new one. Dishes are stored the same way as hand-picked ones (text + link).
-function AddToDay({ picked, plans, defaultPlanId, onRemove, onClose, onDone }) {
+function AddToDay({ picked, plans, defaultPlanId, onRemove, onClose, onDone, blockNames }) {
   const [planId, setPlanId] = useState(plans.some((p) => p.id === defaultPlanId) ? defaultPlanId : plans[0]?.id || '')
   const [date, setDate] = useState(todayKey())
   const [blockId, setBlockId] = useState('__new')
@@ -86,7 +85,7 @@ function AddToDay({ picked, plans, defaultPlanId, onRemove, onClose, onDone }) {
             <div className="grid grid-cols-[1fr_7rem] gap-2">
               <input className={inputClass} list="plan-recipe-blocks" placeholder="Название приёма (необяз.)" value={blockName} onChange={(e) => setBlockName(e.target.value)} />
               <TimeInput value={blockTime} placeholder="Время (1230)" onChange={setBlockTime} />
-              <datalist id="plan-recipe-blocks">{BLOCK_NAMES.map((n) => <option key={n} value={n} />)}</datalist>
+              <datalist id="plan-recipe-blocks">{blockNames.map((n) => <option key={n} value={n} />)}</datalist>
             </div>
           )}
         </div>
@@ -103,7 +102,9 @@ export default function RecipesTab() {
   const { config } = usePlanDeviceState()
   const lang = usePlanLang()
   const recipesCol = usePlanCollection('recipesSlim')
-  const usageDates = usePlanCtx().ctx.usageDates
+  const pctx = usePlanCtx().ctx
+  const usageDates = pctx.usageDates
+  const blockNames = [...new Set(pctx.mealTypes.flatMap((t) => [t.name, t.nameDe]).filter(Boolean))]
   const plansCol = usePlanCollection('plans')
   const [picked, setPicked] = useState({})
   const [open, setOpen] = useState(false)
@@ -173,6 +174,7 @@ export default function RecipesTab() {
       {open && (
         <AddToDay
           picked={pickedList}
+          blockNames={blockNames}
           plans={plans}
           defaultPlanId={defaultPlanId}
           onRemove={(id) => { toggle(id); if (count <= 1) setOpen(false) }}

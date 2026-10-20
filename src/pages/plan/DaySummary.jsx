@@ -2,7 +2,6 @@ import { AlertTriangle } from 'lucide-react'
 import { staffLabel, dishLabel } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf } from '../../plan/exchange'
 import { overlapIds } from '../../plan/calc'
-import { mealColor } from '../../plan/ui'
 import { Guests, shiftHoursText, gatherComments, DishLine } from './gridShared'
 
 // One day, read-only and compact: meals with guests and dishes, who works and
@@ -33,7 +32,7 @@ export default function DaySummary({ date, parts, ctx, showTags = false, onOpenP
               </button>
             )}
             {blocks.map((b) => (
-              <div key={b.id} className={`mb-1.5 border-l-4 pl-2 ${mealColor(b.name).bar}`}>
+              <div key={b.id} className={`mb-1.5 border-l-4 pl-2 ${ctx.mealColor(b.name).bar}`}>
                 <p className="font-semibold text-slate-800 dark:text-slate-100">
                   {b.time ? `${b.time} ` : ''}{b.name || '—'}
                   {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}

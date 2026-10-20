@@ -10,7 +10,6 @@ import { staffLabel } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf } from '../../plan/exchange'
 import { DraftInput, TimeDraft, TimeInput, normalizeTime } from './shared'
 import { RecipePickerModal } from './RecipeBrowser'
-import { mealColor } from '../../plan/ui'
 import { useOpenRecipe } from './recipeBridge'
 
 // Editable versions of the grid's cells. Every field here is the same kind of
@@ -134,7 +133,7 @@ export function MenuCell({ coll, date, day, ctx }) {
   return (
     <div>
       {blocks.map((b) => (
-        <div key={b.id} className={`mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/40 p-1.5 border-l-4 ${mealColor(b.name).bar}`}>
+        <div key={b.id} className={`mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/40 p-1.5 border-l-4 ${ctx.mealColor(b.name).bar}`}>
           <div className="flex items-center gap-1">
             <div className="w-[4.2rem] shrink-0">
               <TimeDraft className={`${COMPACT} text-center`} value={b.time} onCommit={(v) => patchBlock(b, 'time', v || null)} />

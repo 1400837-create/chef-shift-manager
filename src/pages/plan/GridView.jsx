@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer, Upload } from 'lucide-react'
 import { BigButton } from '../../components/UI'
 import { writePaths, commitChange } from '../../plan/planStore'
 import { formatDuration } from '../../plan/hours'
@@ -10,10 +10,11 @@ import {
 import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf, commentsOf, buildTablePrint } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
-import { mealColor, loadPos, savePos, useNarrow } from '../../plan/ui'
+import { loadPos, savePos, useNarrow } from '../../plan/ui'
 import { usePlanDeviceState } from '../../plan/planRoom'
 import { MenuCell, ShiftCell, NoteCell } from './GridCells'
 import CopyModal from './CopyModal'
+import MenuTransferModal from './MenuTransferModal'
 import DayCards from './DayCards'
 import { StaffSelect, StaffSummary, useFocusState } from './StaffFocus'
 import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween, DishLine, MealLegend } from './gridShared'
@@ -51,7 +52,8 @@ function totals(data, dates) {
 // The whole period on one screen, spreadsheet-style: one row per day with the
 // meals and dishes, who works and when, and the day's hours. Tapping a row
 // opens the full editor for that day.
-export default function GridView({ plan, data, ctx, renderDay, plans = [], tree = {} }) {
+export default function GridView({ plan, data, ctx, renderDay, plans = [], tree = {}, menuBridge }) {
+  const [menuOpen, setMenuOpen] = useState(false)
   const today = todayKey()
   const range = useMemo(() => planRange(plan), [plan])
   const existing = useMemo(() => Object.keys(data).filter(isDateKey).sort(), [data])
@@ -260,6 +262,15 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         >
           <Copy size={14} /> Дублировать
         </button>
+        {menuBridge && (
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+            title="Отправить блюда этого периода в раздел «Меню» основной программы"
+          >
+            <Upload size={14} /> В Меню
+          </button>
+        )}
         <button
           onClick={printTable}
           className="min-h-[36px] px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
@@ -270,7 +281,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
       </div>
 
       <StaffSummary ctx={ctx} value={focus} dates={dates} />
-      <MealLegend />
+      <MealLegend ctx={ctx} />
 
       {strays.length > 0 && (
         <div className="mb-3 rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-3 text-sm text-slate-800 dark:text-slate-100">
@@ -378,7 +389,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                         {edit
                           ? <MenuCell coll={coll} date={date} day={day || {}} ctx={ctx} />
                           : blocks.map((b) => (
-                            <div key={b.id} className={`mb-1.5 last:mb-0 border-l-4 pl-2 ${mealColor(b.name).bar}`}>
+                            <div key={b.id} className={`mb-1.5 last:mb-0 border-l-4 pl-2 ${ctx.mealColor(b.name).bar}`}>
                               <p className="font-semibold text-slate-800 dark:text-slate-100">
                                 {b.time ? `${b.time} ` : ''}{b.name || '—'}
                                 {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
@@ -440,6 +451,17 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           )}
         </table>
       </div>
+      )}
+
+      {menuOpen && menuBridge && (
+        <MenuTransferModal
+          title={`${plan.title || 'План'} · ${title}`}
+          dates={dates}
+          partsOf={(d) => (data[d] ? [{ plan, day: data[d] }] : [])}
+          ctx={ctx}
+          menuBridge={menuBridge}
+          onClose={() => setMenuOpen(false)}
+        />
       )}
 
       {copyOpen && (

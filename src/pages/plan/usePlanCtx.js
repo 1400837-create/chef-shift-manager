@@ -4,6 +4,7 @@ import { usePlanLang } from '../../plan/lang'
 import { parseHM } from '../../plan/hours'
 import { collectShifts, isDateKey, parseDate, dayTitle } from '../../plan/calc'
 import { byName } from './shared'
+import { makeMealColor, DEFAULT_MEAL_TYPES } from '../../plan/ui'
 
 const MS_DAY = 86400000
 const dayDiff = (a, b) => Math.round((parseDate(a) - parseDate(b)) / MS_DAY)
@@ -17,6 +18,7 @@ export function usePlanCtx() {
   const staff = usePlanCollection('staff')
   const templatesCol = usePlanCollection('shiftTemplates')
   const mealTplCol = usePlanCollection('mealTemplates')
+  const mealTypesCol = usePlanCollection('mealTypes')
   const recipes = usePlanCollection('recipesSlim')
   const lang = usePlanLang()
   const allData = usePlanCollection('planData').data
@@ -26,6 +28,9 @@ export function usePlanCtx() {
   const ctx = useMemo(() => {
     const staffList = [...staff.items].filter((s) => s.name).sort(byName)
     const templates = [...templatesCol.items].sort((a, b) => (parseHM(a.start) ?? 0) - (parseHM(b.start) ?? 0))
+    const customTypes = [...mealTypesCol.items].filter((t) => t.name).sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name, 'ru'))
+    const mealTypes = customTypes.length ? customTypes : DEFAULT_MEAL_TYPES
+    const mealColor = makeMealColor(mealTypes)
     const mealTemplates = [...mealTplCol.items].filter((t) => t.name).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
     // recipesSlim can come back as an array with holes (Firebase turns small
     // integer keys into one) — skip the empty slots.
@@ -67,10 +72,10 @@ export function usePlanCtx() {
     }
 
     return {
-      staffList, staffById, templates, mealTemplates, recipeList, recipeById, lang, planTitles,
+      staffList, staffById, templates, mealTemplates, mealTypes, mealTypesCustom: customTypes.length > 0, mealColor, recipeList, recipeById, lang, planTitles,
       allShifts: collectShifts(allData), usageDates, repeatNote,
     }
-  }, [staff.items, templatesCol.items, mealTplCol.items, recipes.data, lang, sortedPlans, allData])
+  }, [staff.items, templatesCol.items, mealTplCol.items, mealTypesCol.items, recipes.data, lang, sortedPlans, allData])
 
   return { ctx, sortedPlans, allData, plansReady: plans.ready }
 }

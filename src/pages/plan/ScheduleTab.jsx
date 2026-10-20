@@ -26,11 +26,6 @@ const PLAN_KINDS = [
   { key: 'other', label: 'Другое' },
 ]
 
-export const BLOCK_NAMES = [
-  'Frühstück', 'Mittagessen', 'Imbiss', 'Abendessen', "G'ttesdeinst", 'Lunchpakete', 'Einkaufen + vorbereitung',
-  'Завтрак', 'Обед', 'Полдник', 'Ужин', 'Закупка + подготовка',
-]
-
 const kindLabel = (k) => PLAN_KINDS.find((x) => x.key === k)?.label || ''
 
 function sortedEntries(obj, cmp) {
@@ -647,7 +642,7 @@ function PlanView({ plan, ctx, menuBridge, plans }) {
 
   return (
     <>
-      <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} plans={plans} tree={tree} />
+      <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} plans={plans} tree={tree} menuBridge={menuBridge} />
 
       <Section title={plan.title || 'План'} icon={Clock} right={<Badge color="slate">{kindLabel(plan.kind)}</Badge>}>
         <div className="grid grid-cols-1 gap-2 mb-3">
@@ -794,7 +789,7 @@ export default function ScheduleTab({ menuBridge }) {
   return (
     <div>
       <datalist id="plan-block-names">
-        {BLOCK_NAMES.map((n) => <option key={n} value={n} />)}
+        {[...new Set(ctx.mealTypes.flatMap((t) => [t.name, t.nameDe]).filter(Boolean))].map((n) => <option key={n} value={n} />)}
       </datalist>
 
       <div
@@ -840,7 +835,7 @@ export default function ScheduleTab({ menuBridge }) {
         <p className="text-sm text-slate-400 text-center py-6">Планов пока нет. Создайте первый — например, «Октябрь 2026».</p>
       )}
       {!creating && selected === ALL && sortedPlans.length > 0 && (
-        <AllPlansView plans={sortedPlans} tree={allData} ctx={ctx} onOpenPlan={(id) => setSelected(id)} />
+        <AllPlansView plans={sortedPlans} tree={allData} ctx={ctx} onOpenPlan={(id) => setSelected(id)} menuBridge={menuBridge} />
       )}
       {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} menuBridge={menuBridge} plans={sortedPlans} />}
     </div>
