@@ -222,6 +222,19 @@ export default function Dashboard({
 
       {dashTab === 'overview' && (
       <>
+      <button
+        onClick={() => onNavigate('plan')}
+        className="w-full mb-4 rounded-2xl shadow-md bg-slate-800 dark:bg-slate-700 active:bg-slate-900 text-white px-4 py-4 flex items-center gap-3 text-left"
+      >
+        <span className="shrink-0 w-11 h-11 rounded-xl bg-orange-500 flex items-center justify-center">
+          <CalendarClock size={24} />
+        </span>
+        <span className="min-w-0">
+          <span className="block font-bold text-[17px] leading-tight">План работы</span>
+          <span className="block text-xs text-slate-300 mt-0.5">Сотрудники, смены, журнал изменений</span>
+        </span>
+      </button>
+
       <div className="rounded-2xl shadow-md border-2 border-orange-300 dark:border-orange-700 mb-4 overflow-hidden bg-white dark:bg-slate-800">
         <div className="flex items-center gap-2 px-4 py-3 bg-orange-500 dark:bg-orange-600">
           <ListChecks size={20} className="text-white shrink-0" />

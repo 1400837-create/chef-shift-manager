@@ -7,6 +7,8 @@ import MenuPlanner from './pages/MenuPlanner'
 import Inventory from './pages/Inventory'
 import ShoppingList from './pages/ShoppingList'
 import Finances from './pages/Finances'
+import PlanPage from './pages/PlanPage'
+import { usePlanMaintenance } from './plan/planAdmin'
 import { UndoRedoBar } from './components/UI'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { useTabHistory } from './hooks/useTabHistory'
@@ -105,6 +107,10 @@ export default function App() {
   const [plannedPurchases, setPlannedPurchases] = useLocalStorage('plannedPurchases', [])
   const [notifiedLog, setNotifiedLog] = useLocalStorage('notifiedLog', {})
   const [darkMode, setDarkMode] = useLocalStorage('darkMode', false)
+
+  // Work-plan upkeep (send queued edits, daily snapshot, prune old journal,
+  // publish the slim recipe list). No-op until a plan room is set up here.
+  usePlanMaintenance(recipes)
 
   // One undo/redo stack per tab, except Склад+Закупка share a single stack —
   // they edit the same underlying catalog/purchase data (catalog auto-create
@@ -500,6 +506,7 @@ export default function App() {
             />
           </>
         )}
+        {tab === 'plan' && <PlanPage />}
         {tab === 'finances' && (
           <>
             <UndoRedoBar {...financesHistory} />
