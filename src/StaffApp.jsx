@@ -56,7 +56,7 @@ export default function StaffApp() {
           <LogOut size={16} />
         </button>
       </header>
-      <main className="max-w-lg md:max-w-4xl mx-auto px-3 md:px-6 pt-3 pb-12">
+      <main className="max-w-lg md:max-w-none mx-auto px-3 md:px-6 lg:px-10 pt-3 pb-12">
         <PlanPage />
       </main>
     </div>
