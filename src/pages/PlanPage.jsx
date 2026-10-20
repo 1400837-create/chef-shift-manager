@@ -13,6 +13,7 @@ import { durationMinutes, formatDuration, parseHM } from '../plan/hours'
 import { describeEntry } from '../plan/journalText'
 import { DraftInput, ConfirmButton, TimeInput, TimeDraft, normalizeTime, useAction, Message, StatusBar, parseNorm, byName } from './plan/shared'
 import { usePlanLang, setPlanLang } from '../plan/lang'
+import { useDensity, setDensity, densityVars, DENSITIES } from '../plan/ui'
 import ScheduleTab from './plan/ScheduleTab'
 import HoursTab from './plan/HoursTab'
 import RecipesTab from './plan/RecipesTab'
@@ -507,6 +508,24 @@ function AccessPanel({ config }) {
 // page
 // ---------------------------------------------------------------------------
 
+function DensityToggle() {
+  const density = useDensity()
+  return (
+    <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-sm font-bold" title="Размер строк таблицы">
+      {DENSITIES.map((d, i) => (
+        <button
+          key={d.key}
+          onClick={() => setDensity(d.key)}
+          className={`min-h-[36px] px-2.5 ${density === d.key ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}`}
+          aria-label={d.label}
+        >
+          <span style={{ fontSize: `${0.7 + i * 0.2}rem` }}>A</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function LangToggle() {
   const lang = usePlanLang()
   return (
@@ -548,7 +567,19 @@ function ChangesBanner({ onShow }) {
 export default function PlanPage({ menuBridge }) {
   const { config } = usePlanDeviceState()
   const isOwner = !config || config.role === 'owner'
-  const [sub, setSub] = useState(config ? 'schedule' : 'access')
+  const density = useDensity()
+  const subKey = `kitchenPlan_sub:${config?.code}`
+  const [sub, setSubState] = useState(() => {
+    if (!config) return 'access'
+    try {
+      const v = localStorage.getItem(subKey) || 'schedule'
+      return v === 'access' && config.role !== 'owner' ? 'schedule' : v
+    } catch { return 'schedule' }
+  })
+  const setSub = (key) => {
+    setSubState(key)
+    try { localStorage.setItem(subKey, key) } catch { /* preference only */ }
+  }
 
   const tabs = config
     ? [
@@ -563,10 +594,15 @@ export default function PlanPage({ menuBridge }) {
     : []
 
   return (
-    <div className="pb-4">
+    <div className="pb-4" style={densityVars(density)}>
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">План работы</h1>
-        {config && <LangToggle />}
+        {config && (
+          <div className="flex items-center gap-2">
+            <DensityToggle />
+            <LangToggle />
+          </div>
+        )}
       </div>
       {config && (
         <>

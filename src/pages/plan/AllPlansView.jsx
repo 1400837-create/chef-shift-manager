@@ -1,13 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, AlertTriangle, Printer, EyeOff, Eye } from 'lucide-react'
 import { formatDuration, parseHM } from '../../plan/hours'
 import {
-  dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, shiftMonth, monthTitle, shiftMinutes,
+  dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, shiftMonth, monthTitle, shiftMinutes, isDateKey,
 } from '../../plan/calc'
 import { LOCALE, staffLabel, dishLabel, tr } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf, buildTablePrint } from '../../plan/exchange'
 import { printReport } from '../../utils/printReport'
 import { todayKey } from '../../utils/dateUtils'
+import { mealColor, loadPos, savePos } from '../../plan/ui'
+import { usePlanDeviceState } from '../../plan/planRoom'
 import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText } from './GridView'
 
 const PALETTE = [
@@ -18,6 +20,8 @@ const PALETTE = [
   'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
 ]
+
+const ALL_POS = '__all'
 
 const SPANS = [
   { key: 'week', label: 'Неделя' },
@@ -62,8 +66,11 @@ function conflictIds(entries) {
 export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
   const today = todayKey()
   const locale = LOCALE[ctx.lang]
-  const [span, setSpan] = useState('week')
-  const [anchor, setAnchor] = useState(today)
+  const code = usePlanDeviceState().config?.code
+  const saved = loadPos(code, ALL_POS)
+  const [span, setSpan] = useState(() => (saved?.span === "month" ? "month" : "week"))
+  const [anchor, setAnchor] = useState(() => (isDateKey(saved?.anchor || "") ? saved.anchor : today))
+  useEffect(() => { savePos(code, ALL_POS, { span, anchor }) }, [code, span, anchor])
   const [hideEmpty, setHideEmpty] = useState(false)
 
   const colorOf = useMemo(() => {
@@ -92,6 +99,18 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
   }, [dates])
 
   const step = (dir) => setAnchor((a) => (span === 'month' ? `${shiftMonth(monthOf(a), dir)}-01` : addDaysKey(a, 7 * dir)))
+
+  useEffect(() => {
+    function onKey(e) {
+      const el = e.target
+      const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+      if (typing || e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key === 'ArrowLeft') step(-1)
+      else if (e.key === 'ArrowRight') step(1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
   const title = span === 'week' ? weekTitle(mondayOf(anchor), locale) : monthTitle(monthOf(anchor), locale)
 
   // One entry per plan that has something on the date.
@@ -168,11 +187,11 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
         <span className="basis-full">Здесь всё из всех планов за период. Правится в самом плане: нажмите на его метку.</span>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="overflow-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 max-h-[calc(100dvh-var(--app-header-h,64px)-9.5rem)]">
         <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-28`}>День</th>
+              <th className={`${TH} w-28 left-0 z-30`}>День</th>
               <th className={`${TH} w-[34%]`}>Меню</th>
               <th className={`${TH} w-[24%]`}>Комментарии</th>
               <th className={`${TH} w-56`}>Сотрудники</th>
@@ -197,7 +216,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                 const bad = conflictIds(shifts)
                 return (
                   <tr key={date} className={`align-top ${date === today ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}>
-                    <td className={`${TD} font-bold whitespace-nowrap text-slate-800 dark:text-slate-100`}>{dayTitle(date, locale)}</td>
+                    <td className={`${TD} sticky left-0 z-10 font-bold whitespace-nowrap text-slate-800 dark:text-slate-100 ${date === today ? "bg-orange-50 dark:bg-slate-800" : "bg-white dark:bg-slate-800"}`}>{dayTitle(date, locale)}</td>
                     <td className={TD}>
                       {parts.map(({ plan, day }) => {
                         const blocks = blocksOf(day)
@@ -206,7 +225,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                           <div key={plan.id} className="mb-2 last:mb-0">
                             <Tag plan={plan} />
                             {blocks.map((b) => (
-                              <div key={b.id} className="mt-1">
+                              <div key={b.id} className={`mt-1 border-l-4 pl-2 ${mealColor(b.name).bar}`}>
                                 <p className="font-semibold text-slate-800 dark:text-slate-100">
                                   {b.time ? `${b.time} ` : ''}{b.name || '—'}
                                   {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}

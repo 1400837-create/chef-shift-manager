@@ -10,13 +10,15 @@ import {
 import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf, commentsOf, buildTablePrint } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
+import { mealColor, loadPos, savePos } from '../../plan/ui'
+import { usePlanDeviceState } from '../../plan/planRoom'
 import { MenuCell, ShiftCell, NoteCell } from './GridCells'
 import CopyModal from './CopyModal'
 import { printReport } from '../../utils/printReport'
 
 // Every cell gets a full border so the columns read as a table, not a list.
-export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
-export const TD = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
+export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600 sticky top-0 z-20 bg-slate-200 dark:bg-slate-900'
+export const TD = 'px-2 py-[var(--cell-py,0.5rem)] border border-slate-300 dark:border-slate-600 text-[length:var(--cell-fs,0.875rem)]'
 
 // All comments of a day in one place — on the day itself, on a meal, on a
 // dish or on a shift — each tagged with what it is about.
@@ -87,11 +89,16 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
   const today = todayKey()
   const range = useMemo(() => planRange(plan), [plan])
   const existing = useMemo(() => Object.keys(data).filter(isDateKey).sort(), [data])
-  const [span, setSpan] = useState('week')
+  const code = usePlanDeviceState().config?.code
+  const saved = useMemo(() => loadPos(code, plan.id), [code, plan.id])
+  const [span, setSpan] = useState(() => (['week', 'month', 'all'].includes(saved?.span) ? saved.span : 'week'))
   const [anchor, setAnchor] = useState(() => {
+    if (isDateKey(saved?.anchor || '')) return saved.anchor
     if (range) return inPlanRange(range, today) ? today : range.from
     return existing.includes(today) || !existing.length ? today : existing[0]
   })
+  // Come back to the same plan / week / month next time.
+  useEffect(() => { savePos(code, plan.id, { span, anchor }) }, [code, plan.id, span, anchor])
 
   // The period was just set or changed: bring the table to it.
   useEffect(() => {
@@ -139,6 +146,25 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
     setAnchor((a) => (span === 'month' ? `${shiftMonth(monthOf(a), dir)}-01` : addDaysKey(a, 7 * dir)))
   }
 
+
+  // Laptop keys: ← → move by week/month, Esc closes the open window. Ignored
+  // while typing in a field.
+  useEffect(() => {
+    function onKey(e) {
+      const el = e.target
+      const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+      if (e.key === 'Escape') {
+        if (editing) setEditing(null)
+        else if (copyOpen) setCopyOpen(false)
+        return
+      }
+      if (typing || e.ctrlKey || e.metaKey || e.altKey || editing || copyOpen || span === 'all') return
+      if (e.key === 'ArrowLeft') step(-1)
+      else if (e.key === 'ArrowRight') step(1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
   const periodTotal = totals(data, dates)
   const title = span === 'week'
     ? weekTitle(mondayOf(anchor), locale)
@@ -278,11 +304,11 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="overflow-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 max-h-[calc(100dvh-var(--app-header-h,64px)-9.5rem)]">
         <table className={`w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} border-collapse text-sm`}>
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-28`}>День</th>
+              <th className={`${TH} w-28 left-0 z-30`}>День</th>
               <th className={`${TH} w-[34%]`}>Меню</th>
               <th className={`${TH} w-[24%]`}>Комментарии</th>
               <th className={`${TH} ${editMode ? "w-64" : "w-48"}`}>Сотрудники</th>
@@ -322,7 +348,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                       onClick={edit || outside ? undefined : () => setEditing(date)}
                       className={`align-top ${edit || outside ? '' : 'cursor-pointer active:bg-orange-50 dark:active:bg-slate-700'} ${!day && !edit ? 'text-slate-400' : ''} ${outside ? 'bg-slate-100 dark:bg-slate-900/60 text-slate-400' : ''} ${isToday ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}
                     >
-                      <td className={`${TD} font-bold whitespace-nowrap text-slate-800 dark:text-slate-100`}>
+                      <td className={`${TD} sticky left-0 z-10 font-bold whitespace-nowrap text-slate-800 dark:text-slate-100 ${outside ? "bg-slate-100 dark:bg-slate-900" : isToday ? "bg-orange-50 dark:bg-slate-800" : "bg-white dark:bg-slate-800"}`}>
                         {dayTitle(date, locale)}
                         {outside && (
                           <span className="block text-[11px] font-normal leading-tight text-slate-500">
@@ -350,7 +376,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                         {edit
                           ? <MenuCell coll={coll} date={date} day={day || {}} ctx={ctx} />
                           : blocks.map((b) => (
-                            <div key={b.id} className="mb-1.5 last:mb-0">
+                            <div key={b.id} className={`mb-1.5 last:mb-0 border-l-4 pl-2 ${mealColor(b.name).bar}`}>
                               <p className="font-semibold text-slate-800 dark:text-slate-100">
                                 {b.time ? `${b.time} ` : ''}{b.name || '—'}
                                 {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}

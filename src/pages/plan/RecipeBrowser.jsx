@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Search, Check, X, Plus } from 'lucide-react'
 import { inputClass, BigButton } from '../../components/UI'
 import { RECIPE_CATEGORIES } from '../../utils/constants'
+import { useEscape } from '../../plan/ui'
 
 function RecipeRow({ recipe, lang, selected, onToggle }) {
   const name = lang === 'de' && recipe.de ? recipe.de : recipe.name
@@ -150,6 +151,7 @@ export default function RecipeBrowser({ recipes, lang, picked, onToggle, topOffs
 
 // A window for picking one or several recipes (e.g. into a meal of a day).
 export function RecipePickerModal({ recipes, lang, title, onAdd, onClose }) {
+  useEscape(onClose)
   const [picked, setPicked] = useState({})
   const scrollRef = useRef(null)
   const count = Object.keys(picked).length
