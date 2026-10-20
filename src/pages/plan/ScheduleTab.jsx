@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock, BookOpen } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock, BookOpen, Bookmark } from 'lucide-react'
+import { dishesFromLines, templateFromBlock, templatePaths } from '../../plan/templates'
 import { Section, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../../components/UI'
 import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
 import { usePlanCollection, createRecord, patchRecord, writePaths, newId, commitChange } from '../../plan/planStore'
@@ -118,7 +119,7 @@ function Comments({ coll, path, comments, label, part = 'both', open: openProp, 
 // dishes
 // ---------------------------------------------------------------------------
 
-function DishAdder({ recipeList, onAdd }) {
+function DishAdder({ recipeList, onAdd, onPasteLines }) {
   const [q, setQ] = useState('')
   const needle = q.trim().toLowerCase()
   const matches = needle.length >= 2
@@ -140,6 +141,13 @@ function DishAdder({ recipeList, onAdd }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') addManual() }}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData('text')
+            if (onPasteLines && text.trim().split(/\r?\n/).length > 1) {
+              e.preventDefault()
+              onPasteLines(text)
+            }
+          }}
         />
         <button onClick={addManual} disabled={!q.trim()} className="shrink-0 w-12 h-12 flex items-center justify-center rounded-xl bg-orange-500 text-white disabled:opacity-40">
           <Plus size={18} />
@@ -173,6 +181,20 @@ function BlockCard({ coll, date, block, ctx }) {
 
   const patch = (field, value) =>
     writePaths(coll, { [`${base}/${field}`]: value }, { action: 'update', entity: 'блок', id: date, label })
+
+  function addPasted(text) {
+    const list = dishesFromLines(ctx, text)
+    if (!list.length) return
+    const rel = {}
+    list.forEach((d) => { rel[`${base}/dishes/${newId(coll)}`] = d })
+    writePaths(coll, rel, { action: 'create', entity: 'блюда', id: date, label: `${label}: ${list.length} шт. из вставки` })
+  }
+
+  function saveTemplate() {
+    const name = window.prompt('Название шаблона приёма', block.name || '')
+    if (!name || !name.trim()) return
+    createRecord('mealTemplates', templateFromBlock(block, name.trim()))
+  }
 
   // Several dishes in one write = one journal line, not one per dish.
   function addDishes(list) {
@@ -273,9 +295,10 @@ function BlockCard({ coll, date, block, ctx }) {
         >
           <BookOpen size={16} /> Выбрать из меню (по рубрикам)
         </button>
-        <DishAdder recipeList={ctx.recipeList} onAdd={addDish} />
+        <DishAdder recipeList={ctx.recipeList} onAdd={addDish} onPasteLines={addPasted} />
         {picker && (
           <RecipePickerModal
+            usageDates={ctx.usageDates}
             recipes={ctx.recipeList}
             lang={ctx.lang}
             title={`${dayTitle(date, LOCALE[ctx.lang])} · ${block.name || 'приём'}`}
@@ -285,7 +308,12 @@ function BlockCard({ coll, date, block, ctx }) {
         )}
       </div>
 
-      <Comments coll={coll} path={base} comments={block.comments} label={label} />
+      <div className="flex items-center justify-between">
+        <Comments coll={coll} path={base} comments={block.comments} label={label} />
+        <button onClick={saveTemplate} className="flex items-center gap-1 px-2 min-h-[32px] rounded-lg text-xs font-semibold text-slate-500" title="Сохранить этот приём как шаблон">
+          <Bookmark size={14} /> в шаблон
+        </button>
+      </div>
     </div>
   )
 }
@@ -551,6 +579,22 @@ function DayCard({ coll, date, day, ctx, allShifts, open, onToggle, onDeleted })
           <button onClick={addBlock} className="w-full min-h-[44px] mb-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 text-sm font-semibold flex items-center justify-center gap-1.5">
             <Plus size={16} /> Приём / мероприятие
           </button>
+          {ctx.mealTemplates.length > 0 && (
+            <select
+              className={`${inputClass} mb-4`}
+              value=""
+              onChange={(e) => {
+                const tpl = ctx.mealTemplates.find((t) => t.id === e.target.value)
+                if (!tpl) return
+                writePaths(coll, templatePaths(date, tpl, () => newId(coll)), {
+                  action: 'create', entity: 'приём из шаблона', id: date, label: `${dayTitle(date)} · ${tpl.name}`,
+                })
+              }}
+            >
+              <option value="">Добавить приём из шаблона…</option>
+              {ctx.mealTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          )}
 
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
             Смены{shifts.length > 0 ? ` · план ${formatDuration(plannedMin)}${actualMin ? ` · факт ${formatDuration(actualMin)}` : ''}` : ''}

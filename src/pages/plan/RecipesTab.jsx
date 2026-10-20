@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { X, Plus, CalendarPlus } from 'lucide-react'
 import { inputClass, BigButton } from '../../components/UI'
 import RecipeBrowser from './RecipeBrowser'
+import { usePlanCtx } from './usePlanCtx'
 import { usePlanDeviceState } from '../../plan/planRoom'
 import { usePlanCollection, writePaths, newId } from '../../plan/planStore'
 import { usePlanLang } from '../../plan/lang'
@@ -102,6 +103,7 @@ export default function RecipesTab() {
   const { config } = usePlanDeviceState()
   const lang = usePlanLang()
   const recipesCol = usePlanCollection('recipesSlim')
+  const usageDates = usePlanCtx().ctx.usageDates
   const plansCol = usePlanCollection('plans')
   const [picked, setPicked] = useState({})
   const [open, setOpen] = useState(false)
@@ -142,6 +144,7 @@ export default function RecipesTab() {
       {note && <p className="text-sm text-green-700 dark:text-green-400 mb-2">{note}</p>}
 
       <RecipeBrowser
+        usageDates={usageDates}
         recipes={recipes}
         lang={lang}
         picked={picked}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer, BookOpen, LayoutDashboard,
+  Users, History, Archive, KeyRound, Download, Upload, Copy, Plus, Clock, UserPlus, Lock, CalendarDays, Timer, BookOpen, LayoutDashboard, Bookmark,
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../components/UI'
 import { usePlanDeviceState, getAuthor } from '../plan/planRoom'
@@ -16,6 +16,7 @@ import { usePlanLang, setPlanLang } from '../plan/lang'
 import { useDensity, setDensity, densityVars, DENSITIES } from '../plan/ui'
 import ScheduleTab from './plan/ScheduleTab'
 import PlanDashboard from './plan/PlanDashboard'
+import { RecipeBridgeProvider } from './plan/recipeBridge'
 import { usePlanCtx } from './plan/usePlanCtx'
 import HoursTab from './plan/HoursTab'
 import RecipesTab from './plan/RecipesTab'
@@ -156,6 +157,34 @@ function ShiftTemplates() {
               <ConfirmDeleteButton onConfirm={() => deleteRecord('shiftTemplates', rec.id)} size="w-11 h-11" iconSize={18} />
             </div>
           </div>
+        </div>
+      ))}
+    </Section>
+  )
+}
+
+function MealTemplateList() {
+  const { items, ready } = usePlanCollection('mealTemplates')
+  const sorted = useMemo(() => [...items].filter((t) => t.name).sort((a, b) => a.name.localeCompare(b.name, 'ru')), [items])
+  return (
+    <Section title={`Шаблоны приёмов (${sorted.length})`} icon={Bookmark}>
+      <p className="text-xs text-slate-500 mb-3">
+        Готовые приёмы со временем, числом гостей и блюдами, например «Пятничный ужин». Сохраняются кнопкой закладки в самом
+        приёме и добавляются в любой день выбором «из шаблона».
+      </p>
+      {!ready && sorted.length === 0 && <p className="text-sm text-slate-400 text-center py-2">Загрузка…</p>}
+      {ready && sorted.length === 0 && <p className="text-sm text-slate-400 text-center py-2">Шаблонов пока нет</p>}
+      {sorted.map((t) => (
+        <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 mb-2">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <DraftInput value={t.name} onCommit={(v) => { if (v.trim()) patchRecord('mealTemplates', t.id, { name: v.trim() }) }} />
+            </div>
+            <ConfirmDeleteButton onConfirm={() => deleteRecord('mealTemplates', t.id)} size="w-11 h-11" iconSize={18} />
+          </div>
+          <p className="text-xs text-slate-500 mt-1.5">
+            {t.blockName || 'без названия'}{t.time ? ` · ${t.time}` : ''}{t.persons ? ` · ${t.persons} чел.` : ''} · блюд: {Object.values(t.dishes || {}).length}
+          </p>
         </div>
       ))}
     </Section>
@@ -625,6 +654,7 @@ export default function PlanPage({ menuBridge }) {
     : []
 
   return (
+    <RecipeBridgeProvider recipes={menuBridge?.recipes} catalog={menuBridge?.recountCatalog}>
     <div className="pb-4" style={densityVars(density)}>
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">План работы</h1>
@@ -663,10 +693,12 @@ export default function PlanPage({ menuBridge }) {
         <>
           <StaffDirectory />
           <ShiftTemplates />
+          <MealTemplateList />
         </>
       )}
       {config && sub === 'journal' && <JournalPanel />}
       {config && sub === 'copies' && <BackupsPanel isOwner={isOwner} />}
     </div>
+    </RecipeBridgeProvider>
   )
 }

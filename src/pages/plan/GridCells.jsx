@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Plus, X, BookOpen } from 'lucide-react'
+import { Plus, X, BookOpen, Bookmark } from 'lucide-react'
 import { ConfirmDeleteButton } from '../../components/UI'
-import { writePaths, newId } from '../../plan/planStore'
+import { writePaths, newId, createRecord } from '../../plan/planStore'
+import { dishesFromLines, templateFromBlock, templatePaths } from '../../plan/templates'
 import { dayTitle, shiftMinutes, assignmentWarnings } from '../../plan/calc'
 import { formatDuration } from '../../plan/hours'
 import { getAuthor } from '../../plan/planRoom'
@@ -10,6 +11,7 @@ import { blocksOf, dishesOf, shiftsOf } from '../../plan/exchange'
 import { DraftInput, TimeDraft, TimeInput, normalizeTime } from './shared'
 import { RecipePickerModal } from './RecipeBrowser'
 import { mealColor } from '../../plan/ui'
+import { useOpenRecipe } from './recipeBridge'
 
 // Editable versions of the grid's cells. Every field here is the same kind of
 // per-field write as in the day window, so two people editing never overwrite
@@ -22,7 +24,7 @@ const SELECT = 'min-h-[32px] px-1.5 rounded-lg border border-slate-300 dark:bord
 // menu: meals and their dishes
 // ---------------------------------------------------------------------------
 
-function DishAddLine({ recipeList, onAdd, onPick }) {
+function DishAddLine({ recipeList, onAdd, onPick, onPasteLines }) {
   const [q, setQ] = useState('')
   const needle = q.trim().toLowerCase()
   const matches = needle.length >= 2 ? recipeList.filter((r) => r.name.toLowerCase().includes(needle)).slice(0, 6) : []
@@ -42,6 +44,13 @@ function DishAddLine({ recipeList, onAdd, onPick }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addManual() } }}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData('text')
+            if (onPasteLines && text.trim().split(/\r?\n/).length > 1) {
+              e.preventDefault()
+              onPasteLines(text)
+            }
+          }}
         />
         <button onClick={onPick} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-950/30 text-orange-600" title="Выбрать из меню по рубрикам">
           <BookOpen size={15} />
@@ -65,6 +74,7 @@ function DishAddLine({ recipeList, onAdd, onPick }) {
 }
 
 export function MenuCell({ coll, date, day, ctx }) {
+  const bridge = useOpenRecipe()
   const [pickerFor, setPickerFor] = useState(null)
   const blocks = blocksOf(day)
   const lbl = dayTitle(date)
@@ -82,6 +92,32 @@ export function MenuCell({ coll, date, day, ctx }) {
   function addDish(b, text, recipeId) {
     writePaths(coll, { [`${date}/blocks/${b.id}/dishes/${newId(coll)}`]: { text, recipeId: recipeId || null } }, {
       action: 'create', entity: 'блюдо', id: date, label: `${lbl} · ${b.name || 'приём'}: ${text}`,
+    })
+  }
+
+  // A list pasted into "+ блюдо" (one dish per line) becomes several dishes.
+  function addPasted(b, text) {
+    const list = dishesFromLines(ctx, text)
+    if (!list.length) return
+    const rel = {}
+    list.forEach((d) => { rel[`${date}/blocks/${b.id}/dishes/${newId(coll)}`] = d })
+    writePaths(coll, rel, {
+      action: 'create', entity: 'блюда', id: date,
+      label: `${lbl} · ${b.name || 'приём'}: ${list.length} шт. из вставки`,
+    })
+  }
+
+  function saveTemplate(b) {
+    const name = window.prompt('Название шаблона приёма', b.name || '')
+    if (!name || !name.trim()) return
+    createRecord('mealTemplates', templateFromBlock(b, name.trim()))
+  }
+
+  function applyTemplate(id) {
+    const tpl = ctx.mealTemplates.find((t) => t.id === id)
+    if (!tpl) return
+    writePaths(coll, templatePaths(date, tpl, () => newId(coll)), {
+      action: 'create', entity: 'приём из шаблона', id: date, label: `${lbl} · ${tpl.name}`,
     })
   }
 
@@ -113,6 +149,13 @@ export function MenuCell({ coll, date, day, ctx }) {
                 onCommit={(v) => { const n = parseInt(v, 10); patchBlock(b, 'persons', Number.isFinite(n) && n > 0 ? n : null) }}
               />
             </div>
+            <button
+              onClick={() => saveTemplate(b)}
+              className="shrink-0 w-7 h-8 flex items-center justify-center text-slate-400 hover:text-orange-600"
+              title="Сохранить этот приём как шаблон"
+            >
+              <Bookmark size={14} />
+            </button>
             <ConfirmDeleteButton
               onConfirm={() => writePaths(coll, { [`${date}/blocks/${b.id}`]: null }, { action: 'delete', entity: 'блок', id: date, label: `${lbl} · ${b.name || 'приём'}`, before: b })}
               size="w-7 h-8"
@@ -140,6 +183,18 @@ export function MenuCell({ coll, date, day, ctx }) {
                         }}
                       />
                     )}
+                  {d.recipeId && ctx.repeatNote && ctx.repeatNote(d.recipeId, date) && (
+                    <span className="shrink-0 text-[11px] font-semibold text-orange-600" title={ctx.repeatNote(d.recipeId, date)}>↻</span>
+                  )}
+                  {d.recipeId && bridge && bridge.has(d.recipeId) && (
+                    <button
+                      onClick={() => bridge.open(d.recipeId, b.persons)}
+                      className="shrink-0 w-7 h-8 flex items-center justify-center text-orange-600"
+                      title="Открыть ТК с пересчётом на гостей"
+                    >
+                      <BookOpen size={14} />
+                    </button>
+                  )}
                   <button
                     onClick={() => writePaths(coll, { [`${date}/blocks/${b.id}/dishes/${d.id}`]: null }, { action: 'delete', entity: 'блюдо', id: date, label: `${lbl} · ${b.name || 'приём'}: ${d.text}`, before: d })}
                     className="shrink-0 w-7 h-8 flex items-center justify-center text-slate-400 hover:text-red-600"
@@ -150,10 +205,11 @@ export function MenuCell({ coll, date, day, ctx }) {
                 </div>
               )
             })}
-            <DishAddLine recipeList={ctx.recipeList} onAdd={(t, id) => addDish(b, t, id)} onPick={() => setPickerFor(b.id)} />
+            <DishAddLine recipeList={ctx.recipeList} onAdd={(t, id) => addDish(b, t, id)} onPick={() => setPickerFor(b.id)} onPasteLines={(text) => addPasted(b, text)} />
           </div>
           {pickerFor === b.id && (
             <RecipePickerModal
+              usageDates={ctx.usageDates}
               recipes={ctx.recipeList}
               lang={ctx.lang}
               title={`${lbl} · ${b.name || 'приём'}`}
@@ -163,9 +219,21 @@ export function MenuCell({ coll, date, day, ctx }) {
           )}
         </div>
       ))}
-      <button onClick={addBlock} className="w-full min-h-[30px] rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-xs font-semibold text-slate-500 flex items-center justify-center gap-1">
-        <Plus size={13} /> приём
-      </button>
+      <div className="flex gap-1">
+        <button onClick={addBlock} className="flex-1 min-h-[30px] rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-xs font-semibold text-slate-500 flex items-center justify-center gap-1">
+          <Plus size={13} /> приём
+        </button>
+        {ctx.mealTemplates.length > 0 && (
+          <select
+            className={`${SELECT} w-[7.5rem] text-xs`}
+            value=""
+            onChange={(e) => { if (e.target.value) applyTemplate(e.target.value) }}
+          >
+            <option value="">из шаблона…</option>
+            {ctx.mealTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        )}
+      </div>
     </div>
   )
 }

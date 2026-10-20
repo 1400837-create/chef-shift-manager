@@ -11,8 +11,10 @@ import { printReport } from '../../utils/printReport'
 import { todayKey } from '../../utils/dateUtils'
 import { mealColor, loadPos, savePos, useNarrow } from '../../plan/ui'
 import DayCards from './DayCards'
+import StaffFocus, { useFocusState } from './StaffFocus'
 import { usePlanDeviceState } from '../../plan/planRoom'
-import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText } from './gridShared'
+import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText, DishLine } from './gridShared'
+import { useOpenRecipe } from './recipeBridge'
 
 const PALETTE = [
   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
@@ -75,6 +77,8 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
   useEffect(() => { savePos(code, ALL_POS, { span, anchor }) }, [code, span, anchor])
   const [hideEmpty, setHideEmpty] = useState(false)
   const narrow = useNarrow()
+  const bridge = useOpenRecipe()
+  const [focus, setFocus] = useFocusState(ctx)
 
   const colorOf = useMemo(() => {
     const map = {}
@@ -204,6 +208,8 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
           <Printer size={16} /> Печать
         </button>
       </div>
+      <StaffFocus ctx={ctx} value={focus} onChange={setFocus} dates={dates} />
+
       <div className="flex flex-wrap gap-1.5 mb-3 items-center text-xs text-slate-500">
         <span>Планы:</span>
         {plans.map((p) => <Tag key={p.id} plan={p} />)}
@@ -222,14 +228,15 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
           onOpenPlan={onOpenPlan}
           hideEmpty={hideEmpty}
           onCopyDay={copyDay}
-          repeats={ctx.repeatNote}
+          bridge={bridge}
+          focusStaff={focus}
         />
       ) : (
-      <div className="overflow-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 max-h-[calc(100dvh-var(--app-header-h,64px)-9.5rem)]">
+      <div className="overflow-x-auto min-[960px]:overflow-visible rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
         <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-28 left-0 z-30`}>День</th>
+              <th className={`${TH} w-28 left-0 z-[15]`}>День</th>
               <th className={`${TH} w-[34%]`}>Меню</th>
               <th className={`${TH} w-[24%]`}>Комментарии</th>
               <th className={`${TH} w-56`}>Сотрудники</th>
@@ -268,11 +275,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                                   {b.time ? `${b.time} ` : ''}{b.name || '—'}
                                   {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
                                 </p>
-                                {dishesOf(b).map((d) => (
-                                  <p key={d.id} className={`pl-2 text-slate-600 dark:text-slate-300 ${d.changed ? '!text-red-600 font-semibold' : ''}`}>
-                                    · {dishLabel(d, ctx.recipeById, ctx.lang)}
-                                  </p>
-                                ))}
+                                {dishesOf(b).map((d) => <DishLine key={d.id} d={d} b={b} date={date} ctx={ctx} bridge={bridge} />)}
                               </div>
                             ))}
                           </div>
@@ -293,7 +296,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                     </td>
                     <td className={`${TD} whitespace-nowrap`}>
                       {shifts.map(({ plan, shift }) => (
-                        <p key={`${plan.id}-${shift.id}`} className={`leading-6 ${bad.has(shift.id) ? 'text-red-600 font-semibold' : 'text-slate-700 dark:text-slate-200'}`}>
+                        <p key={`${plan.id}-${shift.id}`} className={`leading-6 ${focus && shift.staffId !== focus ? 'opacity-30' : ''} ${bad.has(shift.id) ? 'text-red-600 font-semibold' : 'text-slate-700 dark:text-slate-200'}`}>
                           {bad.has(shift.id) && <AlertTriangle size={12} className="inline mr-1 -mt-0.5" title="Пересечение со второй сменой этого человека" />}
                           {staffLabel(ctx.staffById[shift.staffId], ctx.lang) || shift.staffName || '?'}
                           <span className={bad.has(shift.id) ? '' : 'text-slate-500'}> {shift.start}–{shift.end}</span>
@@ -305,7 +308,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan }) {
                       {shifts.map(({ plan, shift }) => {
                         const h = shiftHoursText(shift)
                         return (
-                          <p key={`${plan.id}-${shift.id}`} className={`leading-6 font-semibold ${bad.has(shift.id) ? 'text-red-600' : ''}`}>
+                          <p key={`${plan.id}-${shift.id}`} className={`leading-6 font-semibold ${focus && shift.staffId !== focus ? 'opacity-30' : ''} ${bad.has(shift.id) ? 'text-red-600' : ''}`}>
                             {h.planned}
                             {h.actual && <span className="ml-1 text-xs font-normal text-slate-500">(факт {h.actual})</span>}
                           </p>

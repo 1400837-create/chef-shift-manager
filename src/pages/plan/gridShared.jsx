@@ -4,7 +4,7 @@ import { staffLabel, dishLabel } from '../../plan/lang'
 import { dishesOf, commentsOf } from '../../plan/exchange'
 
 // Every cell gets a full border so the columns read as a table, not a list.
-export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600 sticky top-0 z-20 bg-slate-200 dark:bg-slate-900'
+export const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600 sticky z-10 top-[calc(var(--app-header-h,64px)+3.6rem)] bg-slate-200 dark:bg-slate-900'
 export const TD = 'px-2 py-[var(--cell-py,0.5rem)] border border-slate-300 dark:border-slate-600 text-[length:var(--cell-fs,0.875rem)]'
 
 // All comments of a day in one place — on the day itself, on a meal, on a
@@ -43,4 +43,20 @@ export function daysBetween(from, to) {
   const out = []
   for (let d = from; d <= to; d = addDaysKey(d, 1)) out.push(d)
   return out
+}
+
+// One dish line in a read-only view: tap opens its tech card (owner device),
+// and a small mark says when the same dish is served a day or two away.
+export function DishLine({ d, b, date, ctx, bridge }) {
+  const rep = d.recipeId && ctx.repeatNote ? ctx.repeatNote(d.recipeId, date) : null
+  const canOpen = !!(bridge && d.recipeId && bridge.has(d.recipeId))
+  return (
+    <p
+      onClick={canOpen ? (e) => { e.stopPropagation(); bridge.open(d.recipeId, b.persons) } : undefined}
+      className={`pl-2 text-slate-600 dark:text-slate-300 ${d.changed ? '!text-red-600 font-semibold' : ''} ${canOpen ? 'underline decoration-dotted underline-offset-2 cursor-pointer' : ''}`}
+    >
+      · {dishLabel(d, ctx.recipeById, ctx.lang)}
+      {rep && <span className="ml-1 text-[11px] font-semibold text-orange-600" title={rep}>↻ повтор</span>}
+    </p>
+  )
 }

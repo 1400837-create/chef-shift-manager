@@ -16,7 +16,9 @@ import { MenuCell, ShiftCell, NoteCell } from './GridCells'
 import CopyModal from './CopyModal'
 import { copyText } from './Exchange'
 import DayCards from './DayCards'
-import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween } from './gridShared'
+import StaffFocus, { useFocusState } from './StaffFocus'
+import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween, DishLine } from './gridShared'
+import { useOpenRecipe } from './recipeBridge'
 
 export { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween }
 import { printReport } from '../../utils/printReport'
@@ -73,6 +75,8 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
   const [editing, setEditing] = useState(null)
   const [copyOpen, setCopyOpen] = useState(false)
   const narrow = useNarrow()
+  const bridge = useOpenRecipe()
+  const [focus, setFocus] = useFocusState(ctx)
   const [editRaw, setEditMode] = useState(() => {
     try { return localStorage.getItem('kitchenPlan_gridEdit') === '1' } catch { return false }
   })
@@ -299,6 +303,8 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         </button>
       </div>
 
+      <StaffFocus ctx={ctx} value={focus} onChange={setFocus} dates={dates} />
+
       {strays.length > 0 && (
         <div className="mb-3 rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-3 text-sm text-slate-800 dark:text-slate-100">
           Есть записи вне периода этого плана: <b>{strays.length}</b> дн. Они относятся к другим планам.
@@ -321,7 +327,8 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           showTags={false}
           onOpenDay={setEditing}
           onCopyDay={copyDay}
-          repeats={ctx.repeatNote}
+          bridge={bridge}
+          focusStaff={focus}
           isOutside={(d) => !inPlanRange(range, d)}
           outsideNote={(d) => {
             const target = data[d] ? findMoveTarget(plans, plan.id, d) : null
@@ -333,11 +340,11 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           }}
         />
       ) : (
-      <div className="overflow-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 max-h-[calc(100dvh-var(--app-header-h,64px)-9.5rem)]">
+      <div className={`overflow-x-auto ${editMode ? "min-[1240px]:overflow-visible" : "min-[960px]:overflow-visible"} rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800`}>
         <table className={`w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} border-collapse text-sm`}>
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-28 left-0 z-30`}>День</th>
+              <th className={`${TH} w-28 left-0 z-[15]`}>День</th>
               <th className={`${TH} w-[34%]`}>Меню</th>
               <th className={`${TH} w-[24%]`}>Комментарии</th>
               <th className={`${TH} ${editMode ? "w-64" : "w-48"}`}>Сотрудники</th>
@@ -419,11 +426,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                                 {b.time ? `${b.time} ` : ''}{b.name || '—'}
                                 {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
                               </p>
-                              {dishesOf(b).map((d) => (
-                                <p key={d.id} className={`pl-2 text-slate-600 dark:text-slate-300 ${d.changed ? '!text-red-600 font-semibold' : ''}`}>
-                                  · {dishLabel(d, ctx.recipeById, ctx.lang)}
-                                </p>
-                              ))}
+                              {dishesOf(b).map((d) => <DishLine key={d.id} d={d} b={b} date={date} ctx={ctx} bridge={bridge} />)}
                             </div>
                           ))}
                       </td>
@@ -442,7 +445,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                         {edit
                           ? <ShiftCell coll={coll} date={date} day={day || {}} ctx={ctx} />
                           : shifts.map((s) => (
-                            <p key={s.id} className="leading-6 text-slate-700 dark:text-slate-200">
+                            <p key={s.id} className={`leading-6 text-slate-700 dark:text-slate-200 ${focus && s.staffId !== focus ? "opacity-30" : ""}`}>
                               {staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || '?'}
                               <span className="text-slate-500"> {s.start}–{s.end}</span>
                             </p>
@@ -454,7 +457,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                           : shifts.map((s) => {
                             const h = shiftHoursText(s)
                             return (
-                              <p key={s.id} className="leading-6 font-semibold">
+                              <p key={s.id} className={`leading-6 font-semibold ${focus && s.staffId !== focus ? "opacity-30" : ""}`}>
                                 {h.planned}
                                 {h.actual && <span className="ml-1 text-xs font-normal text-slate-500">(факт {h.actual})</span>}
                               </p>

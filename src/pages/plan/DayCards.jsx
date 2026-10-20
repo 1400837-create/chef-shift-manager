@@ -5,7 +5,7 @@ import DaySummary from './DaySummary'
 // The phone version of the table: one card per day, grouped by week. Tapping a
 // card opens that day's editor (when `onOpenDay` is given).
 export default function DayCards({
-  weeks, getParts, ctx, locale, today, span, showTags, onOpenPlan, onOpenDay, isOutside, outsideNote, hideEmpty, repeats, onDish, focusStaff, onCopyDay,
+  weeks, getParts, ctx, locale, today, span, showTags, onOpenPlan, onOpenDay, isOutside, outsideNote, hideEmpty, bridge, focusStaff, onCopyDay,
 }) {
   return (
     <div>
@@ -48,7 +48,7 @@ export default function DayCards({
                     )}
                   </div>
                   {outside && outsideNote ? outsideNote(date) : null}
-                  <DaySummary date={date} parts={parts} ctx={ctx} showTags={showTags} onOpenPlan={onOpenPlan} repeats={repeats} onDish={onDish} focusStaff={focusStaff} />
+                  <DaySummary date={date} parts={parts} ctx={ctx} showTags={showTags} onOpenPlan={onOpenPlan} bridge={bridge} focusStaff={focusStaff} />
                 </div>
               )
             })}

@@ -99,3 +99,32 @@ export function useEscape(onClose) {
     return () => window.removeEventListener('keydown', onKey, true)
   })
 }
+
+// ---- favourite recipes (per device) ---------------------------------------------
+
+const FAV_KEY = 'kitchenPlan_favRecipes'
+const favListeners = new Set()
+let favCache = { raw: null, set: new Set() }
+
+function readFavs() {
+  let raw = ''
+  try { raw = localStorage.getItem(FAV_KEY) || '' } catch { raw = '' }
+  if (raw !== favCache.raw) {
+    let arr = []
+    try { arr = JSON.parse(raw || '[]') } catch { arr = [] }
+    favCache = { raw, set: new Set(Array.isArray(arr) ? arr : []) }
+  }
+  return favCache.set
+}
+
+export function toggleFav(id) {
+  const next = new Set(readFavs())
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  try { localStorage.setItem(FAV_KEY, JSON.stringify([...next])) } catch { /* preference only */ }
+  favListeners.forEach((fn) => fn())
+}
+
+export function useFavorites() {
+  return useSyncExternalStore((cb) => { favListeners.add(cb); return () => favListeners.delete(cb) }, readFavs)
+}

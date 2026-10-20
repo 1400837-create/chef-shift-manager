@@ -3,14 +3,14 @@ import { staffLabel, dishLabel } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf } from '../../plan/exchange'
 import { overlapIds } from '../../plan/calc'
 import { mealColor } from '../../plan/ui'
-import { Guests, shiftHoursText, gatherComments } from './gridShared'
+import { Guests, shiftHoursText, gatherComments, DishLine } from './gridShared'
 
 // One day, read-only and compact: meals with guests and dishes, who works and
 // for how long, comments. Used by the phone cards, the dashboard and the
 // all-plans cards.
 //   parts: [{ plan, day }]   showTags: label blocks with their plan's name
 //   repeats: (recipeId, date) → text|null   onDish(dish): make dishes tappable
-export default function DaySummary({ date, parts, ctx, showTags = false, onOpenPlan, repeats, onDish, focusStaff }) {
+export default function DaySummary({ date, parts, ctx, showTags = false, onOpenPlan, bridge, focusStaff }) {
   const allShifts = parts.flatMap(({ day }) => shiftsOf(day))
   const bad = overlapIds(allShifts)
   const notes = parts.flatMap(({ day }) => gatherComments(day, blocksOf(day), shiftsOf(day), ctx))
@@ -38,20 +38,7 @@ export default function DaySummary({ date, parts, ctx, showTags = false, onOpenP
                   {b.time ? `${b.time} ` : ''}{b.name || '—'}
                   {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
                 </p>
-                {dishesOf(b).map((d) => {
-                  const rep = repeats && d.recipeId ? repeats(d.recipeId, date) : null
-                  const clickable = onDish && d.recipeId && ctx.recipeById[d.recipeId]
-                  return (
-                    <p
-                      key={d.id}
-                      onClick={clickable ? (e) => { e.stopPropagation(); onDish(d, b) } : undefined}
-                      className={`pl-1 text-slate-600 dark:text-slate-300 ${d.changed ? '!text-red-600 font-semibold' : ''} ${clickable ? 'underline decoration-dotted underline-offset-2 cursor-pointer' : ''}`}
-                    >
-                      · {dishLabel(d, ctx.recipeById, ctx.lang)}
-                      {rep && <span className="ml-1 text-[11px] text-orange-600" title={rep}>↻ повтор</span>}
-                    </p>
-                  )
-                })}
+                {dishesOf(b).map((d) => <DishLine key={d.id} d={d} b={b} date={date} ctx={ctx} bridge={bridge} />)}
               </div>
             ))}
           </div>

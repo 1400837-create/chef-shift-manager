@@ -1,15 +1,35 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { Search, Check, X, Plus } from 'lucide-react'
+import { Search, Check, X, Plus, Star } from 'lucide-react'
 import { inputClass, BigButton } from '../../components/UI'
 import { RECIPE_CATEGORIES } from '../../utils/constants'
-import { useEscape } from '../../plan/ui'
+import { useEscape, useFavorites, toggleFav } from '../../plan/ui'
+import { todayKey } from '../../utils/dateUtils'
+import { parseDate } from '../../plan/calc'
 
-function RecipeRow({ recipe, lang, selected, onToggle }) {
+const MS_DAY = 86400000
+const dd = (key) => `${key.slice(8)}.${key.slice(5, 7)}`
+
+// "было 19.10" / "будет 22.10": the closest serving within a week of today.
+function usageNote(dates, today) {
+  if (!dates || !dates.length) return null
+  let best = null
+  dates.forEach((d) => {
+    const diff = Math.round((parseDate(d) - parseDate(today)) / MS_DAY)
+    if (Math.abs(diff) <= 7 && (best === null || Math.abs(diff) < Math.abs(best.diff))) best = { d, diff }
+  })
+  if (!best) return null
+  return best.diff < 0 ? `было ${dd(best.d)}` : best.diff === 0 ? 'сегодня' : `будет ${dd(best.d)}`
+}
+
+function RecipeRow({ recipe, lang, selected, onToggle, note, fav }) {
   const name = lang === 'de' && recipe.de ? recipe.de : recipe.name
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onToggle}
-      className={`w-full text-left flex items-start gap-2.5 px-3 py-2.5 border-b border-slate-100 dark:border-slate-700 last:border-0 ${
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
+      className={`w-full text-left flex items-start gap-2.5 px-3 py-2.5 border-b border-slate-100 dark:border-slate-700 last:border-0 cursor-pointer ${
         selected ? 'bg-orange-50 dark:bg-orange-950/30' : 'active:bg-slate-50 dark:active:bg-slate-700/40'
       }`}
     >
@@ -20,11 +40,21 @@ function RecipeRow({ recipe, lang, selected, onToggle }) {
       >
         {selected && <Check size={15} strokeWidth={3} className="text-white" />}
       </span>
-      <span className="min-w-0">
-        <span className="block text-[15px] font-semibold text-slate-800 dark:text-slate-100 leading-snug">{name}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold text-slate-800 dark:text-slate-100 leading-snug">
+          {name}
+          {note && <span className="ml-2 align-middle px-1.5 py-0.5 rounded-md bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200 text-[11px] font-semibold">{note}</span>}
+        </span>
         {recipe.desc && <span className="block text-xs text-slate-500 dark:text-slate-400 leading-snug mt-0.5">Состав: {recipe.desc}</span>}
       </span>
-    </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); toggleFav(recipe.id) }}
+        className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg ${fav ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600'}`}
+        title={fav ? 'Убрать из избранного' : 'В избранное'}
+      >
+        <Star size={18} fill={fav ? 'currentColor' : 'none'} />
+      </button>
+    </div>
   )
 }
 
@@ -33,27 +63,52 @@ function RecipeRow({ recipe, lang, selected, onToggle }) {
 // (a container scrolls) — `getScroller` says which, `topOffset` is where the
 // pinned bar sticks.
 //   recipes: [{ id, name, de, cat, desc }]
-export default function RecipeBrowser({ recipes, lang, picked, onToggle, topOffset = '0px', getScroller = () => null, barClass = '' }) {
+export default function RecipeBrowser({ recipes, lang, picked, onToggle, topOffset = '0px', getScroller = () => null, barClass = '', usageDates = {} }) {
   const uid = useId().replace(/:/g, '')
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(null)
   const [barH, setBarH] = useState(96)
   const barRef = useRef(null)
   const chipsRef = useRef(null)
+  const favs = useFavorites()
+  const today = todayKey()
 
   const needle = query.trim().toLowerCase()
   const groups = useMemo(() => {
     const keys = new Set(RECIPE_CATEGORIES.map((c) => c.key))
-    return RECIPE_CATEGORIES
+    const matches = (r) => !needle || r.name.toLowerCase().includes(needle) || (r.de || '').toLowerCase().includes(needle) || (r.desc || '').toLowerCase().includes(needle)
+    const byCat = RECIPE_CATEGORIES
       .map((c) => ({
         ...c,
         items: recipes
           .filter((r) => (keys.has(r.cat) ? r.cat : 'other') === c.key)
-          .filter((r) => !needle || r.name.toLowerCase().includes(needle) || (r.de || '').toLowerCase().includes(needle) || (r.desc || '').toLowerCase().includes(needle))
+          .filter(matches)
           .sort((a, b) => a.name.localeCompare(b.name, 'ru')),
       }))
       .filter((g) => g.items.length)
-  }, [recipes, needle])
+
+    // Quick lists on top: starred ones, and what was served around now.
+    const fav = recipes.filter((r) => favs.has(r.id) && matches(r)).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+    const nearness = (r) => {
+      const dates = usageDates[r.id] || []
+      let best = null
+      dates.forEach((d) => {
+        const diff = Math.round((parseDate(d) - parseDate(today)) / MS_DAY)
+        if (diff >= -30 && diff <= 14 && (best === null || Math.abs(diff) < best)) best = Math.abs(diff)
+      })
+      return best
+    }
+    const recent = recipes
+      .map((r) => ({ r, n: nearness(r) }))
+      .filter((x) => x.n !== null && matches(x.r))
+      .sort((a, b) => a.n - b.n)
+      .slice(0, 12)
+      .map((x) => x.r)
+    const extra = []
+    if (fav.length) extra.push({ key: '__fav', label: '★ Избранные', items: fav })
+    if (recent.length) extra.push({ key: '__recent', label: 'Недавние', items: recent })
+    return [...extra, ...byCat]
+  }, [recipes, needle, favs, usageDates, today])
 
   const sectionId = (key) => `rb-${uid}-${key}`
 
@@ -140,7 +195,7 @@ export default function RecipeBrowser({ recipes, lang, picked, onToggle, topOffs
           <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500 mb-1.5 px-1">{g.label} ({g.items.length})</h2>
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
             {g.items.map((r) => (
-              <RecipeRow key={r.id} recipe={r} lang={lang} selected={!!picked[r.id]} onToggle={() => onToggle(r.id)} />
+              <RecipeRow key={r.id} recipe={r} lang={lang} selected={!!picked[r.id]} onToggle={() => onToggle(r.id)} note={usageNote(usageDates[r.id], today)} fav={favs.has(r.id)} />
             ))}
           </div>
         </section>
@@ -150,7 +205,7 @@ export default function RecipeBrowser({ recipes, lang, picked, onToggle, topOffs
 }
 
 // A window for picking one or several recipes (e.g. into a meal of a day).
-export function RecipePickerModal({ recipes, lang, title, onAdd, onClose }) {
+export function RecipePickerModal({ recipes, lang, title, onAdd, onClose, usageDates }) {
   useEscape(onClose)
   const [picked, setPicked] = useState({})
   const scrollRef = useRef(null)
@@ -176,6 +231,7 @@ export function RecipePickerModal({ recipes, lang, title, onAdd, onClose }) {
         </div>
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4">
           <RecipeBrowser
+            usageDates={usageDates}
             recipes={recipes}
             lang={lang}
             picked={picked}

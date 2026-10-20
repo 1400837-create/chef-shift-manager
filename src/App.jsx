@@ -506,7 +506,7 @@ export default function App() {
             />
           </>
         )}
-        {tab === 'plan' && <PlanPage menuBridge={{ menuData, setMenuData }} />}
+        {tab === 'plan' && <PlanPage menuBridge={{ menuData, setMenuData, recipes, recountCatalog }} />}
         {tab === 'finances' && (
           <>
             <UndoRedoBar {...financesHistory} />
