@@ -5,14 +5,15 @@ import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
 import { usePlanCollection, createRecord, patchRecord, writePaths, newId, commitChange } from '../../plan/planStore'
 import { formatDuration, parseHM } from '../../plan/hours'
 import {
-  isDateKey, dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthTitle, shiftMinutes, sumMinutes,
+  isDateKey, dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, monthTitle, shiftMinutes, sumMinutes,
   collectShifts, suggestStaff,
 } from '../../plan/calc'
 import { todayKey } from '../../utils/dateUtils'
-import { DraftInput, byName } from './shared'
+import { DraftInput, ConfirmButton, byName } from './shared'
 import { usePlanLang, LOCALE, staffLabel } from '../../plan/lang'
 import ExchangePanel from './Exchange'
 import CostPanel from './Cost'
+import GridView from './GridView'
 
 const PLAN_KINDS = [
   { key: 'month', label: 'Месяц' },
@@ -436,7 +437,7 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
 // day
 // ---------------------------------------------------------------------------
 
-function DayCard({ coll, date, day, ctx, allShifts, open, onToggle }) {
+function DayCard({ coll, date, day, ctx, allShifts, open, onToggle, onDeleted }) {
   const blocks = sortedEntries(day.blocks, (a, b) => (a.time || '99:99').localeCompare(b.time || '99:99') || a.id.localeCompare(b.id))
   const shifts = sortedEntries(day.shifts, (a, b) => (a.start || '99:99').localeCompare(b.start || '99:99') || (a.staffName || '').localeCompare(b.staffName || '', 'ru'))
   const plannedMin = sumMinutes(shifts, 'planned')
@@ -451,15 +452,25 @@ function DayCard({ coll, date, day, ctx, allShifts, open, onToggle }) {
     })
   }
 
+  function removeDay() {
+    writePaths(coll, { [date]: null }, { action: 'delete', entity: 'день', id: date, label: dayTitle(date), before: day })
+    if (onDeleted) onDeleted()
+  }
+
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 mb-3 overflow-hidden">
-      <button onClick={onToggle} className="w-full flex items-center gap-2 px-3 py-3 text-left bg-slate-50 dark:bg-slate-900/40">
-        {open ? <ChevronDown size={18} className="text-slate-400 shrink-0" /> : <ChevronRight size={18} className="text-slate-400 shrink-0" />}
-        <span className="font-bold text-slate-800 dark:text-slate-100 flex-1 min-w-0">{dayTitle(date, LOCALE[ctx.lang])}</span>
-        {blocks.length > 0 && <Badge color="slate">{blocks.length} приём. · {dishCount} блюд</Badge>}
-        {shifts.length > 0 && <Badge color="orange">{formatDuration(plannedMin)} ч</Badge>}
-        {commentCount > 0 && <MessageSquare size={14} className="text-orange-500 shrink-0" />}
-      </button>
+      <div className="flex items-center bg-slate-50 dark:bg-slate-900/40">
+        <button onClick={onToggle} className="flex-1 min-w-0 flex items-center gap-2 pl-3 py-3 text-left">
+          {open ? <ChevronDown size={18} className="text-slate-400 shrink-0" /> : <ChevronRight size={18} className="text-slate-400 shrink-0" />}
+          <span className="font-bold text-slate-800 dark:text-slate-100 flex-1 min-w-0">{dayTitle(date, LOCALE[ctx.lang])}</span>
+          {blocks.length > 0 && <Badge color="slate">{blocks.length} приём. · {dishCount} блюд</Badge>}
+          {shifts.length > 0 && <Badge color="orange">{formatDuration(plannedMin)} ч</Badge>}
+          {commentCount > 0 && <MessageSquare size={14} className="text-orange-500 shrink-0" />}
+        </button>
+        <div className="shrink-0 px-1">
+          <ConfirmDeleteButton onConfirm={removeDay} size="w-12 h-11" iconSize={18} />
+        </div>
+      </div>
       {open && (
         <div className="p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Приёмы и блюда</p>
@@ -474,18 +485,18 @@ function DayCard({ coll, date, day, ctx, allShifts, open, onToggle }) {
           {shifts.map((s) => <ShiftRow key={s.id} coll={coll} date={date} shift={s} ctx={ctx} blocks={blocks} />)}
           <ShiftAdder coll={coll} date={date} ctx={ctx} shifts={shifts} allShifts={allShifts} />
 
-          <div className="flex items-center justify-between mt-3">
+          <div className="mt-3">
             <Comments coll={coll} path={date} comments={day.comments} label={dayTitle(date)} />
-            <ConfirmDeleteButton
-              onConfirm={() => writePaths(coll, { [date]: null }, { action: 'delete', entity: 'день', id: date, label: dayTitle(date), before: day })}
-              size="w-9 h-9"
-            />
           </div>
         </div>
       )}
     </div>
   )
 }
+
+// A day with nothing in it but its placeholder marker.
+const isEmptyDay = (day) =>
+  !day || (!Object.keys(day.blocks || {}).length && !Object.keys(day.shifts || {}).length && !Object.keys(day.comments || {}).length)
 
 // ---------------------------------------------------------------------------
 // one plan
@@ -505,8 +516,18 @@ function PlanView({ plan, ctx, menuBridge }) {
   const allShifts = useMemo(() => collectShifts(tree), [tree])
   const dates = useMemo(() => Object.keys(data).filter(isDateKey).sort(), [data])
   const [newDate, setNewDate] = useState(() => defaultDate(plan))
+  const [addMode, setAddMode] = useState(plan.kind === 'month' ? 'month' : 'day')
   const [toggled, setToggled] = useState({})
+  const [view, setView] = useState(() => {
+    try { return localStorage.getItem('kitchenPlan_view') === 'cards' ? 'cards' : 'grid' } catch { return 'grid' }
+  })
+  const [note, setNote] = useState(null)
   const today = todayKey()
+
+  function chooseView(v) {
+    setView(v)
+    try { localStorage.setItem('kitchenPlan_view', v) } catch { /* preference only */ }
+  }
 
   const weeks = useMemo(() => {
     const map = new Map()
@@ -518,15 +539,49 @@ function PlanView({ plan, ctx, menuBridge }) {
     return [...map.entries()]
   }, [dates])
 
-  function addDay() {
+  // One write for the whole batch, so adding a month is one journal entry
+  // rather than thirty.
+  function addDays() {
     if (!isDateKey(newDate)) return
-    if (data[newDate]) {
-      setToggled((t) => ({ ...t, [newDate]: true }))
+    let list
+    if (addMode === 'day') list = [newDate]
+    else if (addMode === 'week') {
+      const m = mondayOf(newDate)
+      list = Array.from({ length: 7 }, (_, i) => addDaysKey(m, i))
+    } else {
+      const { from, to } = monthBounds(monthOf(newDate))
+      list = []
+      for (let d = from; d <= to; d = addDaysKey(d, 1)) list.push(d)
+    }
+    const fresh = list.filter((d) => !data[d])
+    if (!fresh.length) {
+      setNote('Эти дни уже есть в плане.')
       return
     }
-    writePaths(coll, { [`${newDate}/d`]: 1 }, { action: 'create', entity: 'день', id: newDate, label: dayTitle(newDate) })
-    setToggled((t) => ({ ...t, [newDate]: true }))
+    const rel = {}
+    fresh.forEach((d) => { rel[`${d}/d`] = 1 })
+    writePaths(coll, rel, {
+      action: 'create', entity: fresh.length > 1 ? 'дни' : 'день', id: plan.id,
+      label: fresh.length > 1 ? `${plan.title || 'план'}: ${fresh.length} дн. (${fresh[0]} — ${fresh[fresh.length - 1]})` : dayTitle(fresh[0]),
+    })
+    setNote(`Добавлено дней: ${fresh.length}.`)
+    if (fresh.length === 1) setToggled((t) => ({ ...t, [fresh[0]]: true }))
   }
+
+  const emptyDays = dates.filter((d) => isEmptyDay(data[d]))
+
+  function clearEmpty() {
+    const rel = {}
+    emptyDays.forEach((d) => { rel[d] = null })
+    writePaths(coll, rel, {
+      action: 'delete', entity: 'пустые дни', id: plan.id, label: `${plan.title || 'план'}: ${emptyDays.length} дн.`,
+    })
+    setNote(`Удалено пустых дней: ${emptyDays.length}.`)
+  }
+
+  const renderDay = (date, close) => (
+    <DayCard coll={coll} date={date} day={data[date]} ctx={ctx} allShifts={allShifts} open onToggle={close} onDeleted={close} />
+  )
 
   return (
     <>
@@ -534,13 +589,34 @@ function PlanView({ plan, ctx, menuBridge }) {
         <div className="grid grid-cols-1 gap-2 mb-3">
           <DraftInput value={plan.title} placeholder="Название плана" onCommit={(v) => { if (v.trim()) patchRecord('plans', plan.id, { title: v.trim() }) }} />
         </div>
-        <div className="flex gap-2">
+        <p className="text-[11px] text-slate-400 mb-1">Добавить в план</p>
+        <div className="grid grid-cols-[1fr_1fr] sm:grid-cols-[8rem_1fr_auto] gap-2">
+          <select className={inputClass} value={addMode} onChange={(e) => setAddMode(e.target.value)}>
+            <option value="day">День</option>
+            <option value="week">Неделю</option>
+            <option value="month">Месяц</option>
+          </select>
           <input type="date" className={inputClass} value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-          <button onClick={addDay} className="shrink-0 px-4 min-h-[48px] rounded-xl bg-orange-500 active:bg-orange-600 text-white font-semibold flex items-center gap-1.5">
-            <Plus size={18} /> День
+          <button onClick={addDays} className="col-span-2 sm:col-span-1 px-4 min-h-[48px] rounded-xl bg-orange-500 active:bg-orange-600 text-white font-semibold flex items-center justify-center gap-1.5">
+            <Plus size={18} /> Добавить
           </button>
         </div>
-        <div className="flex justify-end mt-2">
+        <p className="text-xs text-slate-500 mt-1.5">
+          Неделя — с понедельника по воскресенье, месяц — все дни месяца выбранной даты. Уже существующие дни не затрагиваются.
+        </p>
+        {note && <p className="text-sm text-green-700 dark:text-green-400 mt-1.5">{note}</p>}
+        <div className="flex items-center justify-between mt-3">
+          {emptyDays.length > 0
+            ? (
+              <ConfirmButton
+                onConfirm={clearEmpty}
+                confirmLabel={`Удалить ${emptyDays.length}?`}
+                className="px-3 min-h-[36px] rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+              >
+                Удалить пустые дни ({emptyDays.length})
+              </ConfirmButton>
+            )
+            : <span />}
           <ConfirmDeleteButton
             onConfirm={() => commitChange({
               coll: 'plans', action: 'delete', entity: 'план', id: plan.id, label: plan.title,
@@ -551,27 +627,45 @@ function PlanView({ plan, ctx, menuBridge }) {
         </div>
       </Section>
 
+      <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 text-sm font-semibold mb-3">
+        {[['grid', 'Таблица'], ['cards', 'По дням']].map(([k, l]) => (
+          <button
+            key={k}
+            onClick={() => chooseView(k)}
+            className={`flex-1 min-h-[40px] ${view === k ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {view === 'grid' && <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} />}
+
+      {view === 'cards' && (
+        <>
+          {dates.length === 0 && <p className="text-sm text-slate-400 text-center py-4">В плане пока нет дней — добавьте первый.</p>}
+          {weeks.map(([monday, list]) => (
+            <div key={monday}>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 mt-1">{ctx.lang === 'de' ? 'Woche' : 'Неделя'} {weekTitle(monday, LOCALE[ctx.lang])}</p>
+              {list.map((date) => (
+                <DayCard
+                  key={date}
+                  coll={coll}
+                  date={date}
+                  day={data[date]}
+                  ctx={ctx}
+                  allShifts={allShifts}
+                  open={toggled[date] ?? date >= addDaysKey(today, -1)}
+                  onToggle={() => setToggled((t) => ({ ...t, [date]: !(t[date] ?? date >= addDaysKey(today, -1)) }))}
+                />
+              ))}
+            </div>
+          ))}
+        </>
+      )}
+
       <ExchangePanel plan={plan} data={data} ctx={ctx} shifts={allShifts} menuBridge={menuBridge} />
       {isOwner && <CostPanel plan={plan} data={data} />}
-
-      {dates.length === 0 && <p className="text-sm text-slate-400 text-center py-4">В плане пока нет дней — добавьте первый.</p>}
-      {weeks.map(([monday, list]) => (
-        <div key={monday}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 mt-1">{ctx.lang === 'de' ? 'Woche' : 'Неделя'} {weekTitle(monday, LOCALE[ctx.lang])}</p>
-          {list.map((date) => (
-            <DayCard
-              key={date}
-              coll={coll}
-              date={date}
-              day={data[date]}
-              ctx={ctx}
-              allShifts={allShifts}
-              open={toggled[date] ?? date >= addDaysKey(today, -1)}
-              onToggle={() => setToggled((t) => ({ ...t, [date]: !(t[date] ?? date >= addDaysKey(today, -1)) }))}
-            />
-          ))}
-        </div>
-      ))}
     </>
   )
 }
