@@ -1,0 +1,35 @@
+name: Build preview
+
+# Builds the `design` branch and publishes the result to the `preview-dist`
+# branch (not to GitHub Pages), so a change can be looked at and tested before
+# it goes anywhere near the live app.
+on:
+  push:
+    branches: [design]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+      - name: Publish dist to preview-dist
+        run: |
+          cd dist
+          git init -b preview-dist
+          git config user.name "preview-bot"
+          git config user.email "preview-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "preview build of ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" preview-dist
