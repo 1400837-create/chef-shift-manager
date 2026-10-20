@@ -1,0 +1,306 @@
+import { useState } from 'react'
+import { Plus, X, BookOpen } from 'lucide-react'
+import { ConfirmDeleteButton } from '../../components/UI'
+import { writePaths, newId } from '../../plan/planStore'
+import { getAuthor } from '../../plan/planRoom'
+import { dayTitle } from '../../plan/calc'
+import { staffLabel } from '../../plan/lang'
+import { blocksOf, dishesOf, shiftsOf, parseTimeCell, parseRange } from '../../plan/exchange'
+import { DraftInput } from './shared'
+import { RecipePickerModal } from './RecipeBrowser'
+
+// Editable versions of the grid's cells. Every field here is the same kind of
+// per-field write as in the day window, so two people editing never overwrite
+// each other. Compact styling: these sit inside table cells.
+
+const COMPACT = '!min-h-[32px] !py-1 !px-2 !rounded-lg !text-sm'
+const SELECT = 'min-h-[32px] px-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 max-w-full'
+
+const timeCommit = (patch) => (v) => {
+  const t = v.trim()
+  if (t === '') return patch(null)
+  const p = parseTimeCell(t)
+  if (p) patch(p) // unparsable input is dropped and the field snaps back
+  return undefined
+}
+
+// ---------------------------------------------------------------------------
+// menu: meals and their dishes
+// ---------------------------------------------------------------------------
+
+function DishAddLine({ recipeList, onAdd, onPick }) {
+  const [q, setQ] = useState('')
+  const needle = q.trim().toLowerCase()
+  const matches = needle.length >= 2 ? recipeList.filter((r) => r.name.toLowerCase().includes(needle)).slice(0, 6) : []
+
+  function addManual() {
+    if (!q.trim()) return
+    onAdd(q.trim(), null)
+    setQ('')
+  }
+
+  return (
+    <div className="mt-1">
+      <div className="flex gap-1">
+        <input
+          className="flex-1 min-w-0 min-h-[32px] px-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-transparent text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400 text-slate-900 dark:text-slate-100"
+          placeholder="+ блюдо (Enter)"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addManual() } }}
+        />
+        <button onClick={onPick} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-950/30 text-orange-600" title="Выбрать из меню по рубрикам">
+          <BookOpen size={15} />
+        </button>
+      </div>
+      {matches.length > 0 && (
+        <div className="mt-1 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800">
+          {matches.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => { onAdd(r.name, r.id); setQ('') }}
+              className="w-full text-left px-2 py-1.5 text-sm text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 last:border-0 hover:bg-orange-50 dark:hover:bg-slate-700"
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function MenuCell({ coll, date, day, ctx }) {
+  const [pickerFor, setPickerFor] = useState(null)
+  const blocks = blocksOf(day)
+  const lbl = dayTitle(date)
+
+  const patchBlock = (b, field, value) =>
+    writePaths(coll, { [`${date}/blocks/${b.id}/${field}`]: value }, { action: 'update', entity: 'блок', id: date, label: `${lbl} · ${b.name || 'приём'}` })
+
+  function addBlock() {
+    const bid = newId(coll)
+    writePaths(coll, { [`${date}/blocks/${bid}/name`]: '', [`${date}/blocks/${bid}/time`]: '' }, {
+      action: 'create', entity: 'блок', id: date, label: `${lbl} · новый приём`,
+    })
+  }
+
+  function addDish(b, text, recipeId) {
+    writePaths(coll, { [`${date}/blocks/${b.id}/dishes/${newId(coll)}`]: { text, recipeId: recipeId || null } }, {
+      action: 'create', entity: 'блюдо', id: date, label: `${lbl} · ${b.name || 'приём'}: ${text}`,
+    })
+  }
+
+  function addDishes(b, list) {
+    if (!list.length) return
+    const rel = {}
+    list.forEach((r) => { rel[`${date}/blocks/${b.id}/dishes/${newId(coll)}`] = { text: r.name, recipeId: r.id } })
+    writePaths(coll, rel, {
+      action: 'create', entity: 'блюда', id: date,
+      label: `${lbl} · ${b.name || 'приём'}: ${list.length} шт. (${list.slice(0, 3).map((r) => r.name).join(', ')}${list.length > 3 ? '…' : ''})`,
+    })
+  }
+
+  return (
+    <div>
+      {blocks.map((b) => (
+        <div key={b.id} className="mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/40 p-1.5">
+          <div className="flex items-center gap-1">
+            <div className="w-[4.2rem] shrink-0">
+              <DraftInput className={COMPACT} value={b.time} placeholder="время" onCommit={timeCommit((v) => patchBlock(b, 'time', v))} />
+            </div>
+            <DraftInput className={`${COMPACT} font-semibold`} value={b.name} list="plan-block-names" placeholder="приём / мероприятие" onCommit={(v) => patchBlock(b, 'name', v.trim())} />
+            <div className="w-[3.4rem] shrink-0">
+              <DraftInput
+                className={COMPACT}
+                inputMode="numeric"
+                value={b.persons}
+                placeholder="чел."
+                onCommit={(v) => { const n = parseInt(v, 10); patchBlock(b, 'persons', Number.isFinite(n) && n > 0 ? n : null) }}
+              />
+            </div>
+            <ConfirmDeleteButton
+              onConfirm={() => writePaths(coll, { [`${date}/blocks/${b.id}`]: null }, { action: 'delete', entity: 'блок', id: date, label: `${lbl} · ${b.name || 'приём'}`, before: b })}
+              size="w-7 h-8"
+              iconSize={14}
+            />
+          </div>
+          <div className="mt-1 pl-3">
+            {dishesOf(b).map((d) => {
+              const recipe = d.recipeId ? ctx.recipeById[d.recipeId] : null
+              const readOnlyDe = ctx.lang === 'de' && recipe?.de
+              return (
+                <div key={d.id} className="flex items-center gap-1 mb-1">
+                  {readOnlyDe
+                    ? <div className="flex-1 min-w-0 px-2 py-1 text-sm text-slate-700 dark:text-slate-200">{recipe.de}</div>
+                    : (
+                      <DraftInput
+                        className={`${COMPACT} ${d.changed ? '!text-red-600' : ''}`}
+                        value={d.text}
+                        onCommit={(v) => {
+                          const text = v.trim()
+                          if (!text) return
+                          const rel = { [`${date}/blocks/${b.id}/dishes/${d.id}/text`]: text }
+                          if (d.recipeId && recipe && recipe.name !== text) rel[`${date}/blocks/${b.id}/dishes/${d.id}/recipeId`] = null
+                          writePaths(coll, rel, { action: 'update', entity: 'блюдо', id: date, label: `${lbl} · ${b.name || 'приём'}: ${d.text}` })
+                        }}
+                      />
+                    )}
+                  <button
+                    onClick={() => writePaths(coll, { [`${date}/blocks/${b.id}/dishes/${d.id}`]: null }, { action: 'delete', entity: 'блюдо', id: date, label: `${lbl} · ${b.name || 'приём'}: ${d.text}`, before: d })}
+                    className="shrink-0 w-7 h-8 flex items-center justify-center text-slate-400 hover:text-red-600"
+                    title="Убрать блюдо"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )
+            })}
+            <DishAddLine recipeList={ctx.recipeList} onAdd={(t, id) => addDish(b, t, id)} onPick={() => setPickerFor(b.id)} />
+          </div>
+          {pickerFor === b.id && (
+            <RecipePickerModal
+              recipes={ctx.recipeList}
+              lang={ctx.lang}
+              title={`${lbl} · ${b.name || 'приём'}`}
+              onClose={() => setPickerFor(null)}
+              onAdd={(list) => { addDishes(b, list); setPickerFor(null) }}
+            />
+          )}
+        </div>
+      ))}
+      <button onClick={addBlock} className="w-full min-h-[30px] rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-xs font-semibold text-slate-500 flex items-center justify-center gap-1">
+        <Plus size={13} /> приём
+      </button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// shifts
+// ---------------------------------------------------------------------------
+
+export function ShiftCell({ coll, date, day, ctx }) {
+  const shifts = shiftsOf(day)
+  const lbl = dayTitle(date)
+  const [staffId, setStaffId] = useState('')
+  const [range, setRange] = useState('')
+  const [tpl, setTpl] = useState('')
+  const [err, setErr] = useState(false)
+
+  const patch = (s, field, value) =>
+    writePaths(coll, { [`${date}/shifts/${s.id}/${field}`]: value }, { action: 'update', entity: 'смену', id: date, label: `${lbl} · смена ${s.staffName || ''}`.trim() })
+
+  function changeStaff(s, id) {
+    const rec = ctx.staffById[id]
+    writePaths(coll, { [`${date}/shifts/${s.id}/staffId`]: id || null, [`${date}/shifts/${s.id}/staffName`]: rec ? rec.name : null }, {
+      action: 'update', entity: 'смену', id: date, label: `${lbl} · смена ${s.staffName || ''}`.trim(),
+      changes: [{ f: 'сотрудник', from: s.staffName || null, to: rec ? rec.name : null }],
+    })
+  }
+
+  function add() {
+    const rec = ctx.staffById[staffId]
+    let times = parseRange(range)
+    if (!times && tpl) {
+      const t = ctx.templates.find((x) => x.id === tpl)
+      if (t) times = [t.start, t.end]
+    }
+    if (!rec || !times) { setErr(true); return }
+    setErr(false)
+    writePaths(coll, { [`${date}/shifts/${newId(coll)}`]: { staffId: rec.id, staffName: rec.name, start: times[0], end: times[1] } }, {
+      action: 'create', entity: 'смену', id: date, label: `${lbl} · ${rec.name} ${times[0]}–${times[1]}`,
+    })
+    setStaffId('')
+    setRange('')
+    setTpl('')
+  }
+
+  return (
+    <div>
+      {shifts.map((s) => {
+        const known = s.staffId && ctx.staffById[s.staffId]
+        return (
+          <div key={s.id} className="flex items-center gap-1 mb-1">
+            <select className={`${SELECT} flex-1 min-w-0`} value={s.staffId || (s.staffName ? '__old' : '')} onChange={(e) => changeStaff(s, e.target.value)}>
+              <option value="">—</option>
+              {!known && s.staffName && <option value={s.staffId || '__old'} disabled>{s.staffName} (нет в списке)</option>}
+              {ctx.staffList.map((p) => <option key={p.id} value={p.id}>{staffLabel(p, ctx.lang)}</option>)}
+            </select>
+            <div className="w-[3.8rem] shrink-0"><DraftInput className={COMPACT} value={s.start} onCommit={timeCommit((v) => patch(s, 'start', v))} /></div>
+            <span className="text-slate-400">–</span>
+            <div className="w-[3.8rem] shrink-0"><DraftInput className={COMPACT} value={s.end} onCommit={timeCommit((v) => patch(s, 'end', v))} /></div>
+            <button
+              onClick={() => writePaths(coll, { [`${date}/shifts/${s.id}`]: null }, { action: 'delete', entity: 'смену', id: date, label: `${lbl} · смена ${s.staffName || ''}`.trim(), before: s })}
+              className="shrink-0 w-7 h-8 flex items-center justify-center text-slate-400 hover:text-red-600"
+              title="Убрать смену"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )
+      })}
+      <div className={`mt-1 rounded-lg border border-dashed p-1 ${err ? 'border-red-400' : 'border-slate-300 dark:border-slate-600'}`}>
+        <select className={`${SELECT} w-full mb-1`} value={staffId} onChange={(e) => setStaffId(e.target.value)}>
+          <option value="">+ сотрудник…</option>
+          {ctx.staffList.map((p) => <option key={p.id} value={p.id}>{staffLabel(p, ctx.lang)}</option>)}
+        </select>
+        <div className="flex gap-1">
+          <input
+            className="w-0 flex-1 min-h-[32px] px-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100"
+            placeholder="10-16"
+            value={range}
+            onChange={(e) => setRange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          />
+          {ctx.templates.length > 0 && (
+            <select className={`${SELECT} w-[5.2rem]`} value={tpl} onChange={(e) => setTpl(e.target.value)}>
+              <option value="">смена…</option>
+              {ctx.templates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          )}
+          <button onClick={add} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-orange-500 text-white" title="Добавить смену">
+            <Plus size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// comments
+// ---------------------------------------------------------------------------
+
+export function NoteCell({ coll, date, notes }) {
+  const [text, setText] = useState('')
+
+  function add() {
+    const t = text.trim()
+    if (!t) return
+    const author = getAuthor()
+    writePaths(coll, { [`${date}/comments/${newId(coll)}`]: { text: t, by: author.name, byId: author.id, ts: Date.now() } }, {
+      action: 'create', entity: 'комментарий', id: date, label: `${dayTitle(date)}: ${t.slice(0, 60)}`,
+    })
+    setText('')
+  }
+
+  return (
+    <div className="text-xs">
+      {notes.map((n, i) => (
+        <p key={i} className="mb-1 text-slate-700 dark:text-slate-200">
+          {n.where && <span className="font-semibold text-orange-600">{n.where}: </span>}
+          {n.text}
+          <span className="text-slate-400"> — {n.by}</span>
+        </p>
+      ))}
+      <input
+        className="w-full min-h-[30px] px-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 bg-transparent text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-400 text-slate-900 dark:text-slate-100"
+        placeholder="+ комментарий дня (Enter)"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+      />
+    </div>
+  )
+}

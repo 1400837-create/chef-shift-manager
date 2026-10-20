@@ -360,3 +360,12 @@ export function applyMenuTransfer(prev, days, mode, coursesForDay) {
   })
   return next
 }
+
+// "10-16", "9:30–17", "10.00 - 18:00" → ['10:00','16:00']; null when unclear.
+export function parseRange(raw) {
+  const parts = String(raw || '').trim().split(/\s*[-–—]\s*/)
+  if (parts.length !== 2) return null
+  const a = parseTimeCell(parts[0])
+  const b = parseTimeCell(parts[1])
+  return a && b ? [a, b] : null
+}

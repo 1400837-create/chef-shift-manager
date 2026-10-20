@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, X, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Plus, Pencil } from 'lucide-react'
 import { BigButton } from '../../components/UI'
 import { writePaths } from '../../plan/planStore'
 import { formatDuration } from '../../plan/hours'
@@ -10,6 +10,7 @@ import {
 import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf, commentsOf } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
+import { MenuCell, ShiftCell, NoteCell } from './GridCells'
 
 // Every cell gets a full border so the columns read as a table, not a list.
 const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
@@ -65,6 +66,16 @@ export default function GridView({ plan, data, ctx, renderDay }) {
     return existing.includes(today) || !existing.length ? today : existing[0]
   })
   const [editing, setEditing] = useState(null)
+  const [editMode, setEditMode] = useState(() => {
+    try { return localStorage.getItem('kitchenPlan_gridEdit') === '1' } catch { return false }
+  })
+  const coll = `planData/${plan.id}`
+
+  function toggleEdit() {
+    const next = !editMode
+    setEditMode(next)
+    try { localStorage.setItem('kitchenPlan_gridEdit', next ? '1' : '0') } catch { /* preference only */ }
+  }
   const locale = LOCALE[ctx.lang]
 
   const dates = useMemo(() => {
@@ -129,14 +140,26 @@ export default function GridView({ plan, data, ctx, renderDay }) {
         ))}
       </div>
 
+      <button
+        onClick={toggleEdit}
+        className={`w-full mb-3 min-h-[44px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border ${
+          editMode
+            ? 'bg-orange-500 border-orange-500 text-white'
+            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+        }`}
+      >
+        <Pencil size={16} />
+        {editMode ? 'Правка в таблице включена — нажмите, чтобы выключить' : 'Редактировать прямо в таблице'}
+      </button>
+
       <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <table className="w-full min-w-[920px] border-collapse text-sm">
+        <table className={`w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} border-collapse text-sm`}>
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
               <th className={`${TH} w-28`}>День</th>
               <th className={`${TH} w-[34%]`}>Меню</th>
               <th className={`${TH} w-[24%]`}>Комментарии</th>
-              <th className={`${TH} w-48`}>Сотрудники</th>
+              <th className={`${TH} ${editMode ? "w-64" : "w-48"}`}>Сотрудники</th>
               <th className={`${TH} w-20 text-right`}>Часы</th>
             </tr>
           </thead>
@@ -166,43 +189,58 @@ export default function GridView({ plan, data, ctx, renderDay }) {
                   return (
                     <tr
                       key={date}
-                      onClick={() => setEditing(date)}
-                      className={`align-top cursor-pointer active:bg-orange-50 dark:active:bg-slate-700 ${!day ? 'text-slate-400' : ''} ${isToday ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}
+                      onClick={editMode ? undefined : () => setEditing(date)}
+                      className={`align-top ${editMode ? '' : 'cursor-pointer active:bg-orange-50 dark:active:bg-slate-700'} ${!day && !editMode ? 'text-slate-400' : ''} ${isToday ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}
                     >
                       <td className={`${TD} font-bold whitespace-nowrap text-slate-800 dark:text-slate-100`}>
                         {dayTitle(date, locale)}
+                        {editMode && (
+                          <button
+                            onClick={() => setEditing(date)}
+                            className="mt-1 block text-[11px] font-semibold text-orange-600 underline"
+                            title="Комментарии к блюдам и сменам, флажок «изменено», удаление дня"
+                          >
+                            подробно
+                          </button>
+                        )}
                       </td>
                       <td className={TD}>
-                        {blocks.map((b) => (
-                          <div key={b.id} className="mb-1.5 last:mb-0">
-                            <p className="font-semibold text-slate-800 dark:text-slate-100">
-                              {b.time ? `${b.time} ` : ''}{b.name || '—'}
-                              {b.persons ? <span className="font-normal text-slate-500"> · {b.persons}</span> : null}
-                            </p>
-                            {dishesOf(b).map((d) => (
-                              <p key={d.id} className={`pl-2 text-slate-600 dark:text-slate-300 ${d.changed ? '!text-red-600 font-semibold' : ''}`}>
-                                · {dishLabel(d, ctx.recipeById, ctx.lang)}
+                        {editMode
+                          ? <MenuCell coll={coll} date={date} day={day || {}} ctx={ctx} />
+                          : blocks.map((b) => (
+                            <div key={b.id} className="mb-1.5 last:mb-0">
+                              <p className="font-semibold text-slate-800 dark:text-slate-100">
+                                {b.time ? `${b.time} ` : ''}{b.name || '—'}
+                                {b.persons ? <span className="font-normal text-slate-500"> · {b.persons}</span> : null}
                               </p>
-                            ))}
-                          </div>
-                        ))}
+                              {dishesOf(b).map((d) => (
+                                <p key={d.id} className={`pl-2 text-slate-600 dark:text-slate-300 ${d.changed ? '!text-red-600 font-semibold' : ''}`}>
+                                  · {dishLabel(d, ctx.recipeById, ctx.lang)}
+                                </p>
+                              ))}
+                            </div>
+                          ))}
                       </td>
                       <td className={`${TD} text-xs`}>
-                        {notes.map((n, i) => (
-                          <p key={i} className="mb-1 last:mb-0 text-slate-700 dark:text-slate-200">
-                            {n.where && <span className="font-semibold text-orange-600">{n.where}: </span>}
-                            {n.text}
-                            <span className="text-slate-400"> — {n.by}</span>
-                          </p>
-                        ))}
+                        {editMode
+                          ? <NoteCell coll={coll} date={date} notes={notes} />
+                          : notes.map((n, i) => (
+                            <p key={i} className="mb-1 last:mb-0 text-slate-700 dark:text-slate-200">
+                              {n.where && <span className="font-semibold text-orange-600">{n.where}: </span>}
+                              {n.text}
+                              <span className="text-slate-400"> — {n.by}</span>
+                            </p>
+                          ))}
                       </td>
-                      <td className={`${TD} whitespace-nowrap`}>
-                        {shifts.map((s) => (
-                          <p key={s.id} className="text-slate-700 dark:text-slate-200">
-                            {staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || '?'}
-                            <span className="text-slate-500"> {s.start}–{s.end}</span>
-                          </p>
-                        ))}
+                      <td className={`${TD} ${editMode ? '' : 'whitespace-nowrap'}`}>
+                        {editMode
+                          ? <ShiftCell coll={coll} date={date} day={day || {}} ctx={ctx} />
+                          : shifts.map((s) => (
+                            <p key={s.id} className="text-slate-700 dark:text-slate-200">
+                              {staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || '?'}
+                              <span className="text-slate-500"> {s.start}–{s.end}</span>
+                            </p>
+                          ))}
                       </td>
                       <td className={`${TD} text-right whitespace-nowrap text-slate-700 dark:text-slate-200`}>
                         {shifts.length > 0 && formatDuration(planned)}
