@@ -4,14 +4,14 @@ import {
 } from 'lucide-react'
 import { Section, Field, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../components/UI'
 import { usePlanDeviceState, getAuthor } from '../plan/planRoom'
-import { usePlanCollection, createRecord, patchRecord, deleteRecord, undoLast } from '../plan/planStore'
+import { usePlanCollection, createRecord, patchRecord, deleteRecord, undoLast, redoLast } from '../plan/planStore'
 import {
   usePlanUsers, addUser, setUserPassword, setUserDisabled, deleteUser, createPlanRoom, joinPlanRoomAsOwner,
   setOwnerName, setOwnerPassword, useJournal, useUnseenChanges, markChangesSeen, useBackups, createSnapshot, restoreSnapshot, exportPlanFile, parsePlanFile, importPlanFile,
 } from '../plan/planAdmin'
 import { durationMinutes, formatDuration, parseHM } from '../plan/hours'
 import { describeEntry } from '../plan/journalText'
-import { DraftInput, ConfirmButton, TimeInput, TimeDraft, normalizeTime, useAction, Message, StatusBar, parseNorm, byName } from './plan/shared'
+import { DraftInput, ConfirmButton, TimeInput, TimeDraft, normalizeTime, useAction, Message, StatusBar, StatusIcons, parseNorm, byName } from './plan/shared'
 import { usePlanLang, setPlanLang } from '../plan/lang'
 import { useDensity, setDensity, densityVars, DENSITIES } from '../plan/ui'
 import ScheduleTab from './plan/ScheduleTab'
@@ -627,14 +627,18 @@ export default function PlanPage({ menuBridge }) {
     try { localStorage.setItem(subKey, key) } catch { /* preference only */ }
   }
 
-  // Ctrl/Cmd+Z takes back the last edit made on this device (not while typing
+  // Ctrl/Cmd+Z takes back, Ctrl+Shift+Z / Ctrl+Y brings back the last edit made on this device (not while typing
   // in a field — there it keeps its normal text-undo meaning).
   useEffect(() => {
     function onKey(e) {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return
+      if (!(e.ctrlKey || e.metaKey)) return
+      const k = e.key.toLowerCase()
+      const isUndo = k === 'z' && !e.shiftKey
+      const isRedo = (k === 'z' && e.shiftKey) || k === 'y'
+      if (!isUndo && !isRedo) return
       const el = e.target
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return
-      if (undoLast()) e.preventDefault()
+      if ((isUndo ? undoLast() : redoLast())) e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -656,11 +660,12 @@ export default function PlanPage({ menuBridge }) {
   return (
     <RecipeBridgeProvider recipes={menuBridge?.recipes} catalog={menuBridge?.recountCatalog}>
     <div className="pb-4" style={densityVars(density)}>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">План работы</h1>
         {config && (
-          <div className="flex items-center gap-2">
-            <DensityToggle />
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusIcons />
+            <div className="hidden sm:block"><DensityToggle /></div>
             <LangToggle />
           </div>
         )}

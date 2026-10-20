@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Wifi, WifiOff } from 'lucide-react'
+import { Wifi, WifiOff, Undo2, Redo2 } from 'lucide-react'
 import { inputClass, Badge } from '../../components/UI'
-import { usePlanStatus, flush, usePlanUndo, undoLast } from '../../plan/planStore'
+import { usePlanStatus, flush, usePlanUndo, undoLast, redoLast } from '../../plan/planStore'
 
 // Commits on blur / Enter, not on every keystroke: each commit is a journal
 // entry and a network write, and typing "Larin" must not produce five of them.
@@ -94,37 +94,54 @@ export function Message({ msg }) {
   return <p className={`text-sm border rounded-xl px-3 py-2 mt-2 ${cls}`}>{msg.text}</p>
 }
 
-export function StatusBar() {
+// Icon-only controls for the page header: connection (tap to send what is
+// still waiting), step back, step forward. No labels — hover text only.
+export function StatusIcons() {
   const s = usePlanStatus()
-  const undo = usePlanUndo()
+  const u = usePlanUndo()
+  const btn = 'relative w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs mb-3">
-      <span className={`flex items-center gap-1 font-semibold ${s.online ? 'text-green-600' : 'text-slate-400'}`}>
-        {s.online ? <Wifi size={14} /> : <WifiOff size={14} />}
-        {s.online ? 'онлайн' : 'нет связи'}
-      </span>
-      {s.pending > 0 && <Badge color="orange">Не отправлено: {s.pending}</Badge>}
-      {s.pending > 0 && (
-        <button
-          onClick={() => flush()}
-          disabled={s.flushing}
-          className="px-2.5 min-h-[28px] rounded-lg bg-orange-500 text-white font-semibold disabled:opacity-50"
-        >
-          {s.flushing ? 'Отправляю…' : 'Отправить сейчас'}
-        </button>
-      )}
-      {undo.count > 0 && (
-        <button
-          onClick={() => undoLast()}
-          className="px-2.5 min-h-[28px] rounded-lg bg-slate-700 text-white font-semibold max-w-[16rem] truncate"
-          title={undo.label}
-        >
-          ↶ Отменить: {undo.label}
-        </button>
-      )}
-      {s.error && <span className="text-red-600 dark:text-red-400">{s.error}</span>}
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={() => { if (s.pending > 0) flush() }}
+        className={`${btn} ${s.error ? 'text-red-600' : s.online ? 'text-green-600' : 'text-slate-400'}`}
+        title={s.error || (s.pending > 0 ? `Не отправлено: ${s.pending}. Нажмите, чтобы отправить` : s.online ? 'Онлайн, всё отправлено' : 'Нет связи')}
+        aria-label="Связь"
+      >
+        {s.online ? <Wifi size={18} /> : <WifiOff size={18} />}
+        {s.pending > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center">
+            {s.pending}
+          </span>
+        )}
+      </button>
+      <button
+        onClick={() => undoLast()}
+        disabled={u.count === 0}
+        className={`${btn} text-slate-700 dark:text-slate-200 disabled:opacity-30`}
+        title={u.count ? `Назад: ${u.label}` : 'Нечего отменять'}
+        aria-label="Назад"
+      >
+        <Undo2 size={18} />
+      </button>
+      <button
+        onClick={() => redoLast()}
+        disabled={u.redoCount === 0}
+        className={`${btn} text-slate-700 dark:text-slate-200 disabled:opacity-30`}
+        title={u.redoCount ? `Вперёд: ${u.redoLabel}` : 'Нечего возвращать'}
+        aria-label="Вперёд"
+      >
+        <Redo2 size={18} />
+      </button>
     </div>
   )
+}
+
+// Only appears when something is wrong; otherwise takes no space.
+export function StatusBar() {
+  const s = usePlanStatus()
+  if (!s.error) return null
+  return <p className="text-xs text-red-600 dark:text-red-400 mb-3">{s.error}</p>
 }
 
 export function parseNorm(v) {

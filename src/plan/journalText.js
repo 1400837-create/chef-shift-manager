@@ -67,6 +67,8 @@ export function describeEntry(e) {
       return `отключил(а) доступ пользователя ${name}`.trim()
     case 'enable':
       return `включил(а) доступ пользователя ${name}`.trim()
+    case 'redo':
+      return `повторил(а) действие: ${e.label || ''}`.trim()
     case 'undo':
       return `отменил(а) действие: ${e.label || ''}`.trim()
     case 'restore':

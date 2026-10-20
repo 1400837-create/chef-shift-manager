@@ -363,12 +363,14 @@ function requireRoom() {
 // values back as a new journaled edit (so the other person sees it too).
 
 const undoStack = []
+const redoStack = []
 const undoListeners = new Set()
-let undoSnap = { count: 0, label: '' }
+let undoSnap = { count: 0, label: '', redoCount: 0, redoLabel: '' }
 
 function notifyUndo() {
   const top = undoStack[undoStack.length - 1]
-  undoSnap = { count: undoStack.length, label: top ? top.label : '' }
+  const rtop = redoStack[redoStack.length - 1]
+  undoSnap = { count: undoStack.length, label: top ? top.label : '', redoCount: redoStack.length, redoLabel: rtop ? rtop.label : '' }
   undoListeners.forEach((fn) => fn())
 }
 
@@ -388,12 +390,23 @@ function buildInverse(coll, updates) {
   return inv
 }
 
-export function undoLast() {
-  const e = undoStack.pop()
+// Apply a stored edit and remember how to take that back, onto `otherStack`.
+function replay(from, otherStack, action) {
+  const e = from.pop()
   if (!e) return false
+  const back = buildInverse(e.coll, e.inverse) // what these paths hold right now
+  commit({ coll: e.coll, action, id: e.id, label: e.label, updates: e.inverse, noUndo: true })
+  if (back) otherStack.push({ coll: e.coll, id: e.id, inverse: back, label: e.label })
   notifyUndo()
-  commit({ coll: e.coll, action: 'undo', id: e.id, label: e.label, updates: e.inverse, noUndo: true })
   return true
+}
+
+export function undoLast() {
+  return replay(undoStack, redoStack, 'undo')
+}
+
+export function redoLast() {
+  return replay(redoStack, undoStack, 'redo')
 }
 
 export function commitChange(args) {
@@ -450,6 +463,7 @@ function commit({ coll, action, entity, id, label, updates, changes, before, noU
   outbox.push({ opId, code: cfg.code, clientTs: Date.now(), day, updates: cleanDeep(updates), journal: cleanDeep(journal) })
   if (inverse && action !== 'undo') {
     undoStack.push({ coll, id: id || null, inverse, label: describeEntry({ coll, action, entity, label, changes }) })
+    redoStack.length = 0 // a fresh edit ends the redo chain
     if (undoStack.length > 30) undoStack.shift()
     notifyUndo()
   }
