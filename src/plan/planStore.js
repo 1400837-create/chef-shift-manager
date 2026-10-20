@@ -386,7 +386,7 @@ function commit({ coll, action, entity, id, label, updates, changes, before }) {
 }
 
 function displayLabel(rec) {
-  return (rec && (rec.name || rec.label)) || ''
+  return (rec && (rec.name || rec.label || rec.title)) || ''
 }
 
 export function createRecord(coll, record) {
