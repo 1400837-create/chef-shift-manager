@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, X, MessageSquare, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Plus } from 'lucide-react'
 import { BigButton } from '../../components/UI'
 import { writePaths } from '../../plan/planStore'
 import { formatDuration } from '../../plan/hours'
@@ -8,8 +8,26 @@ import {
   shiftMinutes,
 } from '../../plan/calc'
 import { LOCALE, staffLabel, dishLabel } from '../../plan/lang'
-import { blocksOf, dishesOf, shiftsOf } from '../../plan/exchange'
+import { blocksOf, dishesOf, shiftsOf, commentsOf } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
+
+// Every cell gets a full border so the columns read as a table, not a list.
+const TH = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
+const TD = 'px-2 py-2 border border-slate-300 dark:border-slate-600'
+
+// All comments of a day in one place — on the day itself, on a meal, on a
+// dish or on a shift — each tagged with what it is about.
+function gatherComments(day, blocks, shifts, ctx) {
+  const out = []
+  const add = (node, where) => commentsOf(node).forEach((c) => out.push({ where, text: c.text, by: c.by }))
+  add(day, '')
+  blocks.forEach((b) => {
+    add(b, b.name || 'приём')
+    dishesOf(b).forEach((d) => add(d, dishLabel(d, ctx.recipeById, ctx.lang)))
+  })
+  shifts.forEach((s) => add(s, staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || ''))
+  return out
+}
 
 const SPANS = [
   { key: 'week', label: 'Неделя' },
@@ -112,28 +130,29 @@ export default function GridView({ plan, data, ctx, renderDay }) {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
+        <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
-            <tr className="bg-slate-100 dark:bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-500">
-              <th className="px-2 py-2 w-24">День</th>
-              <th className="px-2 py-2">Приёмы и меню</th>
-              <th className="px-2 py-2 w-48">Сотрудники</th>
-              <th className="px-2 py-2 w-20 text-right">Часы</th>
+            <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
+              <th className={`${TH} w-28`}>День</th>
+              <th className={`${TH} w-[34%]`}>Меню</th>
+              <th className={`${TH} w-[24%]`}>Комментарии</th>
+              <th className={`${TH} w-48`}>Сотрудники</th>
+              <th className={`${TH} w-20 text-right`}>Часы</th>
             </tr>
           </thead>
           <tbody>
             {dates.length === 0 && (
-              <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400">В плане пока нет дней. Добавьте день, неделю или месяц выше.</td></tr>
+              <tr><td colSpan={5} className={`${TD} py-6 text-center text-slate-400`}>В плане пока нет дней. Добавьте день, неделю или месяц выше.</td></tr>
             )}
             {weeks.map(([monday, list]) => {
               const wt = totals(data, list)
               return [
                 span !== 'week' && (
-                  <tr key={`w${monday}`} className="bg-slate-50 dark:bg-slate-900/40">
-                    <td colSpan={3} className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <tr key={`w${monday}`} className="bg-slate-100 dark:bg-slate-900/60">
+                    <td colSpan={4} className={`${TD} !py-1.5 text-xs font-bold uppercase tracking-wide text-slate-500`}>
                       {ctx.lang === 'de' ? 'Woche' : 'Неделя'} {weekTitle(monday, locale)}
                     </td>
-                    <td className="px-2 py-1.5 text-right text-xs font-bold text-slate-600 dark:text-slate-300">{formatDuration(wt.planned)}</td>
+                    <td className={`${TD} !py-1.5 text-right text-xs font-bold text-slate-600 dark:text-slate-300`}>{formatDuration(wt.planned)}</td>
                   </tr>
                 ),
                 ...list.map((date) => {
@@ -142,19 +161,18 @@ export default function GridView({ plan, data, ctx, renderDay }) {
                   const shifts = day ? shiftsOf(day) : []
                   const planned = shifts.reduce((a, s) => a + (shiftMinutes(s, 'planned') || 0), 0)
                   const actual = shifts.reduce((a, s) => a + (shiftMinutes(s, 'actual') || 0), 0)
-                  const commentCount = day ? Object.keys(day.comments || {}).length : 0
+                  const notes = day ? gatherComments(day, blocks, shifts, ctx) : []
                   const isToday = date === today
                   return (
                     <tr
                       key={date}
                       onClick={() => setEditing(date)}
-                      className={`border-t border-slate-100 dark:border-slate-700 align-top cursor-pointer active:bg-orange-50 dark:active:bg-slate-700 ${!day ? 'text-slate-400' : ''} ${isToday ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}
+                      className={`align-top cursor-pointer active:bg-orange-50 dark:active:bg-slate-700 ${!day ? 'text-slate-400' : ''} ${isToday ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}
                     >
-                      <td className="px-2 py-2 font-bold whitespace-nowrap text-slate-800 dark:text-slate-100">
+                      <td className={`${TD} font-bold whitespace-nowrap text-slate-800 dark:text-slate-100`}>
                         {dayTitle(date, locale)}
-                        {commentCount > 0 && <MessageSquare size={12} className="inline ml-1 text-orange-500" />}
                       </td>
-                      <td className="px-2 py-2">
+                      <td className={TD}>
                         {blocks.map((b) => (
                           <div key={b.id} className="mb-1.5 last:mb-0">
                             <p className="font-semibold text-slate-800 dark:text-slate-100">
@@ -169,7 +187,16 @@ export default function GridView({ plan, data, ctx, renderDay }) {
                           </div>
                         ))}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap">
+                      <td className={`${TD} text-xs`}>
+                        {notes.map((n, i) => (
+                          <p key={i} className="mb-1 last:mb-0 text-slate-700 dark:text-slate-200">
+                            {n.where && <span className="font-semibold text-orange-600">{n.where}: </span>}
+                            {n.text}
+                            <span className="text-slate-400"> — {n.by}</span>
+                          </p>
+                        ))}
+                      </td>
+                      <td className={`${TD} whitespace-nowrap`}>
                         {shifts.map((s) => (
                           <p key={s.id} className="text-slate-700 dark:text-slate-200">
                             {staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || '?'}
@@ -177,7 +204,7 @@ export default function GridView({ plan, data, ctx, renderDay }) {
                           </p>
                         ))}
                       </td>
-                      <td className="px-2 py-2 text-right whitespace-nowrap text-slate-700 dark:text-slate-200">
+                      <td className={`${TD} text-right whitespace-nowrap text-slate-700 dark:text-slate-200`}>
                         {shifts.length > 0 && formatDuration(planned)}
                         {actual > 0 && <span className="block text-xs text-slate-500">факт {formatDuration(actual)}</span>}
                       </td>
@@ -189,9 +216,9 @@ export default function GridView({ plan, data, ctx, renderDay }) {
           </tbody>
           {dates.length > 0 && (
             <tfoot>
-              <tr className="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900/40 font-bold text-slate-700 dark:text-slate-200">
-                <td colSpan={3} className="px-2 py-2">Итого за период</td>
-                <td className="px-2 py-2 text-right whitespace-nowrap">
+              <tr className="bg-slate-100 dark:bg-slate-900/60 font-bold text-slate-700 dark:text-slate-200">
+                <td colSpan={4} className={`${TD} border-t-2 border-t-slate-400`}>Итого за период</td>
+                <td className={`${TD} border-t-2 border-t-slate-400 text-right whitespace-nowrap`}>
                   {formatDuration(periodTotal.planned)}
                   {periodTotal.actual > 0 && <span className="block text-xs font-normal text-slate-500">факт {formatDuration(periodTotal.actual)}</span>}
                 </td>

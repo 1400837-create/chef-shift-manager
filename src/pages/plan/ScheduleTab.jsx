@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock } from 'lucide-react'
 import { Section, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../../components/UI'
 import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
@@ -40,8 +40,12 @@ function sortedEntries(obj, cmp) {
 // comments (author + time on every one)
 // ---------------------------------------------------------------------------
 
-function Comments({ coll, path, comments, label }) {
-  const [open, setOpen] = useState(false)
+// `part` lets a caller put the toggle button in one place (next to a dish) and
+// the thread below it, sharing one open state.
+function Comments({ coll, path, comments, label, part = 'both', open: openProp, onToggle }) {
+  const [openState, setOpenState] = useState(false)
+  const open = openProp !== undefined ? openProp : openState
+  const toggle = onToggle || (() => setOpenState((v) => !v))
   const [text, setText] = useState('')
   const list = sortedEntries(comments, (a, b) => (a.ts || 0) - (b.ts || 0))
 
@@ -63,18 +67,21 @@ function Comments({ coll, path, comments, label }) {
     })
   }
 
+  const Wrap = part === 'both' ? 'div' : Fragment
   return (
-    <div>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-1 px-2 min-h-[32px] rounded-lg text-xs font-semibold ${
-          list.length ? 'text-orange-600' : 'text-slate-400'
-        }`}
-        title="Комментарии"
-      >
-        <MessageSquare size={14} /> {list.length || ''}
-      </button>
-      {open && (
+    <Wrap>
+      {part !== 'panel' && (
+        <button
+          onClick={toggle}
+          className={`flex items-center gap-1 px-2 min-h-[32px] rounded-lg text-xs font-semibold ${
+            list.length ? 'text-orange-600' : 'text-slate-400'
+          }`}
+          title="Комментарии"
+        >
+          <MessageSquare size={14} /> {list.length || ''}
+        </button>
+      )}
+      {part !== 'button' && open && (
         <div className="mt-1 mb-2 rounded-xl border border-slate-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-900/40">
           {list.length === 0 && <p className="text-xs text-slate-400 mb-1">Комментариев пока нет</p>}
           {list.map((c) => (
@@ -100,7 +107,7 @@ function Comments({ coll, path, comments, label }) {
           </div>
         </div>
       )}
-    </div>
+    </Wrap>
   )
 }
 
@@ -156,6 +163,7 @@ function BlockCard({ coll, date, block, ctx }) {
   const base = `${date}/blocks/${block.id}`
   const label = `${dayTitle(date)} · ${block.name || 'приём'}`
   const dishes = sortedEntries(block.dishes, (a, b) => a.id.localeCompare(b.id))
+  const [cOpen, setCOpen] = useState({})
   const persons = Number(block.persons)
   const coef = Number.isFinite(persons) && persons > 0 ? Math.round((persons / 10) * 100) / 100 : null
 
@@ -201,7 +209,8 @@ function BlockCard({ coll, date, block, ctx }) {
         {dishes.map((d) => {
           const recipe = d.recipeId ? ctx.recipeById[d.recipeId] : null
           return (
-            <div key={d.id} className="flex items-center gap-1.5 mb-1.5">
+            <div key={d.id} className="mb-1.5">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => patchDish(d, { [`${base}/dishes/${d.id}/changed`]: d.changed ? null : true })}
                 className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-lg ${d.changed ? 'text-red-600' : 'text-slate-300 dark:text-slate-600'}`}
@@ -230,6 +239,7 @@ function BlockCard({ coll, date, block, ctx }) {
               )}
               {d.recipeId && recipe && <Badge color="green">ТК</Badge>}
               {coef !== null && <span className="shrink-0 text-xs text-slate-400">×{coef}</span>}
+              <Comments part="button" coll={coll} path={`${base}/dishes/${d.id}`} comments={d.comments} label={`${label}: ${d.text}`} open={!!cOpen[d.id]} onToggle={() => setCOpen((o) => ({ ...o, [d.id]: !o[d.id] }))} />
               <button
                 onClick={() => writePaths(coll, { [`${base}/dishes/${d.id}`]: null }, { action: 'delete', entity: 'блюдо', id: date, label: `${label}: ${d.text}`, before: d })}
                 className="shrink-0 w-8 h-8 flex items-center justify-center text-slate-400 active:text-red-600"
@@ -237,6 +247,10 @@ function BlockCard({ coll, date, block, ctx }) {
               >
                 <X size={16} />
               </button>
+            </div>
+            <div className="pl-9">
+              <Comments part="panel" coll={coll} path={`${base}/dishes/${d.id}`} comments={d.comments} label={`${label}: ${d.text}`} open={!!cOpen[d.id]} />
+            </div>
             </div>
           )
         })}

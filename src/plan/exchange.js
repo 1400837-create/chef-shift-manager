@@ -264,6 +264,7 @@ export function buildPrintPayload({ plan, data, ctx, shifts, lang, from, to }) {
             dishes: dishesOf(b).map((d) => ({
               text: L(d.text || '', ctx.recipeById[d.recipeId]?.de || ''),
               changed: !!d.changed,
+              comments: commentsOf(d).map((c) => `${c.text} (${c.by})`),
             })),
             comments: commentsOf(b).map((c) => `${c.text} (${c.by})`),
           })),

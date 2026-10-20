@@ -190,7 +190,7 @@ function buildWorkPlanHtml(payload) {
     const days = week.days.map((day) => {
       const blockRows = day.blocks.map((b) => {
         const dishes = b.dishes.length
-          ? b.dishes.map((d) => `${d.changed ? '<span style="display:inline-block;border:1.5px solid #c00;color:#c00;font-weight:bold;width:13px;text-align:center;line-height:15px;margin-right:5px;" title="' + escapeHtml(L.changed) + '">!</span>' : ''}${escapeHtml(d.text)}`).join('<br>')
+          ? b.dishes.map((d) => `${d.changed ? '<span style="display:inline-block;border:1.5px solid #c00;color:#c00;font-weight:bold;width:13px;text-align:center;line-height:15px;margin-right:5px;" title="' + escapeHtml(L.changed) + '">!</span>' : ''}${escapeHtml(d.text)}${note(d.comments)}`).join('<br>')
           : ''
         return `<tr>
           <td class="nowrap">${escapeHtml(b.time)}</td>
