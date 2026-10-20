@@ -9,7 +9,7 @@ import {
   collectShifts, suggestStaff,
 } from '../../plan/calc'
 import { todayKey } from '../../utils/dateUtils'
-import { DraftInput, ConfirmButton, byName } from './shared'
+import { DraftInput, ConfirmButton, TimeDraft, TimeInput, normalizeTime, byName } from './shared'
 import { usePlanLang, LOCALE, staffLabel } from '../../plan/lang'
 import ExchangePanel from './Exchange'
 import CostPanel from './Cost'
@@ -203,7 +203,7 @@ function BlockCard({ coll, date, block, ctx }) {
       <div className="grid grid-cols-[minmax(7.5rem,1fr)_minmax(5rem,1fr)_auto] gap-2 mt-2 items-end">
         <div>
           <p className="text-[11px] text-slate-400 mb-0.5">Время</p>
-          <DraftInput type="time" value={block.time} onCommit={(v) => patch('time', v)} />
+          <TimeDraft value={block.time} onCommit={(v) => patch('time', v || null)} />
         </div>
         <div>
           <p className="text-[11px] text-slate-400 mb-0.5">Персон</p>
@@ -329,11 +329,11 @@ function ShiftRow({ coll, date, shift, ctx, blocks }) {
         </div>
         <div>
           <p className="text-[11px] text-slate-400 mb-0.5">Начало</p>
-          <DraftInput type="time" value={shift.start} onCommit={(v) => patch('start', v)} />
+          <TimeDraft value={shift.start} onCommit={(v) => { if (v) patch('start', v) }} />
         </div>
         <div>
           <p className="text-[11px] text-slate-400 mb-0.5">Конец</p>
-          <DraftInput type="time" value={shift.end} onCommit={(v) => patch('end', v)} />
+          <TimeDraft value={shift.end} onCommit={(v) => { if (v) patch('end', v) }} />
         </div>
         {ctx.templates.length > 0 && (
           <select className={inputClass} value="" onChange={(e) => applyTemplate(e.target.value)}>
@@ -353,11 +353,11 @@ function ShiftRow({ coll, date, shift, ctx, blocks }) {
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div>
             <p className="text-[11px] text-slate-400 mb-0.5">Факт: начало</p>
-            <DraftInput type="time" value={shift.actStart} onCommit={(v) => patch('actStart', v || null)} />
+            <TimeDraft value={shift.actStart} onCommit={(v) => patch('actStart', v || null)} />
           </div>
           <div>
             <p className="text-[11px] text-slate-400 mb-0.5">Факт: конец</p>
-            <DraftInput type="time" value={shift.actEnd} onCommit={(v) => patch('actEnd', v || null)} />
+            <TimeDraft value={shift.actEnd} onCommit={(v) => patch('actEnd', v || null)} />
           </div>
         </div>
       )}
@@ -405,19 +405,23 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
     })
   }
 
+  // The fields hold typed text ("930" shows as 9:30) — work with the clean value.
+  const ns = normalizeTime(start)
+  const ne = normalizeTime(end)
+
   function add() {
     const rec = ctx.staffList.find((s) => s.id === staffId)
     if (!rec) return setError('Выберите сотрудника.')
-    if (parseHM(start) === null || parseHM(end) === null) return setError('Укажите начало и конец смены.')
+    if (!ns || !ne) return setError('Укажите начало и конец смены.')
     setError(null)
-    create(rec, start, end)
+    create(rec, ns, ne)
     setStaffId('')
   }
 
-  const canSuggest = parseHM(start) !== null && parseHM(end) !== null
+  const canSuggest = !!ns && !!ne
   const suggestions = useMemo(
-    () => (pickOpen && canSuggest ? suggestStaff({ staff: ctx.staffList, shifts: allShifts, date, start, end }).slice(0, 6) : []),
-    [pickOpen, canSuggest, ctx.staffList, allShifts, date, start, end]
+    () => (pickOpen && canSuggest ? suggestStaff({ staff: ctx.staffList, shifts: allShifts, date, start: ns, end: ne }).slice(0, 6) : []),
+    [pickOpen, canSuggest, ctx.staffList, allShifts, date, ns, ne]
   )
 
   return (
@@ -433,8 +437,8 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
             {ctx.templates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         )}
-        <input type="time" className={inputClass} value={start} onChange={(e) => { setStart(e.target.value); setTemplateId('') }} />
-        <input type="time" className={inputClass} value={end} onChange={(e) => { setEnd(e.target.value); setTemplateId('') }} />
+        <TimeInput value={start} placeholder="Начало (1000)" onChange={(v) => { setStart(v); setTemplateId('') }} />
+        <TimeInput value={end} placeholder="Конец (1600)" onChange={(v) => { setEnd(v); setTemplateId('') }} onEnter={add} />
         <button onClick={add} className="min-h-[48px] rounded-xl bg-orange-500 active:bg-orange-600 text-white font-semibold flex items-center justify-center gap-1.5">
           <Plus size={16} /> Смена
         </button>
@@ -460,7 +464,7 @@ function ShiftAdder({ coll, date, ctx, shifts, allShifts }) {
                 </p>
               </div>
               <button
-                onClick={() => create(staff, start, end)}
+                onClick={() => create(staff, ns, ne)}
                 className={`shrink-0 px-3 min-h-[36px] rounded-lg text-xs font-semibold ${busy ? 'bg-slate-100 dark:bg-slate-700 text-slate-500' : 'bg-orange-500 text-white'}`}
               >
                 Назначить

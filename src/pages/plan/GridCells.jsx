@@ -5,8 +5,8 @@ import { writePaths, newId } from '../../plan/planStore'
 import { getAuthor } from '../../plan/planRoom'
 import { dayTitle } from '../../plan/calc'
 import { staffLabel } from '../../plan/lang'
-import { blocksOf, dishesOf, shiftsOf, parseTimeCell, parseRange } from '../../plan/exchange'
-import { DraftInput } from './shared'
+import { blocksOf, dishesOf, shiftsOf } from '../../plan/exchange'
+import { DraftInput, TimeDraft, TimeInput, normalizeTime } from './shared'
 import { RecipePickerModal } from './RecipeBrowser'
 
 // Editable versions of the grid's cells. Every field here is the same kind of
@@ -15,14 +15,6 @@ import { RecipePickerModal } from './RecipeBrowser'
 
 const COMPACT = '!min-h-[32px] !py-1 !px-2 !rounded-lg !text-sm'
 const SELECT = 'min-h-[32px] px-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 max-w-full'
-
-const timeCommit = (patch) => (v) => {
-  const t = v.trim()
-  if (t === '') return patch(null)
-  const p = parseTimeCell(t)
-  if (p) patch(p) // unparsable input is dropped and the field snaps back
-  return undefined
-}
 
 // ---------------------------------------------------------------------------
 // menu: meals and their dishes
@@ -107,7 +99,7 @@ export function MenuCell({ coll, date, day, ctx }) {
         <div key={b.id} className="mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/40 p-1.5">
           <div className="flex items-center gap-1">
             <div className="w-[4.2rem] shrink-0">
-              <DraftInput className={COMPACT} value={b.time} placeholder="время" onCommit={timeCommit((v) => patchBlock(b, 'time', v))} />
+              <TimeDraft className={`${COMPACT} text-center`} value={b.time} onCommit={(v) => patchBlock(b, 'time', v || null)} />
             </div>
             <DraftInput className={`${COMPACT} font-semibold`} value={b.name} list="plan-block-names" placeholder="приём / мероприятие" onCommit={(v) => patchBlock(b, 'name', v.trim())} />
             <div className="w-[3.4rem] shrink-0">
@@ -184,7 +176,8 @@ export function ShiftCell({ coll, date, day, ctx }) {
   const shifts = shiftsOf(day)
   const lbl = dayTitle(date)
   const [staffId, setStaffId] = useState('')
-  const [range, setRange] = useState('')
+  const [t1, setT1] = useState('')
+  const [t2, setT2] = useState('')
   const [tpl, setTpl] = useState('')
   const [err, setErr] = useState(false)
 
@@ -201,7 +194,9 @@ export function ShiftCell({ coll, date, day, ctx }) {
 
   function add() {
     const rec = ctx.staffById[staffId]
-    let times = parseRange(range)
+    const a = normalizeTime(t1)
+    const b = normalizeTime(t2)
+    let times = a && b ? [a, b] : null
     if (!times && tpl) {
       const t = ctx.templates.find((x) => x.id === tpl)
       if (t) times = [t.start, t.end]
@@ -212,8 +207,15 @@ export function ShiftCell({ coll, date, day, ctx }) {
       action: 'create', entity: 'смену', id: date, label: `${lbl} · ${rec.name} ${times[0]}–${times[1]}`,
     })
     setStaffId('')
-    setRange('')
+    setT1('')
+    setT2('')
     setTpl('')
+  }
+
+  function chooseTemplate(id) {
+    setTpl(id)
+    const t = ctx.templates.find((x) => x.id === id)
+    if (t) { setT1(t.start); setT2(t.end) }
   }
 
   return (
@@ -227,9 +229,9 @@ export function ShiftCell({ coll, date, day, ctx }) {
               {!known && s.staffName && <option value={s.staffId || '__old'} disabled>{s.staffName} (нет в списке)</option>}
               {ctx.staffList.map((p) => <option key={p.id} value={p.id}>{staffLabel(p, ctx.lang)}</option>)}
             </select>
-            <div className="w-[3.8rem] shrink-0"><DraftInput className={COMPACT} value={s.start} onCommit={timeCommit((v) => patch(s, 'start', v))} /></div>
+            <div className="w-[3.8rem] shrink-0"><TimeDraft className={`${COMPACT} text-center`} value={s.start} onCommit={(v) => { if (v) patch(s, 'start', v) }} /></div>
             <span className="text-slate-400">–</span>
-            <div className="w-[3.8rem] shrink-0"><DraftInput className={COMPACT} value={s.end} onCommit={timeCommit((v) => patch(s, 'end', v))} /></div>
+            <div className="w-[3.8rem] shrink-0"><TimeDraft className={`${COMPACT} text-center`} value={s.end} onCommit={(v) => { if (v) patch(s, 'end', v) }} /></div>
             <button
               onClick={() => writePaths(coll, { [`${date}/shifts/${s.id}`]: null }, { action: 'delete', entity: 'смену', id: date, label: `${lbl} · смена ${s.staffName || ''}`.trim(), before: s })}
               className="shrink-0 w-7 h-8 flex items-center justify-center text-slate-400 hover:text-red-600"
@@ -245,16 +247,12 @@ export function ShiftCell({ coll, date, day, ctx }) {
           <option value="">+ сотрудник…</option>
           {ctx.staffList.map((p) => <option key={p.id} value={p.id}>{staffLabel(p, ctx.lang)}</option>)}
         </select>
-        <div className="flex gap-1">
-          <input
-            className="w-0 flex-1 min-h-[32px] px-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100"
-            placeholder="10-16"
-            value={range}
-            onChange={(e) => setRange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-          />
+        <div className="flex items-center gap-1">
+          <div className="w-[3.8rem] shrink-0"><TimeInput className={`${COMPACT} text-center`} placeholder="с" value={t1} onChange={(v) => { setT1(v); setTpl('') }} /></div>
+          <span className="text-slate-400">–</span>
+          <div className="w-[3.8rem] shrink-0"><TimeInput className={`${COMPACT} text-center`} placeholder="до" value={t2} onChange={(v) => { setT2(v); setTpl('') }} onEnter={add} /></div>
           {ctx.templates.length > 0 && (
-            <select className={`${SELECT} w-[5.2rem]`} value={tpl} onChange={(e) => setTpl(e.target.value)}>
+            <select className={`${SELECT} flex-1 min-w-0`} value={tpl} onChange={(e) => chooseTemplate(e.target.value)}>
               <option value="">смена…</option>
               {ctx.templates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>

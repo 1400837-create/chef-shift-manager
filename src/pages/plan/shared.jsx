@@ -114,3 +114,106 @@ export function parseNorm(v) {
 }
 
 export const byName = (a, b) => (a.name || a.label || '').localeCompare(b.name || b.label || '', 'ru')
+
+// ---------------------------------------------------------------------------
+// Time entry: only digits are typed, the colon appears by itself.
+//   "930" → 9:30 · "1030" → 10:30 · "18" → 18:00 · "9" → 09:00
+// A native time picker (clock dial / scroll wheels) is slow for this: the
+// plan is filled with many times a day.
+// ---------------------------------------------------------------------------
+
+const digitsOf = (text) => String(text ?? '').replace(/\D/g, '').slice(0, 4)
+
+// What to show while typing.
+export function formatTimeText(text) {
+  const d = digitsOf(text)
+  if (d.length <= 2) return d
+  if (d.length === 3) return Number(d.slice(0, 2)) <= 23 ? `${d.slice(0, 2)}:${d[2]}` : `${d[0]}:${d.slice(1)}`
+  return `${d.slice(0, 2)}:${d.slice(2)}`
+}
+
+// Final value: 'HH:MM', '' when empty, null when it isn't a real time.
+export function normalizeTime(text) {
+  const d = digitsOf(text)
+  if (d === '') return ''
+  let h
+  let m
+  if (d.length === 1) { h = Number(d); m = 0 }
+  else if (d.length === 2) {
+    if (Number(d) <= 23) { h = Number(d); m = 0 } else { h = Number(d[0]); m = Number(d[1]) * 10 }
+  } else if (d.length === 3) {
+    if (Number(d.slice(0, 2)) <= 23) { h = Number(d.slice(0, 2)); m = Number(d[2]) * 10 } else { h = Number(d[0]); m = Number(d.slice(1)) }
+  } else { h = Number(d.slice(0, 2)); m = Number(d.slice(2)) }
+  if (h > 23 || m > 59) return null
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+// Controlled field for forms that keep the text in their own state.
+export function TimeInput({ value, onChange, onEnter, className = '', placeholder = 'чч:мм' }) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      maxLength={5}
+      placeholder={placeholder}
+      className={`${inputClass} ${className}`}
+      value={value || ''}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => onChange(formatTimeText(e.target.value))}
+      onBlur={() => {
+        const n = normalizeTime(value)
+        if (n !== null && n !== (value || '')) onChange(n)
+      }}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (onEnter) onEnter(); else e.currentTarget.blur() } }}
+    />
+  )
+}
+
+// Saved-record variant: commits 'HH:MM' (or '' to clear) on blur / Enter and
+// quietly puts the old value back if what was typed isn't a time.
+export function TimeDraft({ value, onCommit, className = '', placeholder = 'чч:мм' }) {
+  const str = value === null || value === undefined ? '' : String(value)
+  const [draft, setDraft] = useState(str)
+  const [editing, setEditing] = useState(false)
+  const latest = useRef({ draft, editing, onCommit, str })
+  latest.current = { draft, editing, onCommit, str }
+
+  useEffect(() => {
+    if (!editing) setDraft(str)
+  }, [str, editing])
+
+  function finish() {
+    const { draft: d, onCommit: commit, str: current } = latest.current
+    latest.current.editing = false
+    setEditing(false)
+    const n = normalizeTime(d)
+    if (n === null) { setDraft(current); return }
+    setDraft(n)
+    if (n !== current) commit(n)
+  }
+
+  // Same reason as DraftInput: closing a window mid-edit must not lose it.
+  useEffect(() => () => {
+    const { draft: d, editing: e, onCommit: commit, str: current } = latest.current
+    if (!e) return
+    const n = normalizeTime(d)
+    if (n !== null && n !== current) commit(n)
+  }, [])
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      maxLength={5}
+      placeholder={placeholder}
+      className={`${inputClass} ${className}`}
+      value={draft}
+      onFocus={(e) => { setEditing(true); e.target.select() }}
+      onChange={(e) => setDraft(formatTimeText(e.target.value))}
+      onBlur={finish}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }}
+    />
+  )
+}

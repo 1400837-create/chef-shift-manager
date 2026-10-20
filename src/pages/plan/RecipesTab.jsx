@@ -9,6 +9,7 @@ import { dayTitle, isDateKey } from '../../plan/calc'
 import { blocksOf } from '../../plan/exchange'
 import { todayKey } from '../../utils/dateUtils'
 import { BLOCK_NAMES } from './ScheduleTab'
+import { TimeInput, normalizeTime } from './shared'
 
 // Adds the chosen recipes to one day of one plan, into an existing meal or a
 // new one. Dishes are stored the same way as hand-picked ones (text + link).
@@ -35,7 +36,7 @@ function AddToDay({ picked, plans, defaultPlanId, onRemove, onClose, onDone }) {
     if (bid === '__new') {
       bid = newId(coll)
       rel[`${date}/blocks/${bid}/name`] = blockName.trim()
-      rel[`${date}/blocks/${bid}/time`] = blockTime
+      rel[`${date}/blocks/${bid}/time`] = normalizeTime(blockTime) || ''
     }
     picked.forEach((r) => {
       rel[`${date}/blocks/${bid}/dishes/${newId(coll)}`] = { text: r.name, recipeId: r.id }
@@ -83,7 +84,7 @@ function AddToDay({ picked, plans, defaultPlanId, onRemove, onClose, onDone }) {
           {selectedBlock === '__new' && (
             <div className="grid grid-cols-[1fr_7rem] gap-2">
               <input className={inputClass} list="plan-recipe-blocks" placeholder="Название приёма (необяз.)" value={blockName} onChange={(e) => setBlockName(e.target.value)} />
-              <input type="time" className={inputClass} value={blockTime} onChange={(e) => setBlockTime(e.target.value)} />
+              <TimeInput value={blockTime} placeholder="Время (1230)" onChange={setBlockTime} />
               <datalist id="plan-recipe-blocks">{BLOCK_NAMES.map((n) => <option key={n} value={n} />)}</datalist>
             </div>
           )}

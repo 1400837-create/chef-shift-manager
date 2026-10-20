@@ -11,7 +11,7 @@ import {
 } from '../plan/planAdmin'
 import { durationMinutes, formatDuration, parseHM } from '../plan/hours'
 import { describeEntry } from '../plan/journalText'
-import { DraftInput, ConfirmButton, useAction, Message, StatusBar, parseNorm, byName } from './plan/shared'
+import { DraftInput, ConfirmButton, TimeInput, TimeDraft, normalizeTime, useAction, Message, StatusBar, parseNorm, byName } from './plan/shared'
 import { usePlanLang, setPlanLang } from '../plan/lang'
 import ScheduleTab from './plan/ScheduleTab'
 import HoursTab from './plan/HoursTab'
@@ -95,15 +95,17 @@ function ShiftTemplates() {
   const [error, setError] = useState(null)
 
   function add() {
-    if (parseHM(form.start) === null || parseHM(form.end) === null) {
+    const start = normalizeTime(form.start)
+    const end = normalizeTime(form.end)
+    if (!start || !end) {
       setError('Укажите начало и конец смены.')
       return
     }
     setError(null)
     createRecord('shiftTemplates', {
-      label: form.label.trim() || `${form.start}–${form.end}`,
-      start: form.start,
-      end: form.end,
+      label: form.label.trim() || `${start}–${end}`,
+      start,
+      end,
     })
     setForm({ label: '', start: '', end: '' })
   }
@@ -117,8 +119,8 @@ function ShiftTemplates() {
       <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-3 mb-3">
         <div className="grid grid-cols-2 gap-2">
           <input className={inputClass + ' col-span-2'} placeholder="Название (необязательно)" value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} />
-          <input type="time" className={inputClass} value={form.start} onChange={(e) => setForm((f) => ({ ...f, start: e.target.value }))} />
-          <input type="time" className={inputClass} value={form.end} onChange={(e) => setForm((f) => ({ ...f, end: e.target.value }))} />
+          <TimeInput value={form.start} placeholder="Начало (1000)" onChange={(v) => setForm((f) => ({ ...f, start: v }))} />
+          <TimeInput value={form.end} placeholder="Конец (1600)" onChange={(v) => setForm((f) => ({ ...f, end: v }))} />
           <button
             onClick={add}
             className="col-span-2 min-h-[48px] rounded-xl bg-orange-500 active:bg-orange-600 text-white font-semibold flex items-center justify-center gap-1.5"
@@ -140,11 +142,11 @@ function ShiftTemplates() {
             </div>
             <div>
               <p className="text-[11px] text-slate-400 mb-0.5">Начало</p>
-              <DraftInput type="time" value={rec.start} onCommit={(v) => { if (parseHM(v) !== null) patchRecord('shiftTemplates', rec.id, { start: v }) }} />
+              <TimeDraft value={rec.start} onCommit={(v) => { if (v) patchRecord('shiftTemplates', rec.id, { start: v }) }} />
             </div>
             <div>
               <p className="text-[11px] text-slate-400 mb-0.5">Конец</p>
-              <DraftInput type="time" value={rec.end} onCommit={(v) => { if (parseHM(v) !== null) patchRecord('shiftTemplates', rec.id, { end: v }) }} />
+              <TimeDraft value={rec.end} onCommit={(v) => { if (v) patchRecord('shiftTemplates', rec.id, { end: v }) }} />
             </div>
             <div className="col-span-2 flex items-center justify-between">
               <Badge color="slate">{formatDuration(durationMinutes(rec.start, rec.end))} ч</Badge>
