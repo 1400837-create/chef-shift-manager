@@ -2,6 +2,7 @@ import { useState } from 'react'
 import App from './App'
 import StaffApp from './StaffApp'
 import { StaffLogin, DeviceChooser } from './components/StaffGate'
+import DatalistDropdown from './components/DatalistDropdown'
 import { usePlanDeviceState, isFreshDevice } from './plan/planRoom'
 
 // Decides what this device is running:
@@ -16,9 +17,19 @@ export default function Root() {
   // always say "not fresh".
   const [fresh] = useState(() => isFreshDevice())
 
+  let screen
   if (config?.role === 'staff') {
-    return session ? <StaffApp /> : <StaffLogin initialCode={config.code} />
+    screen = session ? <StaffApp /> : <StaffLogin initialCode={config.code} />
+  } else if (fresh && !deviceChoice && !config) {
+    screen = <DeviceChooser />
+  } else {
+    screen = <App />
   }
-  if (fresh && !deviceChoice && !config) return <DeviceChooser />
-  return <App />
+  // The suggestion lists of every `<input list>` in the app are drawn by this.
+  return (
+    <>
+      {screen}
+      <DatalistDropdown />
+    </>
+  )
 }
