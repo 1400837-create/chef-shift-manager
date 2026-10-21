@@ -861,7 +861,7 @@ export default function ShoppingList({
                 <input
                   list="all-known-stores"
                   className={inputClass + ' flex-1 min-w-0 text-sm'}
-                  placeholder="Выберите или впишите магазин"
+                  placeholder="Магазин…"
                   value={bulkStore}
                   onChange={(e) => { setBulkStore(e.target.value); setBulkNote(null) }}
                   onKeyDown={(e) => { if (e.key === 'Enter') assignStoreToSelected(bulkStore) }}
