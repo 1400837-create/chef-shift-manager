@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock, BookOpen, Bookmark, Settings } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, MessageSquare, Flag, Users, X, Clock, BookOpen, Bookmark, Settings, Archive, Search } from 'lucide-react'
 import { cmpId } from '../../plan/exchange'
+import { isArchived, sortByPeriod } from '../../plan/archive'
+import { useEscape } from '../../plan/ui'
 import { dishesFromLines, templateFromBlock, templatePaths } from '../../plan/templates'
 import { Section, inputClass, BigButton, Badge, ConfirmDeleteButton } from '../../components/UI'
 import { usePlanDeviceState, getAuthor } from '../../plan/planRoom'
@@ -615,7 +617,8 @@ const isEmptyDay = (day) =>
 // one plan
 // ---------------------------------------------------------------------------
 
-function PlanView({ plan, ctx, menuBridge, plans }) {
+function PlanView({ plan, ctx, menuBridge, plans, onGoToPlan }) {
+  const archived = isArchived(plan, todayKey())
   const isOwner = usePlanDeviceState().config?.role === 'owner'
   const coll = `planData/${plan.id}`
   const { data } = usePlanCollection(coll)
@@ -644,7 +647,7 @@ function PlanView({ plan, ctx, menuBridge, plans }) {
 
   return (
     <>
-      <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} plans={plans} tree={tree} menuBridge={menuBridge} />
+      <GridView plan={plan} data={data} ctx={ctx} renderDay={renderDay} plans={plans} tree={tree} menuBridge={menuBridge} onGoToPlan={onGoToPlan} />
 
       <section className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mb-4 overflow-hidden">
         <button
@@ -699,14 +702,27 @@ function PlanView({ plan, ctx, menuBridge, plans }) {
               </ConfirmButton>
             )
             : <span />}
-          <ConfirmDeleteButton
-            onConfirm={() => commitChange({
-              coll: 'plans', action: 'delete', entity: 'план', id: plan.id, label: plan.title,
-              updates: { [`plans/${plan.id}`]: null, [`planData/${plan.id}`]: null }, before: plan,
-            })}
-            size="w-9 h-9"
-          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => patchRecord('plans', plan.id, { archived: !archived })}
+              className="px-3 min-h-[36px] rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5"
+            >
+              <Archive size={14} /> {archived ? 'Вернуть в ряд' : 'В архив'}
+            </button>
+            <ConfirmDeleteButton
+              onConfirm={() => commitChange({
+                coll: 'plans', action: 'delete', entity: 'план', id: plan.id, label: plan.title,
+                updates: { [`plans/${plan.id}`]: null, [`planData/${plan.id}`]: null }, before: plan,
+              })}
+              size="w-9 h-9"
+            />
+          </div>
         </div>
+        <p className="text-xs text-slate-500 mt-2">
+          {archived
+            ? 'План в архиве: его нет в ряду кнопок, но он открывается из «Архива», данные и часы сохранены.'
+            : 'В архив план уходит сам через 2 месяца после конца. Можно убрать раньше — кнопкой «В архив».'}
+        </p>
         </div>}
       </section>
 
@@ -775,6 +791,71 @@ function NewPlanForm({ onCreated, onCancel }) {
   )
 }
 
+// The full list of plans (current and archived), searchable, grouped by year.
+function PlansPicker({ plans, selected, today, onPick, onClose }) {
+  const [q, setQ] = useState('')
+  useEscape(onClose)
+  const fmt = (k) => `${k.slice(8)}.${k.slice(5, 7)}.${k.slice(2, 4)}`
+  const groups = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    const list = sortByPeriod(plans)
+      .filter((p) => !needle || `${p.title || ''} ${kindLabel(p.kind)}`.toLowerCase().includes(needle))
+      .reverse()
+    const map = new Map()
+    list.forEach((p) => {
+      const r = planRange(p)
+      const year = r ? r.from.slice(0, 4) : 'Без дат'
+      if (!map.has(year)) map.set(year, [])
+      map.get(year).push(p)
+    })
+    return [...map.entries()]
+  }, [plans, q])
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-md max-h-[88vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 p-4 pb-2">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input className={`${inputClass} pl-9`} placeholder="Найти план" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+          </div>
+          <button onClick={onClose} className="w-11 h-11 shrink-0 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500"><X size={18} /></button>
+        </div>
+        <div className="overflow-y-auto px-4 pb-4">
+          {groups.length === 0 && <p className="text-sm text-slate-400 text-center py-6">Ничего не найдено.</p>}
+          {groups.map(([year, list]) => (
+            <div key={year} className="mb-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-1.5">{year}</p>
+              {list.map((p) => {
+                const r = planRange(p)
+                const arch = isArchived(p, today)
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => onPick(p.id)}
+                    className={`w-full text-left flex items-center gap-2 px-3 py-2.5 mb-1.5 rounded-xl border ${
+                      p.id === selected ? 'border-orange-400 bg-orange-50 dark:bg-orange-950/30' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800'
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold text-slate-800 dark:text-slate-100 truncate">{p.title || kindLabel(p.kind)}</span>
+                      <span className="block text-xs text-slate-500">{kindLabel(p.kind)}{r ? ` · ${fmt(r.from)} – ${fmt(r.to)}` : ''}</span>
+                    </span>
+                    {arch && <Badge color="slate">архив</Badge>}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const ALL = '__all'
 
 export default function ScheduleTab({ menuBridge }) {
@@ -798,6 +879,12 @@ export default function ScheduleTab({ menuBridge }) {
   }, [selected, selKey])
 
   const plan = sortedPlans.find((p) => p.id === selected)
+  // The row shows current plans in calendar order; finished ones live in the archive list.
+  const today = todayKey()
+  const ordered = useMemo(() => sortByPeriod(sortedPlans), [sortedPlans])
+  const rowPlans = ordered.filter((p) => !isArchived(p, today) || p.id === selected)
+  const hiddenCount = ordered.length - rowPlans.length
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
     <div>
@@ -819,7 +906,7 @@ export default function ScheduleTab({ menuBridge }) {
             Все планы
           </button>
         )}
-        {sortedPlans.map((p) => (
+        {rowPlans.map((p) => (
           <button
             key={p.id}
             onClick={() => { setSelected(p.id); setCreating(false) }}
@@ -830,6 +917,14 @@ export default function ScheduleTab({ menuBridge }) {
             {p.title || kindLabel(p.kind)}
           </button>
         ))}
+        {(hiddenCount > 0 || ordered.length > 6) && (
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="shrink-0 min-h-[40px] px-3.5 rounded-full text-sm font-semibold whitespace-nowrap flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-sm"
+          >
+            {hiddenCount > 0 ? <><Archive size={15} /> Архив ({hiddenCount})</> : <><Search size={15} /> Найти</>}
+          </button>
+        )}
         <button
           onClick={() => setCreating(true)}
           className="shrink-0 min-h-[40px] px-3.5 rounded-full text-sm font-semibold bg-slate-800 text-white flex items-center gap-1"
@@ -837,6 +932,16 @@ export default function ScheduleTab({ menuBridge }) {
           <Plus size={15} /> Новый план
         </button>
       </div>
+
+      {pickerOpen && (
+        <PlansPicker
+          plans={sortedPlans}
+          selected={selected}
+          today={today}
+          onPick={(id) => { setSelected(id); setCreating(false); setPickerOpen(false) }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
 
       {creating && (
         <NewPlanForm
@@ -850,7 +955,7 @@ export default function ScheduleTab({ menuBridge }) {
       {!creating && selected === ALL && sortedPlans.length > 0 && (
         <AllPlansView plans={sortedPlans} tree={allData} ctx={ctx} onOpenPlan={(id) => setSelected(id)} menuBridge={menuBridge} />
       )}
-      {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} menuBridge={menuBridge} plans={sortedPlans} />}
+      {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} menuBridge={menuBridge} plans={sortedPlans} onGoToPlan={(id) => { setSelected(id); setCreating(false) }} />}
     </div>
   )
 }

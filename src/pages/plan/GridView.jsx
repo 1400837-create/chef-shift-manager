@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer, Upload, Eye, EyeOff } from 'lucide-react'
 import { BigButton } from '../../components/UI'
-import { writePaths, commitChange } from '../../plan/planStore'
+import { writePaths, commitChange, createRecord } from '../../plan/planStore'
+import { adjacentPlan, dayBeyond } from '../../plan/archive'
 import { formatDuration } from '../../plan/hours'
 import {
   isDateKey, dayTitle, weekTitle, mondayOf, addDaysKey, monthOf, monthBounds, shiftMonth, monthTitle, planRange, inPlanRange,
@@ -53,7 +54,7 @@ function totals(data, dates) {
 // The whole period on one screen, spreadsheet-style: one row per day with the
 // meals and dishes, who works and when, and the day's hours. Tapping a row
 // opens the full editor for that day.
-export default function GridView({ plan, data, ctx, renderDay, plans = [], tree = {}, menuBridge }) {
+export default function GridView({ plan, data, ctx, renderDay, plans = [], tree = {}, menuBridge, onGoToPlan }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const today = todayKey()
   const range = useMemo(() => planRange(plan), [plan])
@@ -137,8 +138,44 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
     [weeks, hideEmpty, data]
   )
 
+  // The arrows walk along the plans: inside the plan they move a week (or a
+  // month); when the next step would leave the plan, they open the neighbouring
+  // plan instead. No neighbour: a month plan offers to create the next/previous
+  // month, anything else says there is nothing further.
+  const [edgeNote, setEdgeNote] = useState(null)
+  const [offer, setOffer] = useState(null) // { month, date, dir }
+  useEffect(() => {
+    if (!edgeNote) return undefined
+    const t = setTimeout(() => setEdgeNote(null), 3000)
+    return () => clearTimeout(t)
+  }, [edgeNote])
+
+  function goToPlan(planId, date) {
+    savePos(code, planId, { span, anchor: date })
+    if (onGoToPlan) onGoToPlan(planId)
+  }
+
   function step(dir) {
-    setAnchor((a) => (span === 'month' ? `${shiftMonth(monthOf(a), dir)}-01` : addDaysKey(a, 7 * dir)))
+    const next = span === 'month' ? `${shiftMonth(monthOf(anchor), dir)}-01` : addDaysKey(anchor, 7 * dir)
+    if (range && onGoToPlan) {
+      const per = span === 'month' ? monthBounds(monthOf(next)) : { from: mondayOf(next), to: addDaysKey(mondayOf(next), 6) }
+      if (!(per.from <= range.to && per.to >= range.from)) {
+        const adj = adjacentPlan(plans, plan, dir)
+        if (adj) { goToPlan(adj.plan.id, adj.date); return }
+        const beyond = dayBeyond(plan, dir)
+        if (plan.kind === 'month' && beyond) { setOffer({ month: monthOf(beyond), date: beyond }); return }
+        setEdgeNote(dir > 0 ? 'Дальше планов нет' : 'Раньше планов нет')
+        return
+      }
+    }
+    setAnchor(next)
+  }
+
+  function createOffered() {
+    const { month, date } = offer
+    const id = createRecord('plans', { title: monthTitle(month), kind: 'month', month, dateFrom: null, dateTo: null, createdAt: Date.now() })
+    setOffer(null)
+    goToPlan(id, date)
   }
 
 
@@ -256,6 +293,20 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
       />
 
       <StaffSummary ctx={ctx} value={focus} dates={dates} />
+      {edgeNote && <p className="mb-2 -mt-1 text-center text-xs font-semibold text-slate-500 animate-fade-in">{edgeNote}</p>}
+      {offer && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={() => setOffer(null)}>
+          <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-800 p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="font-bold text-slate-800 dark:text-slate-100">Плана «{monthTitle(offer.month, locale)}» ещё нет</p>
+            <p className="text-sm text-slate-500 mt-1">Создать его и перейти к нему?</p>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <BigButton onClick={createOffered}>Создать</BigButton>
+              <button onClick={() => setOffer(null)} className="min-h-[52px] rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold">Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {strays.length > 0 && (
         <div className="mb-3 rounded-xl border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-3 text-sm text-slate-800 dark:text-slate-100">
