@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store, Check, Printer, Flag } from 'lucide-react'
 import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
@@ -52,6 +52,13 @@ export default function ShoppingList({
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false)
+  // Store to give to every ticked row at once (selection mode), and the
+  // one-line confirmation shown after doing it.
+  const [bulkStore, setBulkStore] = useState('')
+  const [bulkNote, setBulkNote] = useState(null)
+  // 'category' = grouped by отдел (the default, as before); 'store' = one
+  // block per store, rows without a store last. Per device.
+  const [sortMode, setSortMode] = useLocalStorage('shoppingSortMode', 'category', { localOnly: true })
   const now = new Date()
 
   const productSuggestions = useMemo(() => {
@@ -271,6 +278,8 @@ export default function ShoppingList({
     setSelectionMode((v) => !v)
     setSelectedIds(new Set())
     setConfirmingBulkDelete(false)
+    setBulkNote(null)
+    setBulkStore("")
     // Their toggle buttons are hidden in selection mode, so an editor left
     // open would be stuck open with no way to close it.
     setOpenPlannedStore(null)
@@ -297,6 +306,30 @@ export default function ShoppingList({
   function clearSelection() {
     setConfirmingBulkDelete(false)
     setSelectedIds(new Set())
+  }
+
+  // Gives (or, with an empty name, takes away) a store for every ticked row,
+  // and remembers it on each product the same way the per-row field does.
+  function assignStoreToSelected(value) {
+    const name = (value || '').trim()
+    if (selectedIds.size === 0) return
+    const ids = new Set(selectedIds)
+    const productIds = new Set(plannedPurchases.filter((p) => ids.has(p.id)).map((p) => String(p.productId)))
+    setPlannedPurchases((prev) => prev.map((p) => (ids.has(p.id) ? { ...p, store: name } : p)))
+    if (name) {
+      setRecountCatalog((prev) =>
+        prev.map((item) => {
+          if (!productIds.has(String(item.id))) return item
+          const stores = item.stores || []
+          if (stores.some((s) => s.toLowerCase() === name.toLowerCase())) return item
+          return { ...item, stores: [...stores, name] }
+        })
+      )
+    }
+    setBulkNote(name ? `Магазин «${name}» назначен: ${ids.size}` : `Магазин снят у позиций: ${ids.size}`)
+    setBulkStore('')
+    setSelectedIds(new Set())
+    setConfirmingBulkDelete(false)
   }
 
   function deleteSelected() {
@@ -368,6 +401,16 @@ export default function ShoppingList({
   const CATEGORY_ORDER = PRODUCT_CATEGORIES.map((c) => c.key)
   const sortedPlannedPurchases = useMemo(() => {
     return [...plannedPurchases].sort((a, b) => {
+      // By store: each store's items together (А–Я), items with no store last.
+      if (sortMode === 'store') {
+        const sa = (a.store || '').trim()
+        const sb = (b.store || '').trim()
+        if (sa !== sb) {
+          if (!sa) return 1
+          if (!sb) return -1
+          return sa.localeCompare(sb, 'ru')
+        }
+      }
       const pa = recountCatalog.find((pr) => String(pr.id) === String(a.productId))
       const pb = recountCatalog.find((pr) => String(pr.id) === String(b.productId))
       const ia = CATEGORY_ORDER.indexOf(pa?.category)
@@ -378,7 +421,7 @@ export default function ShoppingList({
       return (pa?.name || '').localeCompare(pb?.name || '', 'ru')
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plannedPurchases, recountCatalog])
+  }, [plannedPurchases, recountCatalog, sortMode])
 
   // Every store name currently assigned to at least one planned item, for
   // the filter control — not the union of every product's known stores,
@@ -704,6 +747,22 @@ export default function ShoppingList({
 
         {plannedPurchases.length > 0 && (
           <div className="flex flex-col gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 shrink-0">Сортировка</span>
+              <div className="flex rounded-full overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+                {[['category', 'По рубрикам'], ['store', 'По магазинам']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setSortMode(key)}
+                    className={`min-h-[32px] px-3 whitespace-nowrap ${
+                      sortMode === key ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             {storesInUse.length > 0 && (
               <div className="flex gap-1.5 overflow-x-auto">
                 <button
@@ -794,6 +853,51 @@ export default function ShoppingList({
                 {confirmingBulkDelete ? `Точно? (${selectedIds.size})` : `Удалить (${selectedIds.size})`}
               </button>
             </div>
+            <div className="mt-2.5 pt-2.5 border-t border-orange-200 dark:border-orange-800">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                <Store size={13} /> Магазин для выбранных
+              </p>
+              <div className="flex gap-2">
+                <input
+                  list="all-known-stores"
+                  className={inputClass + ' flex-1 min-w-0 text-sm'}
+                  placeholder="Выберите или впишите магазин"
+                  value={bulkStore}
+                  onChange={(e) => { setBulkStore(e.target.value); setBulkNote(null) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') assignStoreToSelected(bulkStore) }}
+                />
+                <button
+                  onClick={() => assignStoreToSelected(bulkStore)}
+                  disabled={selectedIds.size === 0 || !bulkStore.trim()}
+                  className="shrink-0 min-h-[48px] px-4 rounded-xl bg-orange-500 active:bg-orange-600 text-white text-sm font-semibold disabled:opacity-40"
+                >
+                  Назначить
+                </button>
+              </div>
+              {allKnownStores.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap mt-2">
+                  {allKnownStores.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => { setBulkStore(s); setBulkNote(null) }}
+                      className={`min-h-[30px] px-3 rounded-full text-xs font-semibold ${
+                        bulkStore.trim().toLowerCase() === s.toLowerCase()
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedIds.size > 0 && (
+                <button onClick={() => assignStoreToSelected('')} className="mt-2 text-xs font-semibold text-slate-500">
+                  Снять магазин у выбранных
+                </button>
+              )}
+              {bulkNote && <p className="mt-2 text-xs font-semibold text-green-700 dark:text-green-400">{bulkNote}</p>}
+            </div>
           </div>
         )}
 
@@ -811,7 +915,13 @@ export default function ShoppingList({
           </p>
         )}
         <div className="flex flex-col gap-2">
-          {visiblePlannedPurchases.map((p) => {
+          {visiblePlannedPurchases.map((p, idx) => {
+            const storeName = (p.store || '').trim()
+            const prevStore = idx > 0 ? (visiblePlannedPurchases[idx - 1].store || '').trim() : null
+            const showStoreHeader = sortMode === 'store' && (idx === 0 || storeName !== prevStore)
+            const storeGroupCount = showStoreHeader
+              ? visiblePlannedPurchases.filter((x) => (x.store || '').trim() === storeName).length
+              : 0
             const product = recountCatalog.find((pr) => String(pr.id) === String(p.productId))
             const { balance } = product
               ? computeBalance(product.id, { recounts, purchases, productions, recipes, waste: catalogWaste }, now)
@@ -821,8 +931,13 @@ export default function ShoppingList({
             const storeOpen = openPlannedStore === p.id
             const isSelected = selectedIds.has(p.id)
             return (
+              <Fragment key={p.id}>
+              {showStoreHeader && (
+                <p className="flex items-center gap-1.5 mt-2 first:mt-0 text-xs font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                  <Store size={13} /> {storeName || 'Без магазина'} <span className="font-semibold text-slate-400">({storeGroupCount})</span>
+                </p>
+              )}
               <div
-                key={p.id}
                 className={`rounded-xl border px-3 py-2 ${
                   selectionMode && isSelected
                     ? 'border-orange-400 bg-orange-50 dark:border-orange-600 dark:bg-orange-950/30'
@@ -944,6 +1059,7 @@ export default function ShoppingList({
                   <p className="text-xs text-orange-600 mt-1.5">💬 {p.comment}</p>
                 )}
               </div>
+              </Fragment>
             )
           })}
         </div>
