@@ -16,19 +16,22 @@ export default function ViewBar({ title, onStep, span, spans, onSpan, actions, c
 
   return (
     <div className="mb-3">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        {onStep && (
-          <button onClick={() => onStep(-1)} className={`${btn} ${idle}`} aria-label="Назад по датам" title="Предыдущий период">
-            <ChevronLeft size={18} />
-          </button>
-        )}
-        <p className="flex-1 min-w-0 text-center font-bold text-slate-800 dark:text-slate-100 text-[15px] truncate">{title}</p>
-        {onStep && (
-          <button onClick={() => onStep(1)} className={`${btn} ${idle}`} aria-label="Вперёд по датам" title="Следующий период">
-            <ChevronRight size={18} />
-          </button>
-        )}
-        <div className="flex shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+      <div className="flex items-center gap-2 mb-1.5 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+        <div className="hidden sm:block" />
+        <div className="flex flex-1 sm:flex-none items-center justify-center gap-1 min-w-0">
+          {onStep && (
+            <button onClick={() => onStep(-1)} className={`${btn} ${idle}`} aria-label="Назад по датам" title="Предыдущий период">
+              <ChevronLeft size={18} />
+            </button>
+          )}
+          <p className="min-w-[8.5rem] max-w-[14rem] text-center font-bold text-slate-800 dark:text-slate-100 text-[15px] truncate px-1">{title}</p>
+          {onStep && (
+            <button onClick={() => onStep(1)} className={`${btn} ${idle}`} aria-label="Вперёд по датам" title="Следующий период">
+              <ChevronRight size={18} />
+            </button>
+          )}
+        </div>
+        <div className="flex shrink-0 sm:justify-self-end rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-semibold">
           {spans.map((s) => (
             <button
               key={s.key}
