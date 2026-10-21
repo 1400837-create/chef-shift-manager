@@ -270,3 +270,94 @@ input[data-combo] {
   background-size: 1rem;
   padding-right: 2rem;
 }
+
+/* ------------------------------------------------------------------ */
+/* Plan table: every day is its own rounded card with a gap between it  */
+/* and the next one (the date sits in a tinted cell at the left).       */
+/* ------------------------------------------------------------------ */
+.plan-days {
+  border-collapse: separate;
+  border-spacing: 0 9px;
+  --day-bg: #ffffff;
+  --day-head: #f6f8fb;
+  --day-line: rgba(148, 163, 184, 0.55);
+  --day-div: rgba(148, 163, 184, 0.28);
+  --day-today-bg: #fffaf4;
+  --day-today-head: #ffedd5;
+  --day-today-line: #fb923c;
+  --day-out-bg: #eef2f6;
+}
+.dark .plan-days {
+  --day-bg: #1b2538;
+  --day-head: #212c42;
+  --day-line: rgba(148, 163, 184, 0.28);
+  --day-div: rgba(148, 163, 184, 0.16);
+  --day-today-bg: #2a2431;
+  --day-today-head: #4a2f1e;
+  --day-today-line: #f97316;
+  --day-out-bg: #151d2d;
+}
+.plan-days thead th {
+  border-width: 1px 0;
+}
+.plan-days thead th:first-child {
+  border-left-width: 1px;
+  border-radius: 12px 0 0 12px;
+}
+.plan-days thead th:last-child {
+  border-right-width: 1px;
+  border-radius: 0 12px 12px 0;
+}
+.plan-days tr.day-row > td {
+  background-color: var(--day-bg);
+  border-style: solid;
+  border-color: var(--day-line);
+  border-width: 1px 0;
+}
+.plan-days tr.day-row > td + td {
+  box-shadow: inset 1px 0 0 var(--day-div);
+}
+.plan-days tr.day-row > td:first-child {
+  background-color: var(--day-head);
+  border-left-width: 1px;
+  border-radius: 14px 0 0 14px;
+}
+.plan-days tr.day-row > td:last-child {
+  border-right-width: 1px;
+  border-radius: 0 14px 14px 0;
+}
+.plan-days tr.day-today > td {
+  background-color: var(--day-today-bg);
+  border-color: var(--day-today-line);
+  border-width: 2px 0;
+}
+.plan-days tr.day-today > td:first-child {
+  background-color: var(--day-today-head);
+  border-left-width: 2px;
+}
+.plan-days tr.day-today > td:last-child {
+  border-right-width: 2px;
+}
+.plan-days tr.day-outside > td {
+  background-color: var(--day-out-bg);
+}
+.plan-days tr.week-row > td {
+  background: transparent;
+  border: 0;
+  padding-top: 6px;
+  padding-bottom: 0;
+}
+.plan-days tfoot td {
+  background-color: var(--day-head);
+  border-style: solid;
+  border-color: var(--day-line);
+  border-width: 1px 0;
+}
+.plan-days tfoot td:first-child {
+  border-left-width: 1px;
+  border-radius: 12px 0 0 12px;
+}
+.plan-days tfoot td:last-child {
+  border-right-width: 1px;
+  border-radius: 0 12px 12px 0;
+}

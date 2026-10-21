@@ -200,8 +200,8 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
           focusStaff={focus}
         />
       ) : (
-      <div className="overflow-x-auto min-[960px]:overflow-visible rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-md">
-        <table className="w-full min-w-[920px] border-collapse text-sm">
+      <div className="overflow-x-auto min-[960px]:overflow-visible -mx-1 px-1 pb-1">
+        <table className="plan-days w-full min-w-[920px] text-sm">
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
               <th className={`${TH} w-28 sticky left-0 z-[15]`}>День</th>
@@ -217,7 +217,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
               if (!list.length) return null
               return [
               span !== 'week' && (
-                <tr key={`w${monday}`} className="bg-slate-100 dark:bg-slate-900/60">
+                <tr key={`w${monday}`} className="week-row">
                   <td colSpan={5} className={`${TD} !py-1.5 text-xs font-bold uppercase tracking-wide text-slate-500`}>
                     {ctx.lang === 'de' ? 'Woche' : 'Неделя'} {weekTitle(monday, locale)}
                   </td>
@@ -228,8 +228,8 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
                 const shifts = parts.flatMap(({ plan, day }) => shiftsOf(day).map((shift) => ({ plan, shift })))
                 const bad = conflictIds(shifts)
                 return (
-                  <tr key={date} className={`align-top ${date === today ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}>
-                    <td className={`${TD} sticky left-0 z-10 font-bold whitespace-nowrap text-slate-800 dark:text-slate-100 ${date === today ? "bg-orange-50 dark:bg-slate-800" : "bg-white dark:bg-slate-800"}`}>{dayTitle(date, locale)}</td>
+                  <tr key={date} className={`day-row align-top ${date === today ? 'day-today' : ''}`}>
+                    <td className={`${TD} sticky left-0 z-10 font-bold whitespace-nowrap text-slate-800 dark:text-slate-100 `}>{dayTitle(date, locale)}</td>
                     <td className={TD}>
                       {parts.map(({ plan, day }) => {
                         const blocks = blocksOf(day)

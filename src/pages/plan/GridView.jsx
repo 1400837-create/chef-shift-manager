@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Plus, Pencil, Copy, Printer, Upload, Eye, EyeOff } from 'lucide-react'
 import { BigButton } from '../../components/UI'
 import { writePaths, commitChange } from '../../plan/planStore'
 import { formatDuration } from '../../plan/hours'
@@ -91,6 +91,17 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
     setEditMode(next)
     try { localStorage.setItem('kitchenPlan_gridEdit', next ? '1' : '0') } catch { /* preference only */ }
   }
+  // Show only days that have something in them (a meal, a shift or a comment).
+  // Per device; while editing every day stays visible so any day can be filled in.
+  const [hideEmptyRaw, setHideEmptyRaw] = useState(() => {
+    try { return localStorage.getItem('kitchenPlan_hideEmpty') === '1' } catch { return false }
+  })
+  const hideEmpty = hideEmptyRaw && !editMode
+  function toggleHideEmpty() {
+    const next = !hideEmptyRaw
+    setHideEmptyRaw(next)
+    try { localStorage.setItem('kitchenPlan_hideEmpty', next ? '1' : '0') } catch { /* preference only */ }
+  }
   const locale = LOCALE[ctx.lang]
 
   const dates = useMemo(() => {
@@ -115,6 +126,16 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
     })
     return [...map.entries()]
   }, [dates])
+
+  const dayHasData = (d) => {
+    const day = data[d]
+    return !!day && (Object.keys(day.blocks || {}).length > 0 || Object.keys(day.shifts || {}).length > 0 || Object.keys(day.comments || {}).length > 0)
+  }
+  const shownWeeks = useMemo(
+    () => (hideEmpty ? weeks.map(([m, list]) => [m, list.filter(dayHasData)]).filter(([, list]) => list.length) : weeks),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weeks, hideEmpty, data]
+  )
 
   function step(dir) {
     setAnchor((a) => (span === 'month' ? `${shiftMonth(monthOf(a), dir)}-01` : addDaysKey(a, 7 * dir)))
@@ -185,7 +206,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
       ctx,
       lang: ctx.lang,
       showTags: false,
-      hideEmpty: false,
+      hideEmpty,
     }))
   }
 
@@ -227,6 +248,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         onFocus={setFocus}
         actions={[
           !narrow && { key: 'edit', icon: Pencil, title: editMode ? 'Правка в таблице включена — нажмите, чтобы выключить' : 'Править блюда, смены и комментарии прямо в таблице', onClick: toggleEdit, active: editMode },
+          { key: 'empty', icon: hideEmpty ? Eye : EyeOff, title: editMode ? 'Скрыть дни без заданий (при правке показываются все дни)' : hideEmpty ? 'Показать дни без заданий' : 'Скрыть дни без заданий', onClick: toggleHideEmpty, active: hideEmptyRaw },
           { key: 'dup', icon: Copy, title: 'Продублировать день или неделю на другие даты этого плана', onClick: () => setCopyOpen(true) },
           menuBridge && { key: 'menu', icon: Upload, title: 'Отправить блюда в раздел «Меню» основной программы', onClick: () => setMenuOpen(true) },
           { key: 'print', icon: Printer, title: 'Печать таблицы', onClick: printTable },
@@ -249,6 +271,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
       {narrow ? (
         <DayCards
           weeks={weeks}
+          hideEmpty={hideEmpty}
           getParts={(d) => (data[d] ? [{ plan, day: data[d] }] : [])}
           ctx={ctx}
           locale={locale}
@@ -269,8 +292,8 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           }}
         />
       ) : (
-      <div className={`overflow-x-auto ${editMode ? "min-[1240px]:overflow-visible" : "min-[960px]:overflow-visible"} rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-md`}>
-        <table className={`w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} border-collapse text-sm`}>
+      <div className={`overflow-x-auto ${editMode ? "min-[1240px]:overflow-visible" : "min-[960px]:overflow-visible"} -mx-1 px-1 pb-1`}>
+        <table className={`plan-days w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} text-sm`}>
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
               <th className={`${TH} w-28 sticky left-0 z-[15]`}>День</th>
@@ -281,14 +304,17 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
             </tr>
           </thead>
           <tbody>
+            {dates.length > 0 && shownWeeks.length === 0 && (
+              <tr><td colSpan={5} className="py-6 text-center text-slate-400">В этом периоде нет дней с заданиями.</td></tr>
+            )}
             {dates.length === 0 && (
               <tr><td colSpan={5} className={`${TD} py-6 text-center text-slate-400`}>В плане пока нет дней. Добавьте день, неделю или месяц ниже, в блоке плана.</td></tr>
             )}
-            {weeks.map(([monday, list]) => {
+            {shownWeeks.map(([monday, list]) => {
               const wt = totals(data, list)
               return [
                 span !== 'week' && (
-                  <tr key={`w${monday}`} className="bg-slate-100 dark:bg-slate-900/60">
+                  <tr key={`w${monday}`} className="week-row">
                     <td colSpan={4} className={`${TD} !py-1.5 text-xs font-bold uppercase tracking-wide text-slate-500`}>
                       {ctx.lang === 'de' ? 'Woche' : 'Неделя'} {weekTitle(monday, locale)}
                     </td>
@@ -311,9 +337,9 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                     <tr
                       key={date}
                       onClick={edit || outside ? undefined : () => setEditing(date)}
-                      className={`align-top ${edit || outside ? '' : 'cursor-pointer active:bg-orange-50 dark:active:bg-slate-700'} ${!day && !edit ? 'text-slate-400' : ''} ${outside ? 'bg-slate-100 dark:bg-slate-900/60 text-slate-400' : ''} ${isToday ? 'bg-orange-50/60 dark:bg-orange-950/20' : ''}`}
+                      className={`day-row align-top ${edit || outside ? '' : 'cursor-pointer active:brightness-95'} ${!day && !edit ? 'text-slate-400' : ''} ${outside ? 'day-outside text-slate-400' : ''} ${isToday ? 'day-today' : ''}`}
                     >
-                      <td className={`${TD} sticky left-0 z-10 font-bold whitespace-nowrap text-slate-800 dark:text-slate-100 ${outside ? "bg-slate-100 dark:bg-slate-900" : isToday ? "bg-orange-50 dark:bg-slate-800" : "bg-white dark:bg-slate-800"}`}>
+                      <td className={`${TD} sticky left-0 z-10 font-bold whitespace-nowrap text-slate-800 dark:text-slate-100 `}>
                         {dayTitle(date, locale)}
                         {outside && (
                           <span className="block text-[11px] font-normal leading-tight text-slate-500">
