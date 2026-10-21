@@ -446,7 +446,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                             </p>
                           ))}
                       </td>
-                      <td className={`${TD} `}>
+                      <td className={`${TD} ${edit ? '' : 'whitespace-nowrap'}`}>
                         {edit
                           ? <ShiftCell coll={coll} date={date} day={day || {}} ctx={ctx} />
                           : shifts.map((s) => (

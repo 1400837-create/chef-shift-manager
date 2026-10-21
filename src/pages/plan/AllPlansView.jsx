@@ -262,7 +262,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
                         ))
                       })}
                     </td>
-                    <td className={TD}>
+                    <td className={`${TD} whitespace-nowrap`}>
                       {shifts.map(({ plan, shift }) => (
                         <p key={`${plan.id}-${shift.id}`} className={`leading-6 ${focus && shift.staffId !== focus ? 'opacity-30' : ''} ${bad.has(shift.id) ? 'text-red-600 font-semibold' : 'text-slate-700 dark:text-slate-200'}`}>
                           {bad.has(shift.id) && <AlertTriangle size={12} className="inline mr-1 -mt-0.5" title="Пересечение со второй сменой этого человека" />}
