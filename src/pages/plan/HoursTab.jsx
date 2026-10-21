@@ -79,13 +79,13 @@ function Adjustments({ row, month, items }) {
           <ConfirmDeleteButton onConfirm={() => deleteRecord('hourAdjust', a.id)} size="w-8 h-8" iconSize={15} />
         </div>
       ))}
-      <div className="flex gap-1.5 mt-1.5 items-stretch">
+      <div className="flex flex-wrap gap-1.5 mt-1.5 items-stretch">
         <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0">
           <button onClick={() => setSign(1)} className={`px-3 min-h-[44px] text-sm font-bold ${sign === 1 ? 'bg-green-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}`} title="Переработка (плюс)">+</button>
           <button onClick={() => setSign(-1)} className={`px-3 min-h-[44px] text-sm font-bold ${sign === -1 ? 'bg-red-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}`} title="Недоработка (минус)">−</button>
         </div>
-        <input className={`${inputClass} w-24 text-center`} inputMode="text" placeholder="ч:мм" value={time} onChange={(e) => setTime(e.target.value)} />
-        <input className={`${inputClass} flex-1 min-w-0`} placeholder="Причина (необязательно)" value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
+        <div className="w-24 shrink-0"><input className={`${inputClass} text-center`} inputMode="text" placeholder="ч:мм" value={time} onChange={(e) => setTime(e.target.value)} /></div>
+        <div className="flex-1 min-w-[11rem]"><input className={inputClass} placeholder="Причина (необязательно)" value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add() }} /></div>
         <button onClick={add} className="shrink-0 px-4 min-h-[48px] rounded-xl bg-orange-500 text-white text-sm font-semibold">Добавить</button>
       </div>
       {err && <p className="text-xs text-red-600 mt-1">{err}</p>}
