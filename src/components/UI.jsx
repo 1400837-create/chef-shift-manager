@@ -1,10 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Printer, Trash2, Undo2, Redo2, Search } from 'lucide-react'
+import { Check, Printer, Trash2, Undo2, Redo2, Search, ChevronDown } from 'lucide-react'
 
-export function Section({ title, icon: Icon, children, right, className = "" }) {
+// `fold` (a storage key) makes the card collapsible: the title row becomes a
+// button with a chevron, the body is only drawn while open, and the open/closed
+// choice is remembered on this device. Closed by default (`defaultOpen` to flip).
+export function Section({ title, icon: Icon, children, right, className = '', fold, defaultOpen = false }) {
+  const storeKey = fold ? `kitchenOS_fold:${fold}` : null
+  const [open, setOpen] = useState(() => {
+    if (!storeKey) return true
+    try {
+      const v = localStorage.getItem(storeKey)
+      return v === null ? defaultOpen : v === '1'
+    } catch { return defaultOpen }
+  })
+  function toggle() {
+    const next = !open
+    setOpen(next)
+    try { localStorage.setItem(storeKey, next ? '1' : '0') } catch { /* preference only */ }
+  }
+  const shown = !fold || open
   return (
     <section className={`bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-200 dark:border-slate-700 mb-4 overflow-hidden ${className}`}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-gradient-to-b from-slate-50 to-white dark:from-slate-900/50 dark:to-slate-800">
+      <div
+        {...(fold ? { role: 'button', tabIndex: 0, onClick: toggle, onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }, 'aria-expanded': open } : {})}
+        className={`flex items-center justify-between px-4 py-3 ${shown ? 'border-b border-slate-100 dark:border-slate-700' : ''} bg-gradient-to-b from-slate-50 to-white dark:from-slate-900/50 dark:to-slate-800 ${fold ? 'cursor-pointer select-none active:bg-slate-50 dark:active:bg-slate-700/40' : ''}`}
+      >
         <div className="flex items-center gap-2.5">
           {Icon && (
             <span className="w-8 h-8 shrink-0 rounded-xl flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100 dark:from-slate-700 dark:to-slate-700 text-orange-600 dark:text-orange-300 shadow-sm">
@@ -14,8 +34,9 @@ export function Section({ title, icon: Icon, children, right, className = "" }) 
           <h2 className="font-semibold text-slate-800 dark:text-slate-100 text-[15px]">{title}</h2>
         </div>
         {right}
+        {fold && <ChevronDown size={18} className={`shrink-0 text-slate-400 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />}
       </div>
-      <div className="p-3">{children}</div>
+      {shown && <div className={`p-3 ${fold ? 'animate-fade-up' : ''}`}>{children}</div>}
     </section>
   )
 }

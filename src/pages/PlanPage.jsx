@@ -42,7 +42,7 @@ function StaffDirectory() {
   }
 
   return (
-    <Section title={`Сотрудники (${sorted.length})`} icon={Users}>
+    <Section title={`Сотрудники (${sorted.length})`} icon={Users} fold="plan-dir-staff">
       <p className="text-xs text-slate-500 mb-3">
         Имя по-русски и по-немецки (подставляется при смене языка) и норма часов в месяц. Список общий —
         его могут менять оба; из него потом выбираются сотрудники в графике.
@@ -115,7 +115,7 @@ function ShiftTemplates() {
   }
 
   return (
-    <Section title={`Типовые смены (${sorted.length})`} icon={Clock}>
+    <Section title={`Типовые смены (${sorted.length})`} icon={Clock} fold="plan-dir-shifts">
       <p className="text-xs text-slate-500 mb-3">
         Готовые смены для быстрого выбора в графике, например 10:00–16:00. Часы считаются как конец минус
         начало, перерыв не вычитается; смена через полночь считается верно.
@@ -182,7 +182,7 @@ function MealTypesEditor() {
   }
 
   return (
-    <Section title="Типы приёмов (список и цвета полосок)" icon={Palette}>
+    <Section title="Типы приёмов (список и цвета полосок)" icon={Palette} fold="plan-dir-types">
       <p className="text-xs text-slate-500 mb-3">
         Эти названия подсказываются в поле «Приём / мероприятие», а цвет полоски слева у приёма берётся отсюда: если в
         названии приёма встречается название типа или любое из «слов для поиска», он получает цвет типа. Остальные
@@ -270,7 +270,7 @@ function MealTemplateList() {
   const { items, ready } = usePlanCollection('mealTemplates')
   const sorted = useMemo(() => [...items].filter((t) => t.name).sort((a, b) => a.name.localeCompare(b.name, 'ru')), [items])
   return (
-    <Section title={`Шаблоны приёмов (${sorted.length})`} icon={Bookmark}>
+    <Section title={`Шаблоны приёмов (${sorted.length})`} icon={Bookmark} fold="plan-dir-templates">
       <p className="text-xs text-slate-500 mb-3">
         Готовые приёмы со временем, числом гостей и блюдами, например «Пятничный ужин». Сохраняются кнопкой закладки в самом
         приёме и добавляются в любой день выбором «из шаблона».
