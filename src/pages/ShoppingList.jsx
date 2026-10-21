@@ -754,7 +754,7 @@ export default function ShoppingList({
                   <button
                     key={key}
                     onClick={() => setSortMode(key)}
-                    className={`min-h-[32px] px-3 whitespace-nowrap ${
+                    className={`min-h-[32px] px-3 text-xs whitespace-nowrap ${
                       sortMode === key ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                     }`}
                   >
