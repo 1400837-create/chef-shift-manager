@@ -160,9 +160,15 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
     if (range && onGoToPlan) {
       const per = span === 'month' ? monthBounds(monthOf(next)) : { from: mondayOf(next), to: addDaysKey(mondayOf(next), 6) }
       if (!(per.from <= range.to && per.to >= range.from)) {
-        const adj = adjacentPlan(plans, plan, dir)
-        if (adj) { goToPlan(adj.plan.id, adj.date); return }
         const beyond = dayBeyond(plan, dir)
+        let adj = adjacentPlan(plans, plan, dir)
+        // A month plan does not skip a whole missing month: a plan that only starts
+        // later than that month does not count as the next one.
+        if (adj && plan.kind === 'month' && beyond) {
+          const mb = monthBounds(monthOf(beyond))
+          if (dir > 0 ? adj.date > mb.to : adj.date < mb.from) adj = null
+        }
+        if (adj) { goToPlan(adj.plan.id, adj.date); return }
         if (plan.kind === 'month' && beyond) { setOffer({ month: monthOf(beyond), date: beyond }); return }
         setEdgeNote(dir > 0 ? 'Дальше планов нет' : 'Раньше планов нет')
         return
