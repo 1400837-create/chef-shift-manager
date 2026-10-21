@@ -14,7 +14,7 @@ import MenuTransferModal from './MenuTransferModal'
 import { StaffSummary, useFocusState } from './StaffFocus'
 import ViewBar from './ViewBar'
 import { usePlanDeviceState } from '../../plan/planRoom'
-import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText, DishLine, MealLegend } from './gridShared'
+import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText, DishLine, MealLegend, useColumnWidths, ColGrip } from './gridShared'
 import { useOpenRecipe } from './recipeBridge'
 
 const PALETTE = [
@@ -81,6 +81,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
   const narrow = useNarrow()
   const bridge = useOpenRecipe()
   const [focus, setFocus] = useFocusState(ctx)
+  const cw = useColumnWidths('view')
 
   const colorOf = useMemo(() => {
     const map = {}
@@ -200,15 +201,15 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
           focusStaff={focus}
         />
       ) : (
-      <div className="overflow-x-auto min-[960px]:overflow-visible -mx-1 px-1 pb-1">
-        <table className="plan-days w-full min-w-[720px] text-sm">
+      <div className={`overflow-x-auto ${cw.custom ? "" : "min-[960px]:overflow-visible"} -mx-1 px-1 pb-1`}>
+        <table style={cw.tableStyle} className={`plan-days text-sm ${cw.custom ? "plan-fixed" : "w-full min-w-[720px]"}`}>
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-center text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-[5.5rem] sticky left-0 z-[15]`}>День</th>
-              <th className={`${TH}`}>Меню</th>
-              <th className={`${TH} w-[15%]`}>Комментарии</th>
-              <th className={`${TH} w-44`}>Сотрудники</th>
-              <th className={`${TH} w-16`}>Часы</th>
+              <th data-col="day" style={cw.cellStyle('day')} className={`${TH} w-[5.5rem] sticky left-0 z-[15]`}>День<ColGrip cw={cw} col="day" /></th>
+              <th data-col="menu" style={cw.cellStyle('menu')} className={`${TH} relative`}>Меню<ColGrip cw={cw} col="menu" /></th>
+              <th data-col="notes" style={cw.cellStyle('notes')} className={`${TH} relative w-[15%]`}>Комментарии<ColGrip cw={cw} col="notes" /></th>
+              <th data-col="staff" style={cw.cellStyle('staff')} className={`${TH} relative w-44`}>Сотрудники<ColGrip cw={cw} col="staff" /></th>
+              <th data-col="hours" style={cw.cellStyle('hours')} className={`${TH} relative w-16`}>Часы<ColGrip cw={cw} col="hours" /></th>
             </tr>
           </thead>
           <tbody>

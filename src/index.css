@@ -361,3 +361,15 @@ input[data-combo] {
   border-right-width: 1px;
   border-radius: 0 12px 12px 0;
 }
+
+/* A table whose column widths were set by hand: exactly those widths, text
+   wraps inside the column (even a very long word), nothing is stretched to
+   the screen — a wider table scrolls sideways. */
+.plan-fixed {
+  table-layout: fixed;
+}
+.plan-fixed th,
+.plan-fixed td {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { formatDuration } from '../../plan/hours'
 import { shiftMinutes, addDaysKey } from '../../plan/calc'
 import { staffLabel, dishLabel } from '../../plan/lang'
@@ -78,5 +79,83 @@ export function MealLegend({ ctx }) {
         {ctx.lang === 'de' ? 'Sonstiges' : 'Другое'}
       </span>
     </p>
+  )
+}
+
+// ---- column widths the user drags ------------------------------------------------
+// Until a column is dragged the table lays itself out as before. The first drag
+// freezes every column at its current width; from then on the widths are exactly
+// what was set (text wraps inside a column, a table wider than the screen
+// scrolls sideways). Widths are kept on this device, one set for reading and
+// one for editing.
+const COL_ORDER = ['day', 'menu', 'notes', 'staff', 'hours']
+const COL_MIN = 40 // about 2–3 characters plus the cell padding
+const cwKey = (mode) => `kitchenPlan_colw_${mode}`
+
+function loadWidths(mode) {
+  try {
+    const v = JSON.parse(localStorage.getItem(cwKey(mode)) || 'null')
+    if (v && typeof v === 'object' && COL_ORDER.every((k) => Number.isFinite(v[k]))) return v
+  } catch { /* none saved */ }
+  return null
+}
+
+export function useColumnWidths(mode) {
+  const [widths, setWidths] = useState(() => loadWidths(mode))
+  const [dragging, setDragging] = useState(null)
+  useEffect(() => { setWidths(loadWidths(mode)) }, [mode])
+
+  function begin(e, col) {
+    e.preventDefault()
+    e.stopPropagation()
+    const grip = e.currentTarget
+    const row = grip.closest('tr')
+    let latest = widths
+    if (!latest) {
+      latest = {}
+      row.querySelectorAll('th[data-col]').forEach((t) => { latest[t.dataset.col] = Math.round(t.getBoundingClientRect().width) })
+      setWidths(latest)
+    }
+    const startX = e.clientX
+    const startW = latest[col]
+    try { grip.setPointerCapture(e.pointerId) } catch { /* not supported */ }
+    setDragging(col)
+    const move = (ev) => {
+      latest = { ...latest, [col]: Math.max(COL_MIN, Math.round(startW + ev.clientX - startX)) }
+      setWidths(latest)
+    }
+    const up = () => {
+      grip.removeEventListener('pointermove', move)
+      grip.removeEventListener('pointerup', up)
+      grip.removeEventListener('pointercancel', up)
+      try { localStorage.setItem(cwKey(mode), JSON.stringify(latest)) } catch { /* preference only */ }
+      setDragging(null)
+    }
+    grip.addEventListener('pointermove', move)
+    grip.addEventListener('pointerup', up)
+    grip.addEventListener('pointercancel', up)
+  }
+
+  return {
+    custom: !!widths,
+    begin,
+    dragging,
+    cellStyle: (col) => (widths ? { width: widths[col] } : undefined),
+    tableStyle: widths ? { width: COL_ORDER.reduce((a, k) => a + widths[k], 0) } : undefined,
+  }
+}
+
+// The handle on the right edge of a column heading.
+export function ColGrip({ cw, col }) {
+  return (
+    <span
+      role="separator"
+      aria-label="Изменить ширину колонки"
+      onPointerDown={(e) => cw.begin(e, col)}
+      className="absolute top-0 -right-2 z-20 h-full w-4 cursor-col-resize select-none flex justify-center"
+      style={{ touchAction: 'none' }}
+    >
+      <span className={`h-full rounded-full transition-all ${cw.dragging === col ? 'w-[3px] bg-orange-500' : 'w-px bg-slate-300 dark:bg-slate-600 hover:w-[3px] hover:bg-orange-400'}`} />
+    </span>
   )
 }

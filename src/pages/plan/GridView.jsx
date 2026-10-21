@@ -19,7 +19,7 @@ import MenuTransferModal from './MenuTransferModal'
 import DayCards from './DayCards'
 import { StaffSummary, useFocusState } from './StaffFocus'
 import ViewBar from './ViewBar'
-import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween, DishLine, MealLegend } from './gridShared'
+import { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween, DishLine, MealLegend, useColumnWidths, ColGrip } from './gridShared'
 import { useOpenRecipe } from './recipeBridge'
 
 export { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween }
@@ -88,6 +88,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
   const coll = `planData/${plan.id}`
 
   const editMode = editRaw && !narrow
+  const cw = useColumnWidths(editMode ? 'edit' : 'view')
 
   function toggleEdit() {
     const next = !editMode
@@ -351,15 +352,15 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
           }}
         />
       ) : (
-      <div className={`overflow-x-auto ${editMode ? "min-[1240px]:overflow-visible" : "min-[960px]:overflow-visible"} -mx-1 px-1 pb-1`}>
-        <table className={`plan-days w-full ${editMode ? "min-w-[1180px]" : "min-w-[720px]"} text-sm`}>
+      <div className={`overflow-x-auto ${cw.custom ? "" : editMode ? "min-[1240px]:overflow-visible" : "min-[960px]:overflow-visible"} -mx-1 px-1 pb-1`}>
+        <table style={cw.tableStyle} className={`plan-days text-sm ${cw.custom ? "plan-fixed" : `w-full ${editMode ? "min-w-[1180px]" : "min-w-[720px]"}`}`}>
           <thead>
             <tr className="bg-slate-200 dark:bg-slate-900 text-center text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-[5.5rem] sticky left-0 z-[15]`}>День</th>
-              <th className={`${TH}`}>Меню</th>
-              <th className={`${TH} w-[15%]`}>Комментарии</th>
-              <th className={`${TH} ${editMode ? "w-64" : "w-44"}`}>Сотрудники</th>
-              <th className={`${TH} w-16`}>Часы</th>
+              <th data-col="day" style={cw.cellStyle('day')} className={`${TH} w-[5.5rem] sticky left-0 z-[15]`}>День<ColGrip cw={cw} col="day" /></th>
+              <th data-col="menu" style={cw.cellStyle('menu')} className={`${TH} relative`}>Меню<ColGrip cw={cw} col="menu" /></th>
+              <th data-col="notes" style={cw.cellStyle('notes')} className={`${TH} relative w-[15%]`}>Комментарии<ColGrip cw={cw} col="notes" /></th>
+              <th data-col="staff" style={cw.cellStyle('staff')} className={`${TH} relative ${editMode ? "w-64" : "w-44"}`}>Сотрудники<ColGrip cw={cw} col="staff" /></th>
+              <th data-col="hours" style={cw.cellStyle('hours')} className={`${TH} relative w-16`}>Часы<ColGrip cw={cw} col="hours" /></th>
             </tr>
           </thead>
           <tbody>
