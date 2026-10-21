@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store, Check, Printer, Flag } from 'lucide-react'
+import { Plus, ShoppingBasket, AlertTriangle, Upload, X, Calendar, MessageSquare, Store, Check, Printer, Flag, LayoutGrid } from 'lucide-react'
 import { Section, inputClass, BigButton, PrintButton, ConfirmDeleteButton, ConfirmMarkButton } from '../components/UI'
 import { formatRu, todayKey, parseLocalDate, addDays, monthKey, toKey } from '../utils/dateUtils'
 import { printReport } from '../utils/printReport'
@@ -746,75 +746,80 @@ export default function ShoppingList({
         )}
 
         {plannedPurchases.length > 0 && (
-          <div className="flex flex-col gap-2 mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-500 shrink-0">Сортировка</span>
-              <div className="flex rounded-full overflow-hidden border border-slate-200 dark:border-slate-700 text-xs font-semibold">
-                {[['category', 'По рубрикам'], ['store', 'По магазинам']].map(([key, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => setSortMode(key)}
-                    className={`min-h-[32px] px-3 text-xs whitespace-nowrap ${
-                      sortMode === key ? 'bg-slate-800 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {storesInUse.length > 0 && (
-              <div className="flex gap-1.5 overflow-x-auto">
+          <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-2 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-700 p-1.5">
+            {/* how the list is ordered */}
+            <div className="flex rounded-full bg-slate-200/70 dark:bg-slate-700 p-0.5 shadow-inner">
+              {[['category', 'Рубрики', LayoutGrid], ['store', 'Магазины', Store]].map(([key, label, Icon]) => (
                 <button
-                  onClick={() => setStoreFilter('all')}
-                  className={`shrink-0 min-h-[32px] px-3 rounded-full text-xs font-semibold whitespace-nowrap ${
-                    storeFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  key={key}
+                  onClick={() => setSortMode(key)}
+                  className={`min-h-[30px] px-3 rounded-full text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 ${
+                    sortMode === key
+                      ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400'
                   }`}
                 >
-                  Все магазины
+                  <Icon size={13} /> {label}
                 </button>
-                {storesInUse.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setStoreFilter(s)}
-                    className={`shrink-0 min-h-[32px] px-3 rounded-full text-xs font-semibold whitespace-nowrap ${
-                      storeFilter === s ? 'bg-slate-800 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+              ))}
+            </div>
+
+            {/* show one store only */}
+            {storesInUse.length > 0 && (
+              <>
+                <span className="hidden sm:block w-px h-5 bg-slate-200 dark:bg-slate-600" />
+                <div className="flex gap-1 overflow-x-auto max-w-full">
+                  {['all', ...storesInUse].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setStoreFilter(s)}
+                      className={`shrink-0 min-h-[30px] px-3 rounded-full text-xs font-semibold whitespace-nowrap border ${
+                        storeFilter === s
+                          ? 'bg-orange-100 border-orange-300 text-orange-700 dark:bg-orange-900/40 dark:border-orange-700 dark:text-orange-300'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {s === 'all' ? 'Все' : s}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
-            {flaggedCount > 0 && (
-              <div className="flex">
+
+            <div className="flex items-center gap-1 ml-auto">
+              {flaggedCount > 0 && (
                 <button
                   onClick={() => setFlaggedOnly((v) => !v)}
-                  className={`shrink-0 min-h-[32px] px-3 rounded-full text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 ${
-                    flaggedOnly ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  title="Только отмеченные флажком"
+                  className={`min-h-[30px] px-2.5 rounded-full text-xs font-semibold whitespace-nowrap flex items-center gap-1 border ${
+                    flaggedOnly
+                      ? 'bg-amber-500 border-amber-500 text-white'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
                   }`}
                 >
-                  <Flag size={13} fill="currentColor" /> Только отмеченные ({flaggedCount})
+                  <Flag size={12} fill="currentColor" /> {flaggedCount}
                 </button>
-              </div>
-            )}
-            <label className="flex items-center gap-2 text-xs text-slate-500">
-              <input
-                type="checkbox"
-                checked={includeDate}
-                onChange={(e) => setIncludeDate(e.target.checked)}
-                className="w-4 h-4 accent-orange-500"
-              />
-              Указать дату на печати
+              )}
+              <button
+                onClick={() => setIncludeDate((v) => !v)}
+                title="Указать дату на печати"
+                className={`min-h-[30px] px-2.5 rounded-full text-xs font-semibold whitespace-nowrap flex items-center gap-1 border ${
+                  includeDate
+                    ? 'bg-orange-100 border-orange-300 text-orange-700 dark:bg-orange-900/40 dark:border-orange-700 dark:text-orange-300'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                <Calendar size={12} /> Дата
+              </button>
               {includeDate && (
                 <input
                   type="date"
-                  className={inputClass + ' h-8 py-0 w-auto'}
+                  className={inputClass + ' h-[30px] min-h-0 py-0 px-2 text-xs w-auto rounded-full'}
                   value={printDate}
                   onChange={(e) => setPrintDate(e.target.value)}
                 />
               )}
-            </label>
+            </div>
           </div>
         )}
 
