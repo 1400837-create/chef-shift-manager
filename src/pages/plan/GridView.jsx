@@ -352,14 +352,14 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
         />
       ) : (
       <div className={`overflow-x-auto ${editMode ? "min-[1240px]:overflow-visible" : "min-[960px]:overflow-visible"} -mx-1 px-1 pb-1`}>
-        <table className={`plan-days w-full ${editMode ? "min-w-[1180px]" : "min-w-[920px]"} text-sm`}>
+        <table className={`plan-days w-full ${editMode ? "min-w-[1180px]" : "min-w-[720px]"} text-sm`}>
           <thead>
-            <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-28 sticky left-0 z-[15]`}>День</th>
-              <th className={`${TH} w-[34%]`}>Меню</th>
-              <th className={`${TH} w-[24%]`}>Комментарии</th>
-              <th className={`${TH} ${editMode ? "w-64" : "w-48"}`}>Сотрудники</th>
-              <th className={`${TH} w-20 text-right`}>Часы</th>
+            <tr className="bg-slate-200 dark:bg-slate-900 text-center text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
+              <th className={`${TH} w-[5.5rem] sticky left-0 z-[15]`}>День</th>
+              <th className={`${TH}`}>Меню</th>
+              <th className={`${TH} w-[15%]`}>Комментарии</th>
+              <th className={`${TH} ${editMode ? "w-64" : "w-44"}`}>Сотрудники</th>
+              <th className={`${TH} w-16`}>Часы</th>
             </tr>
           </thead>
           <tbody>
@@ -446,13 +446,13 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                             </p>
                           ))}
                       </td>
-                      <td className={`${TD} ${edit ? '' : 'whitespace-nowrap'}`}>
+                      <td className={`${TD} `}>
                         {edit
                           ? <ShiftCell coll={coll} date={date} day={day || {}} ctx={ctx} />
                           : shifts.map((s) => (
                             <p key={s.id} className={`leading-6 text-slate-700 dark:text-slate-200 ${focus && s.staffId !== focus ? "opacity-30" : ""}`}>
                               {staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || '?'}
-                              <span className="text-slate-500"> {s.start}–{s.end}</span>
+                              <span className="text-slate-500 whitespace-nowrap"> {s.start}–{s.end}</span>
                             </p>
                           ))}
                       </td>

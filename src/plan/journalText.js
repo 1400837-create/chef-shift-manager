@@ -7,6 +7,7 @@ const SUBJECT = {
   dayTasks: 'задачу на день',
   mealTemplates: 'шаблон приёма',
   mealTypes: 'тип приёма',
+  hourAdjust: 'корректировку часов',
 }
 
 // Schedule edits carry an explicit `entity` already in the accusative.

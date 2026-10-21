@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react'
-import { Section, Badge } from '../../components/UI'
-import { usePlanCollection } from '../../plan/planStore'
+import { Section, Badge, ConfirmDeleteButton, inputClass } from '../../components/UI'
+import { usePlanCollection, createRecord, deleteRecord } from '../../plan/planStore'
+import { getAuthor } from '../../plan/planRoom'
 import { formatDuration } from '../../plan/hours'
 import {
   monthOf, monthBounds, shiftMonth, monthTitle, mondayOf, addDaysKey, weekTitle,
@@ -22,6 +23,76 @@ function status(plannedMin, norm) {
   return { color: 'green', text: 'по норме' }
 }
 
+// "2:30", "2,5", "2.5", "45м" → minutes (null when it isn't a duration)
+function parseDuration(text) {
+  const s = String(text || '').trim().replace(',', '.').toLowerCase()
+  if (!s) return null
+  let m = s.match(/^(\d{1,3}):(\d{1,2})$/)
+  if (m) return Number(m[1]) * 60 + Number(m[2])
+  m = s.match(/^(\d{1,3}(?:\.\d+)?)\s*(ч|h)?$/)
+  if (m) return Math.round(Number(m[1]) * 60)
+  m = s.match(/^(\d{1,4})\s*(м|мин|m|min)$/)
+  if (m) return Number(m[1])
+  return null
+}
+
+const signed = (min) => `${min < 0 ? '−' : '+'}${formatDuration(Math.abs(min))}`
+
+// Hand-entered overtime (+) and undertime (−) of one person for the month: it is
+// added to the month's hours, with who entered it and why.
+function Adjustments({ row, month, items }) {
+  const [sign, setSign] = useState(1)
+  const [time, setTime] = useState('')
+  const [note, setNote] = useState('')
+  const [err, setErr] = useState(null)
+
+  function add() {
+    const min = parseDuration(time)
+    if (!min) { setErr('Укажите часы: например 2:30 или 2,5'); return }
+    setErr(null)
+    const who = getAuthor().name
+    createRecord('hourAdjust', {
+      staffId: row.key,
+      staffName: row.name,
+      month,
+      minutes: sign * min,
+      note: note.trim() || null,
+      by: who,
+      createdAt: Date.now(),
+      label: `${row.name}: ${signed(sign * min)}${note.trim() ? ` (${note.trim()})` : ''}`,
+    })
+    setTime('')
+    setNote('')
+  }
+
+  return (
+    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Переработка и недоработка</p>
+      {items.length === 0 && <p className="text-xs text-slate-400 mb-1.5">Корректировок за этот месяц нет.</p>}
+      {items.map((a) => (
+        <div key={a.id} className="flex items-center gap-2 py-1 text-sm">
+          <b className={a.minutes < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}>{signed(a.minutes)}</b>
+          <span className="min-w-0 flex-1 text-slate-600 dark:text-slate-300 truncate">
+            {a.note || 'без причины'}
+            {a.by && <span className="text-slate-400"> — {a.by}</span>}
+          </span>
+          <ConfirmDeleteButton onConfirm={() => deleteRecord('hourAdjust', a.id)} size="w-8 h-8" iconSize={15} />
+        </div>
+      ))}
+      <div className="flex gap-1.5 mt-1.5 items-stretch">
+        <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0">
+          <button onClick={() => setSign(1)} className={`px-3 min-h-[44px] text-sm font-bold ${sign === 1 ? 'bg-green-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}`} title="Переработка (плюс)">+</button>
+          <button onClick={() => setSign(-1)} className={`px-3 min-h-[44px] text-sm font-bold ${sign === -1 ? 'bg-red-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-500'}`} title="Недоработка (минус)">−</button>
+        </div>
+        <input className={`${inputClass} w-24 text-center`} inputMode="text" placeholder="ч:мм" value={time} onChange={(e) => setTime(e.target.value)} />
+        <input className={`${inputClass} flex-1 min-w-0`} placeholder="Причина (необязательно)" value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
+        <button onClick={add} className="shrink-0 px-4 min-h-[48px] rounded-xl bg-orange-500 text-white text-sm font-semibold">Добавить</button>
+      </div>
+      {err && <p className="text-xs text-red-600 mt-1">{err}</p>}
+    </div>
+  )
+}
+
 function weeksOfMonth(from, to) {
   const out = []
   let monday = mondayOf(from)
@@ -32,10 +103,10 @@ function weeksOfMonth(from, to) {
   return out
 }
 
-function StaffRow({ row, weeks, shifts }) {
+function StaffRow({ row, weeks, shifts, month, adjItems }) {
   const lang = usePlanLang()
   const [open, setOpen] = useState(false)
-  const st = status(row.planned, row.norm)
+  const st = status(row.planned + row.adj, row.norm)
   const perWeek = useMemo(
     () => (open
       ? weeks.map((monday) => {
@@ -58,6 +129,7 @@ function StaffRow({ row, weeks, shifts }) {
           <p className="text-xs text-slate-500">
             Норма {row.norm !== null ? `${row.norm} ч` : '—'} · План <b>{formatDuration(row.planned)}</b>
             {row.actual > 0 && <> · Факт <b>{formatDuration(row.actual)}</b></>}
+            {row.adj !== 0 && <> · Корректировка <b className={row.adj < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}>{signed(row.adj)}</b></>}
           </p>
         </div>
         <Badge color={st.color}>{st.text}</Badge>
@@ -74,6 +146,7 @@ function StaffRow({ row, weeks, shifts }) {
             </div>
           ))}
           <p className="text-[11px] text-slate-400 mt-1">Недели считаются целиком (пн–вс), даже если они захватывают соседний месяц.</p>
+          <Adjustments row={row} month={month} items={adjItems} />
         </div>
       )}
     </div>
@@ -83,12 +156,23 @@ function StaffRow({ row, weeks, shifts }) {
 export default function HoursTab() {
   const lang = usePlanLang()
   const staff = usePlanCollection('staff')
+  const adjustments = usePlanCollection('hourAdjust')
   const tree = usePlanCollection('planData').data
   const [month, setMonth] = useState(() => monthOf(todayKey()))
   const { from, to } = monthBounds(month)
 
   const shifts = useMemo(() => collectShifts(tree), [tree])
   const weeks = useMemo(() => weeksOfMonth(from, to), [from, to])
+
+  const adjByStaff = useMemo(() => {
+    const m = new Map()
+    adjustments.items.filter((a) => a.month === month && a.staffId).forEach((a) => {
+      if (!m.has(a.staffId)) m.set(a.staffId, [])
+      m.get(a.staffId).push(a)
+    })
+    m.forEach((list) => list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)))
+    return m
+  }, [adjustments.items, month])
 
   const { rows, total, warnings } = useMemo(() => {
     const byKey = aggregateByStaff(shifts, from, to)
@@ -101,18 +185,19 @@ export default function HoursTab() {
       list.push({
         key: s.id, name: s.name, nameDe: s.nameDe, norm: typeof s.norm === 'number' ? s.norm : null,
         planned: r ? r.planned : 0, actual: r ? r.actual : 0, removed: false,
+        adj: (adjByStaff.get(s.id) || []).reduce((a, x) => a + (Number(x.minutes) || 0), 0),
       })
     })
     // Shifts of people who have since left the directory still count.
     byKey.forEach((r, key) => {
       if (seen.has(key)) return
-      list.push({ key, name: r.name || '(без имени)', norm: null, planned: r.planned, actual: r.actual, removed: true })
+      list.push({ key, name: r.name || '(без имени)', norm: null, planned: r.planned, actual: r.actual, removed: true, adj: (adjByStaff.get(key) || []).reduce((a, x) => a + (Number(x.minutes) || 0), 0) })
     })
     list.sort(byName)
-    const t = list.reduce((a, r) => ({ planned: a.planned + r.planned, actual: a.actual + r.actual }), { planned: 0, actual: 0 })
+    const t = list.reduce((a, r) => ({ planned: a.planned + r.planned, actual: a.actual + r.actual, adj: a.adj + r.adj }), { planned: 0, actual: 0, adj: 0 })
     const warn = list.filter((r) => normMinutes(r.norm) !== null && r.planned > normMinutes(r.norm))
     return { rows: list, total: t, warnings: warn }
-  }, [staff.items, shifts, from, to])
+  }, [staff.items, shifts, from, to, adjByStaff])
 
   const weekTotals = useMemo(
     () => weeks.map((monday) => {
@@ -124,7 +209,7 @@ export default function HoursTab() {
     [weeks, shifts]
   )
 
-  const visible = rows.filter((r) => r.planned > 0 || r.actual > 0 || r.norm !== null)
+  const visible = rows.filter((r) => r.planned > 0 || r.actual > 0 || r.norm !== null || r.adj !== 0)
 
   return (
     <div>
@@ -142,6 +227,7 @@ export default function HoursTab() {
         <div className="flex gap-6 text-sm text-slate-700 dark:text-slate-200">
           <p>План: <b className="text-lg">{formatDuration(total.planned)}</b> ч</p>
           <p>Факт: <b className="text-lg">{formatDuration(total.actual)}</b> ч</p>
+          {total.adj !== 0 && <p>Корректировки: <b className="text-lg">{signed(total.adj)}</b> ч</p>}
         </div>
         <p className="text-xs text-slate-400 mt-1">Перерывы не вычитаются. Учитываются все планы (месяц, лагерь, мероприятия).</p>
       </Section>
@@ -169,7 +255,7 @@ export default function HoursTab() {
 
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Сотрудники</p>
       {visible.length === 0 && <p className="text-sm text-slate-400 text-center py-4">В этом месяце смен и норм пока нет.</p>}
-      {visible.map((r) => <StaffRow key={r.key} row={r} weeks={weeks} shifts={shifts} />)}
+      {visible.map((r) => <StaffRow key={r.key} row={r} weeks={weeks} shifts={shifts} month={month} adjItems={adjByStaff.get(r.key) || []} />)}
     </div>
   )
 }

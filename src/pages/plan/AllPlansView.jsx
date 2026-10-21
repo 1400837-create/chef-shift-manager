@@ -201,14 +201,14 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
         />
       ) : (
       <div className="overflow-x-auto min-[960px]:overflow-visible -mx-1 px-1 pb-1">
-        <table className="plan-days w-full min-w-[920px] text-sm">
+        <table className="plan-days w-full min-w-[720px] text-sm">
           <thead>
-            <tr className="bg-slate-200 dark:bg-slate-900 text-left text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
-              <th className={`${TH} w-28 sticky left-0 z-[15]`}>День</th>
-              <th className={`${TH} w-[34%]`}>Меню</th>
-              <th className={`${TH} w-[24%]`}>Комментарии</th>
-              <th className={`${TH} w-56`}>Сотрудники</th>
-              <th className={`${TH} w-20 text-right`}>Часы</th>
+            <tr className="bg-slate-200 dark:bg-slate-900 text-center text-xs uppercase tracking-wide text-slate-600 dark:text-slate-300">
+              <th className={`${TH} w-[5.5rem] sticky left-0 z-[15]`}>День</th>
+              <th className={`${TH}`}>Меню</th>
+              <th className={`${TH} w-[15%]`}>Комментарии</th>
+              <th className={`${TH} w-44`}>Сотрудники</th>
+              <th className={`${TH} w-16`}>Часы</th>
             </tr>
           </thead>
           <tbody>
@@ -262,12 +262,12 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
                         ))
                       })}
                     </td>
-                    <td className={`${TD} whitespace-nowrap`}>
+                    <td className={TD}>
                       {shifts.map(({ plan, shift }) => (
                         <p key={`${plan.id}-${shift.id}`} className={`leading-6 ${focus && shift.staffId !== focus ? 'opacity-30' : ''} ${bad.has(shift.id) ? 'text-red-600 font-semibold' : 'text-slate-700 dark:text-slate-200'}`}>
                           {bad.has(shift.id) && <AlertTriangle size={12} className="inline mr-1 -mt-0.5" title="Пересечение со второй сменой этого человека" />}
                           {staffLabel(ctx.staffById[shift.staffId], ctx.lang) || shift.staffName || '?'}
-                          <span className={bad.has(shift.id) ? '' : 'text-slate-500'}> {shift.start}–{shift.end}</span>
+                          <span className={`whitespace-nowrap ${bad.has(shift.id) ? '' : 'text-slate-500'}`}> {shift.start}–{shift.end}</span>
                           <span className={`ml-1 inline-block w-2 h-2 rounded-full align-middle ${colorOf[plan.id].split(' ')[0]}`} title={plan.title} />
                         </p>
                       ))}

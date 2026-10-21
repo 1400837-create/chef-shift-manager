@@ -7,7 +7,7 @@ import { describeEntry } from './journalText'
 // Collections that make up "the plan" — what snapshots, the file export and
 // restore all cover. recipesSlim/users/journal/backups are deliberately not
 // in here: the first is derived, the rest are infrastructure.
-export const PLAN_COLLECTIONS = ['staff', 'shiftTemplates', 'plans', 'planData', 'tasks', 'dayTasks', 'mealTemplates', 'mealTypes']
+export const PLAN_COLLECTIONS = ['staff', 'shiftTemplates', 'plans', 'planData', 'tasks', 'dayTasks', 'mealTemplates', 'mealTypes', 'hourAdjust']
 
 // ---------------------------------------------------------------------------
 // Why this isn't useLocalStorage + whole-key sync
