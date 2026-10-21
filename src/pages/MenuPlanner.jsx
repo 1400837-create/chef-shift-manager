@@ -21,6 +21,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useBackableTab } from '../hooks/useBackableTab'
 import { uid } from '../utils/id'
 import { computeDropdownRect } from '../utils/dropdownPosition'
+import MenuToPlan from './MenuToPlan'
 
 export default function MenuPlanner({
   menuData, setMenuData, settings, setSettings, dishLibrary, setDishLibrary,
@@ -906,6 +907,8 @@ export default function MenuPlanner({
           </>
         )}
       </Section>
+
+      <MenuToPlan menuData={menuData} recipes={recipes} monthKey={monthKey} />
 
       <div className="flex flex-col gap-2 mb-4">
         {days.map((day) => {
