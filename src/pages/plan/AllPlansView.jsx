@@ -127,7 +127,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
     .map((p) => ({ plan: p, day: tree[p.id]?.[date] }))
     .filter((x) => !isEmpty(x.day))
 
-  const dayMinutes = (parts) => parts.reduce((sum, { day }) => sum + shiftsOf(day).reduce((a, s) => a + (shiftMinutes(s, 'planned') || 0), 0), 0)
+  const dayMinutes = (parts) => parts.reduce((sum, { day }) => sum + shiftsOf(day).reduce((a, s) => (focus && s.staffId !== focus ? a : a + (shiftMinutes(s, 'planned') || 0)), 0), 0)
   const periodTotal = dates.reduce((a, d) => a + dayMinutes(dayParts(d)), 0)
 
   // first and last day that has anything in any plan (for the "whole plan" preset)

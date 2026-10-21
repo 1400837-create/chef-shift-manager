@@ -39,11 +39,13 @@ function findMoveTarget(plans, currentId, date) {
 
 
 
-function totals(data, dates) {
+// With a staff member picked in the selector only that person's shifts are counted.
+function totals(data, dates, staffId) {
   let planned = 0
   let actual = 0
   dates.forEach((date) => {
     shiftsOf(data[date] || {}).forEach((s) => {
+      if (staffId && s.staffId !== staffId) return
       planned += shiftMinutes(s, 'planned') || 0
       actual += shiftMinutes(s, 'actual') || 0
     })
@@ -203,7 +205,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
-  const periodTotal = totals(data, dates)
+  const periodTotal = totals(data, dates, focus)
   const title = span === 'week'
     ? weekTitle(mondayOf(anchor), locale)
     : span === 'month' ? monthTitle(monthOf(anchor), locale) : plan.title || ''
@@ -368,7 +370,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
               <tr><td colSpan={5} className={`${TD} py-6 text-center text-slate-400`}>В плане пока нет дней. Добавьте день, неделю или месяц ниже, в блоке плана.</td></tr>
             )}
             {shownWeeks.map(([monday, list]) => {
-              const wt = totals(data, list)
+              const wt = totals(data, list, focus)
               return [
                 span !== 'week' && (
                   <tr key={`w${monday}`} className="week-row">
