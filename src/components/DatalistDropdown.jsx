@@ -172,7 +172,7 @@ export default function DatalistDropdown() {
     delete el.dataset.typing
     el.removeAttribute('inputmode')
     // blur → fields that save on blur (plan cells) save the picked value.
-    el.blur()
+    setTimeout(() => el.blur(), 0)
   }
 
   function startTyping() {
@@ -182,7 +182,7 @@ export default function DatalistDropdown() {
     el.dataset.typing = '1'
     el.removeAttribute('inputmode')
     setState(null)
-    el.blur()
+    setTimeout(() => el.blur(), 0)
     requestAnimationFrame(() => el.focus())
   }
 
