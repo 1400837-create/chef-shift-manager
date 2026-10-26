@@ -19,7 +19,13 @@ import { DAILY_CLEANING_ITEMS } from './utils/constants'
 import { computeBalance } from './utils/stockBalance'
 
 export default function App() {
-  const [tab, setTab] = useState('dashboard')
+  // A shortcut on the app icon opens a given screen: /?tab=plan&sub=schedule
+  const [tab, setTab] = useState(() => {
+    try {
+      const t = new URLSearchParams(window.location.search).get('tab')
+      return ['dashboard', 'menu', 'recipes', 'inventory', 'shopping', 'finances', 'plan'].includes(t) ? t : 'dashboard'
+    } catch { return 'dashboard' }
+  })
   useBackableTab('app', tab, setTab)
   const [searchOpen, setSearchOpen] = useState(false)
 

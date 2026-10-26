@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import App from './App'
 import StaffApp from './StaffApp'
 import { StaffLogin, DeviceChooser } from './components/StaffGate'
@@ -16,6 +16,15 @@ export default function Root() {
   // app has already written its own bookkeeping keys, so asking later would
   // always say "not fresh".
   const [fresh] = useState(() => isFreshDevice())
+
+  // Launch parameters (from an app-icon shortcut) were read while the screens
+  // rendered; clear them so a reload or a later visit doesn't repeat them.
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search)
+      if (p.has('tab') || p.has('sub')) window.history.replaceState(window.history.state, '', window.location.pathname + window.location.hash)
+    } catch { /* ignore */ }
+  }, [])
 
   let screen
   if (config?.role === 'staff') {

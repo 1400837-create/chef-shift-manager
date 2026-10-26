@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kitchen-os-v7'
+const CACHE_NAME = 'kitchen-os-v8'
 const APP_SHELL = ['/chef-shift-manager/', '/chef-shift-manager/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {

@@ -721,7 +721,10 @@ export default function PlanPage({ menuBridge }) {
   const [sub, setSubState] = useState(() => {
     if (!config) return 'access'
     try {
-      const v = localStorage.getItem(subKey) || 'dash'
+      // an app-icon shortcut can ask for a sub-tab: /?tab=plan&sub=schedule
+      const asked = new URLSearchParams(window.location.search).get('sub')
+      const known = ['dash', 'schedule', 'menu', 'hours', 'dir', 'journal', 'copies', 'access']
+      const v = (known.includes(asked) ? asked : null) || localStorage.getItem(subKey) || 'dash'
       return v === 'access' && config.role !== 'owner' ? 'schedule' : v
     } catch { return 'dash' }
   })
