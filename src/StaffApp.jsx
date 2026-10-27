@@ -32,7 +32,7 @@ export default function StaffApp() {
   }, [])
 
   return (
-    <div className="min-h-screen app-bg">
+    <div className="min-h-screen app-bg" style={{ "--bottom-nav-h": "0px" }}>
       <header
         ref={headerRef}
         className="safe-top sticky top-0 z-30 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 text-white px-3 lg:px-6 py-2.5 flex items-center gap-2 shadow-lg border-b border-white/5"

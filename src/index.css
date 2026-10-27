@@ -373,3 +373,14 @@ input[data-combo] {
   white-space: normal !important;
   overflow-wrap: anywhere;
 }
+
+/* Height of the bottom navigation bar, so a bar docked above it knows where to sit
+   (a desktop with a mouse has a side menu instead; the staff screen has none). */
+:root {
+  --bottom-nav-h: calc(66px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  :root {
+    --bottom-nav-h: 0px;
+  }
+}

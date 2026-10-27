@@ -885,6 +885,18 @@ export default function ScheduleTab({ menuBridge }) {
   const rowPlans = ordered.filter((p) => !isArchived(p, today) || p.id === selected)
   const hiddenCount = ordered.length - rowPlans.length
   const [pickerOpen, setPickerOpen] = useState(false)
+  // While a field is being typed in, the bottom plaque steps aside (it would sit
+  // right above the on-screen keyboard and cover the field).
+  const [typing, setTyping] = useState(false)
+  useEffect(() => {
+    let t
+    const isField = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')
+    const on = (e) => { if (isField(e.target)) { clearTimeout(t); setTyping(true) } }
+    const off = () => { clearTimeout(t); t = setTimeout(() => setTyping(false), 150) }
+    document.addEventListener('focusin', on)
+    document.addEventListener('focusout', off)
+    return () => { clearTimeout(t); document.removeEventListener('focusin', on); document.removeEventListener('focusout', off) }
+  }, [])
 
   return (
     <div>
@@ -892,10 +904,39 @@ export default function ScheduleTab({ menuBridge }) {
         {[...new Set(ctx.mealTypes.flatMap((t) => [t.name, t.nameDe]).filter(Boolean))].map((n) => <option key={n} value={n} />)}
       </datalist>
 
+
+      {pickerOpen && (
+        <PlansPicker
+          plans={sortedPlans}
+          selected={selected}
+          today={today}
+          onPick={(id) => { setSelected(id); setCreating(false); setPickerOpen(false) }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {creating && (
+        <NewPlanForm
+          onCreated={(id) => { setSelected(id); setCreating(false) }}
+          onCancel={() => setCreating(false)}
+        />
+      )}
+      {!creating && !plan && selected !== ALL && plansReady && (
+        <p className="text-sm text-slate-400 text-center py-6">Планов пока нет. Создайте первый — например, «Октябрь 2026».</p>
+      )}
+      {!creating && selected === ALL && sortedPlans.length > 0 && (
+        <AllPlansView plans={sortedPlans} tree={allData} ctx={ctx} onOpenPlan={(id) => setSelected(id)} menuBridge={menuBridge} />
+      )}
+      {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} menuBridge={menuBridge} plans={sortedPlans} onGoToPlan={(id) => { setSelected(id); setCreating(false) }} />}
+
+      {/* The plan buttons live in one fixed plaque at the bottom of the page. */}
+      <div className={`h-[4.5rem]`} aria-hidden="true" />
       <div
-        className="sticky z-20 -mx-3 md:-mx-6 lg:-mx-8 px-3 md:px-6 lg:px-8 py-2 mb-2 flex gap-1.5 overflow-x-auto items-center bg-slate-100/70 dark:bg-slate-950/70 backdrop-blur-md shadow-[0_6px_12px_-8px_rgba(15,23,42,0.25)]"
-        style={{ top: "var(--app-header-h, 64px)" }}
+        className={`fixed left-0 right-0 z-30 desk:left-[92px] transition-all duration-200 ${typing ? 'translate-y-6 opacity-0 pointer-events-none' : ''}`}
+        style={{ bottom: 'var(--bottom-nav-h, 0px)' }}
       >
+        <div className="mx-auto w-full max-w-lg md:max-w-none lg:max-w-[1680px] px-3 md:px-6 lg:px-8 pb-2">
+          <div className="flex gap-1.5 overflow-x-auto items-center rounded-2xl bg-white/85 dark:bg-slate-900/85 backdrop-blur-xl border border-slate-200 dark:border-slate-700 shadow-lg p-1.5">
         {sortedPlans.length > 1 && (
           <button
             onClick={() => { setSelected(ALL); setCreating(false) }}
@@ -931,31 +972,9 @@ export default function ScheduleTab({ menuBridge }) {
         >
           <Plus size={15} /> Новый план
         </button>
+          </div>
+        </div>
       </div>
-
-      {pickerOpen && (
-        <PlansPicker
-          plans={sortedPlans}
-          selected={selected}
-          today={today}
-          onPick={(id) => { setSelected(id); setCreating(false); setPickerOpen(false) }}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
-
-      {creating && (
-        <NewPlanForm
-          onCreated={(id) => { setSelected(id); setCreating(false) }}
-          onCancel={() => setCreating(false)}
-        />
-      )}
-      {!creating && !plan && selected !== ALL && plansReady && (
-        <p className="text-sm text-slate-400 text-center py-6">Планов пока нет. Создайте первый — например, «Октябрь 2026».</p>
-      )}
-      {!creating && selected === ALL && sortedPlans.length > 0 && (
-        <AllPlansView plans={sortedPlans} tree={allData} ctx={ctx} onOpenPlan={(id) => setSelected(id)} menuBridge={menuBridge} />
-      )}
-      {!creating && plan && <PlanView key={plan.id} plan={plan} ctx={ctx} menuBridge={menuBridge} plans={sortedPlans} onGoToPlan={(id) => { setSelected(id); setCreating(false) }} />}
     </div>
   )
 }
