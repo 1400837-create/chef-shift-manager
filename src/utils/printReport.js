@@ -235,42 +235,117 @@ function buildWorkPlanHtml(payload) {
   return `<h1 style="font-size:22px;">${escapeHtml(payload.title)}</h1>${weeks || `<p class="muted">${escapeHtml(L.noData)}</p>`}${summary}${cost}`
 }
 
+// The week table is printed "fit to sheet": every size inside #fit is in em,
+// so the whole table scales with #fit's font-size (see WORK_TABLE_CSS and
+// fitWorkTable below). Each week is its own sheet (.wt-page), and the scale is
+// chosen so that the fullest week still fits one landscape page.
 function buildWorkTableHtml(payload) {
   const L = payload.labels
-  const guest = (n) => (n ? `<span style="display:inline-block;margin-left:6px;padding:0 5px;border:1.5px solid #000;border-radius:4px;font-weight:bold;font-size:11px;">${escapeHtml(n)} ${escapeHtml(payload.guests)}</span>` : '')
+  const guest = (n) => (n ? `<span class="wt-guest">${escapeHtml(n)} ${escapeHtml(payload.guests)}</span>` : '')
   const flag = (changed) => (changed
-    ? `<span style="display:inline-block;border:1.5px solid #c00;color:#c00;font-weight:bold;width:11px;text-align:center;line-height:13px;margin-right:4px;" title="${escapeHtml(L.changed)}">!</span>`
+    ? `<span class="wt-flag" title="${escapeHtml(L.changed)}">!</span>`
     : '')
 
-  const body = payload.weeks.map((w) => {
+  const pages = payload.weeks.map((w) => {
     const rows = w.rows.map((r) => {
       const menu = r.blocks.map((b) => `
-        <div style="margin-bottom:4px;">
-          ${b.tag ? `<div class="muted" style="font-size:10px;text-transform:uppercase;">${escapeHtml(b.tag)}</div>` : ''}
+        <div class="wt-block">
+          ${b.tag ? `<div class="muted wt-tag">${escapeHtml(b.tag)}</div>` : ''}
           <b>${escapeHtml(b.time)} ${escapeHtml(b.name)}</b>${guest(b.persons)}
-          ${b.dishes.map((d) => `<div style="padding-left:8px;">${flag(d.changed)}${escapeHtml(d.text)}</div>`).join('')}
+          ${b.dishes.map((d) => `<div class="wt-dish">${flag(d.changed)}${escapeHtml(d.text)}</div>`).join('')}
         </div>`).join('')
-      const notes = r.notes.map((n) => `<div style="font-size:10px;margin-bottom:2px;">${escapeHtml(n)}</div>`).join('')
-      const staff = r.shifts.map((s) => `<div style="line-height:1.5;${s.warn ? 'color:#c00;font-weight:bold;' : ''}">${s.warn ? '&#9888; ' : ''}${escapeHtml(s.staff)} ${escapeHtml(s.time)}</div>`).join('')
-      const hours = r.shifts.map((s) => `<div style="line-height:1.5;text-align:right;font-weight:bold;">${escapeHtml(s.hours)}</div>`).join('')
+      const notes = r.notes.map((n) => `<div class="wt-note">${escapeHtml(n)}</div>`).join('')
+      const staff = r.shifts.map((s) => `<div class="wt-line${s.warn ? ' wt-warn' : ''}">${s.warn ? '&#9888; ' : ''}${escapeHtml(s.staff)} ${escapeHtml(s.time)}</div>`).join('')
+      const hours = r.shifts.map((s) => `<div class="wt-line wt-hours">${escapeHtml(s.hours)}</div>`).join('')
       return `<tr class="print-no-break">
-        <td style="white-space:nowrap;font-weight:bold;">${escapeHtml(r.day)}</td>
-        <td>${menu}</td><td>${notes}</td><td>${staff}</td><td style="width:70px;">${hours}</td>
+        <td class="wt-day">${escapeHtml(r.day)}</td>
+        <td>${menu}</td><td>${notes}</td><td>${staff}</td><td>${hours}</td>
       </tr>`
     }).join('')
     return `<h2>${escapeHtml(w.title)}</h2>
       <table>
         <thead><tr>
-          <th style="width:80px;">${escapeHtml(L.day)}</th><th style="width:38%;">${escapeHtml(L.menu)}</th>
-          <th style="width:22%;">${escapeHtml(L.comments)}</th><th style="width:150px;">${escapeHtml(L.staff)}</th><th style="width:70px;">${escapeHtml(L.hours)}</th>
+          <th style="width:6.7em;">${escapeHtml(L.day)}</th><th style="width:38%;">${escapeHtml(L.menu)}</th>
+          <th style="width:22%;">${escapeHtml(L.comments)}</th><th style="width:14.5em;">${escapeHtml(L.staff)}</th><th style="width:5.8em;">${escapeHtml(L.hours)}</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`
-  }).join('')
+  })
 
-  return `<h1>${escapeHtml(payload.title)} <span class="muted" style="font-weight:normal;font-size:13px;">${escapeHtml(payload.period)}</span></h1>
-    ${body || `<p class="muted">${escapeHtml(L.noData)}</p>`}
-    <p style="text-align:right;font-weight:bold;">${escapeHtml(L.total)}: ${escapeHtml(payload.total)}</p>`
+  const head = `<h1>${escapeHtml(payload.title)} <span class="muted wt-period">${escapeHtml(payload.period)}</span></h1>`
+  const total = `<p class="wt-total">${escapeHtml(L.total)}: ${escapeHtml(payload.total)}</p>`
+  if (!pages.length) pages.push(`<p class="muted">${escapeHtml(L.noData)}</p>`)
+  const last = pages.length - 1
+  return `<div id="fit">${pages.map((p, i) => `<section class="wt-page">${i === 0 ? head : ''}${p}${i === last ? total : ''}</section>`).join('')}</div>`
+}
+
+// ---------------------------------------------------------------------------
+// "fit to sheet" for the week table
+// ---------------------------------------------------------------------------
+// On screen #fit is laid out at a fixed 1000px width with font-size --f px.
+// In print it is the full page width with font-size --f × 0.1vw, and in
+// Chrome's print layout 100vw = the printable width of the chosen sheet.
+// So the print is the on-screen layout scaled to the sheet: same proportions
+// on A4 and A3, just bigger. Paper size is NOT fixed in @page any more — it
+// comes from the print dialog.
+
+const FIT_REF_WIDTH = 1000
+// Printable height / width of a landscape A-series sheet with 8mm margins:
+// A4 194/281 = 0.690, A3 281/404 = 0.696. 0.66 leaves room for borders and
+// rounding (borders are 1px, they do not scale).
+const FIT_MAX_RATIO = 0.66
+const FIT_MIN_F = 9 //  ≈ 8pt on A4 — below that the week is allowed to run onto a second sheet
+const FIT_MAX_F = 20 // a nearly empty week is not blown up beyond ≈ 1.75× the old size
+
+const WORK_TABLE_CSS = `
+  @page { size: landscape; margin: 8mm; }
+  body { margin: 0; }
+  #fit { --f: 12; width: ${FIT_REF_WIDTH}px; font-size: calc(var(--f) * 1px); }
+  @media print { #fit { width: auto; font-size: calc(var(--f) * ${100 / FIT_REF_WIDTH}vw); } }
+  #fit h1 { font-size: 1.5em; margin: 0 0 .6em; }
+  #fit h2 { font-size: 1.15em; margin: 0 0 .5em; border-bottom: 1px solid #000; padding-bottom: .15em; }
+  #fit table { width: 100%; border-collapse: collapse; margin-bottom: .6em; }
+  #fit th, #fit td { border: 1px solid #000; padding: .33em .5em; text-align: left; font-size: 1em; }
+  .wt-page { display: flow-root; }
+  .wt-page + .wt-page { break-before: page; page-break-before: always; }
+  .wt-period { font-weight: normal; font-size: .72em; }
+  .wt-day { white-space: nowrap; font-weight: bold; }
+  .wt-block { margin-bottom: .33em; }
+  .wt-tag { font-size: .83em; text-transform: uppercase; }
+  .wt-dish { padding-left: .67em; }
+  .wt-note { font-size: .83em; margin-bottom: .17em; }
+  .wt-line { line-height: 1.5; white-space: nowrap; }
+  .wt-hours { text-align: right; font-weight: bold; }
+  .wt-warn { color: #c00; font-weight: bold; }
+  .wt-total { text-align: right; font-weight: bold; margin: .4em 0 0; }
+  .wt-guest { display: inline-block; margin-left: .5em; padding: 0 .4em; border: 1.5px solid #000; border-radius: .33em; font-weight: bold; font-size: .92em; }
+  .wt-flag { display: inline-block; border: 1.5px solid #c00; color: #c00; font-weight: bold; width: .92em; text-align: center; line-height: 1.08em; margin-right: .33em; }
+`
+
+// Picks the largest --f at which every week (.wt-page) fits one sheet.
+// Returns the chosen value. Exported for testing.
+export function fitWorkTable(doc) {
+  const root = doc.getElementById('fit')
+  if (!root) return null
+  const pages = Array.from(root.querySelectorAll('.wt-page'))
+  const limit = FIT_MAX_RATIO * FIT_REF_WIDTH
+  const set = (f) => root.style.setProperty('--f', String(f))
+  const fits = (f) => {
+    set(f)
+    return pages.every((p) => p.getBoundingClientRect().height <= limit)
+  }
+  if (fits(FIT_MAX_F)) return FIT_MAX_F
+  if (!fits(FIT_MIN_F)) { set(FIT_MIN_F); return FIT_MIN_F }
+  let lo = FIT_MIN_F
+  let hi = FIT_MAX_F
+  while (hi - lo > 0.1) {
+    const mid = (lo + hi) / 2
+    if (fits(mid)) lo = mid
+    else hi = mid
+  }
+  const f = Math.floor(lo * 10) / 10
+  set(f)
+  return f
 }
 
 const BUILDERS = {
@@ -284,18 +359,20 @@ const BUILDERS = {
   'purchase-log': buildPurchaseLogHtml,
 }
 
-export function printReport(payload) {
+// The full self-contained print document. Exported for testing.
+export function renderPrintHtml(payload) {
   const builder = BUILDERS[payload.type]
-  if (!builder) return
+  if (!builder) return null
 
   const bodyHtml = builder(payload)
-  const html = `<!doctype html>
+  const fitCss = payload.type === 'work-table' ? WORK_TABLE_CSS : ''
+  return `<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <title>Печать — LA CHEF</title>
 <style>
-  @page { size: A4 ${payload.landscape ? 'landscape' : 'portrait'}; margin: ${payload.landscape ? '9mm' : '14mm'}; }
+  ${fitCss ? '' : `@page { size: A4 ${payload.landscape ? 'landscape' : 'portrait'}; margin: ${payload.landscape ? '9mm' : '14mm'}; }`}
   body { font-family: Arial, Helvetica, sans-serif; color: #000; font-size: 13px; }
   h1 { font-size: 18px; margin: 0 0 10px; }
   h2 { font-size: 14px; margin: 14px 0 6px; border-bottom: 1px solid #000; padding-bottom: 2px; }
@@ -307,12 +384,18 @@ export function printReport(payload) {
   .nowrap { white-space: nowrap; }
   .print-no-break { break-inside: avoid; page-break-inside: avoid; }
   .day-row td { font-weight: bold; background: #eee; border-top: 2px solid #000; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+${fitCss}
 </style>
 </head>
 <body>
 ${bodyHtml}
 </body>
 </html>`
+}
+
+export function printReport(payload) {
+  const html = renderPrintHtml(payload)
+  if (!html) return
 
   const win = window.open('', '_blank')
   if (!win) {
@@ -323,5 +406,10 @@ ${bodyHtml}
   win.document.write(html)
   win.document.close()
   win.focus()
-  setTimeout(() => win.print(), 250)
+  setTimeout(() => {
+    // If measuring fails for any reason the table still prints, just at the
+    // default size — never block the print on the fit.
+    try { fitWorkTable(win.document) } catch { /* default --f stays */ }
+    win.print()
+  }, 250)
 }
