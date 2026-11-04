@@ -16,6 +16,7 @@ import ViewBar from './ViewBar'
 import { usePlanDeviceState } from '../../plan/planRoom'
 import { TH, TD, gatherComments, daysBetween, Guests, shiftHoursText, DishLine, MealLegend, useColumnWidths, ColGrip } from './gridShared'
 import { useOpenRecipe } from './recipeBridge'
+import { Tr } from './Tr'
 
 const PALETTE = [
   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
@@ -241,7 +242,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
                             {blocks.map((b) => (
                               <div key={b.id} className={`mt-1 border-l-4 pl-2 ${ctx.mealColor(b.name).bar}`}>
                                 <p className="font-semibold text-slate-800 dark:text-slate-100">
-                                  {b.time ? `${b.time} ` : ''}{b.name || '—'}
+                                  {b.time ? `${b.time} ` : ''}{b.name ? <Tr text={b.name} ctx={ctx} /> : '—'}
                                   {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
                                 </p>
                                 {dishesOf(b).map((d) => <DishLine key={d.id} d={d} b={b} date={date} ctx={ctx} bridge={bridge} />)}
@@ -257,7 +258,7 @@ export default function AllPlansView({ plans, tree, ctx, onOpenPlan, menuBridge 
                         return notes.map((n, i) => (
                           <p key={`${plan.id}-${i}`} className="mb-1 text-slate-700 dark:text-slate-200">
                             {n.where && <span className="font-semibold text-orange-600">{n.where}: </span>}
-                            {n.text}
+                            <Tr text={n.text} ctx={ctx} />
                             <span className="text-slate-400"> — {n.by}</span>
                           </p>
                         ))

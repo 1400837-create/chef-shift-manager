@@ -3,6 +3,7 @@ import {
   isDateKey, dayTitle, weekTitle, mondayOf, shiftMinutes, aggregateByStaff, overlapIds,
 } from './calc'
 import { LOCALE, tr } from './lang'
+import { makeTranslator } from './glossary'
 
 // Everything here is pure: plan data in, text / print payload / write-set out.
 // `data` is one plan's tree: { [YYYY-MM-DD]: { blocks, shifts, comments } }.
@@ -237,6 +238,14 @@ export function buildPrintPayload({ plan, data, ctx, shifts, lang, from, to }) {
   const L = (ru, de) => (lang === 'both' ? (de && de !== ru ? `${ru} / ${de}` : ru) : lang === 'de' ? (de || ru) : ru)
   const T = (key) => (lang === 'both' ? `${tr('ru', key)} / ${tr('de', key)}` : tr(lang, key))
   const D = (fn) => (lang === 'both' ? `${fn('ru-RU')} / ${fn('de-DE')}` : fn(LOCALE[lang]))
+  // hand-typed text (event names, dishes without a German recipe name,
+  // comments) goes through the shared glossary
+  const G = makeTranslator(ctx.glossaryMap || new Map(), lang)
+  const X = (text) => G(text || '').text
+  const dishText = (d) => {
+    const de = ctx.recipeById[d.recipeId]?.de || ''
+    return de ? L(d.text || '', de) : X(d.text)
+  }
 
   const dates = planDates(data, from, to)
   const weeks = new Map()
@@ -264,14 +273,14 @@ export function buildPrintPayload({ plan, data, ctx, shifts, lang, from, to }) {
           title: D((loc) => dayTitle(date, loc)),
           blocks: blocksOf(day).map((b) => ({
             time: b.time || '',
-            name: b.name || '',
+            name: X(b.name),
             persons: b.persons || '',
             dishes: dishesOf(b).map((d) => ({
-              text: L(d.text || '', ctx.recipeById[d.recipeId]?.de || ''),
+              text: dishText(d),
               changed: !!d.changed,
-              comments: commentsOf(d).map((c) => `${c.text} (${c.by})`),
+              comments: commentsOf(d).map((c) => `${X(c.text)} (${c.by})`),
             })),
-            comments: commentsOf(b).map((c) => `${c.text} (${c.by})`),
+            comments: commentsOf(b).map((c) => `${X(c.text)} (${c.by})`),
           })),
           shifts: shiftList.map((s) => {
             const p = shiftMinutes(s, 'planned')
@@ -281,10 +290,10 @@ export function buildPrintPayload({ plan, data, ctx, shifts, lang, from, to }) {
               time: `${s.start || ''}–${s.end || ''}`,
               hours: p === null ? '' : formatDuration(p),
               actual: a === null ? '' : `${s.actStart}–${s.actEnd} (${formatDuration(a)})`,
-              comments: commentsOf(s).map((c) => `${c.text} (${c.by})`),
+              comments: commentsOf(s).map((c) => `${X(c.text)} (${c.by})`),
             }
           }),
-          dayComments: commentsOf(day).map((c) => `${c.text} (${c.by})`),
+          dayComments: commentsOf(day).map((c) => `${X(c.text)} (${c.by})`),
           total: shiftList.length ? formatDuration(planned) : '',
         }
       }),
@@ -398,6 +407,14 @@ export function buildTablePrint({ title, period, dates, partsOf, ctx, lang, show
   const L = (ru, de) => (lang === 'both' ? (de && de !== ru ? `${ru} / ${de}` : ru) : lang === 'de' ? (de || ru) : ru)
   const T = (key) => (lang === 'both' ? `${tr('ru', key)} / ${tr('de', key)}` : tr(lang, key))
   const D = (fn) => (lang === 'both' ? `${fn('ru-RU')} / ${fn('de-DE')}` : fn(LOCALE[lang]))
+  // hand-typed text (event names, dishes without a German recipe name,
+  // comments) goes through the shared glossary
+  const G = makeTranslator(ctx.glossaryMap || new Map(), lang)
+  const X = (text) => G(text || '').text
+  const dishText = (d) => {
+    const de = ctx.recipeById[d.recipeId]?.de || ''
+    return de ? L(d.text || '', de) : X(d.text)
+  }
 
   const weeks = new Map()
   dates.forEach((d) => {
@@ -424,20 +441,20 @@ export function buildTablePrint({ title, period, dates, partsOf, ctx, lang, show
           blocks.push({
             tag: showTags && idx === 0 ? plan.title || '' : '',
             time: b.time || '',
-            name: b.name || '',
+            name: X(b.name),
             persons: b.persons || '',
-            dishes: dishesOf(b).map((d) => ({ text: L(d.text || '', ctx.recipeById[d.recipeId]?.de || ''), changed: !!d.changed })),
+            dishes: dishesOf(b).map((d) => ({ text: dishText(d), changed: !!d.changed })),
           })
-          commentsOf(b).forEach((c) => notes.push(`${b.name || ''}: ${c.text} (${c.by})`))
-          dishesOf(b).forEach((d) => commentsOf(d).forEach((c) => notes.push(`${d.text}: ${c.text} (${c.by})`)))
+          commentsOf(b).forEach((c) => notes.push(`${X(b.name)}: ${X(c.text)} (${c.by})`))
+          dishesOf(b).forEach((d) => commentsOf(d).forEach((c) => notes.push(`${dishText(d)}: ${X(c.text)} (${c.by})`)))
         })
-        commentsOf(day).forEach((c) => notes.push(`${c.text} (${c.by})`))
+        commentsOf(day).forEach((c) => notes.push(`${X(c.text)} (${c.by})`))
         shiftsOf(day).forEach((s) => {
           const rec = s.staffId ? ctx.staffById[s.staffId] : null
           const p = shiftMinutes(s, 'planned')
           const a = shiftMinutes(s, 'actual')
           totalMin += p || 0
-          commentsOf(s).forEach((c) => notes.push(`${rec?.name || s.staffName || ''}: ${c.text} (${c.by})`))
+          commentsOf(s).forEach((c) => notes.push(`${L(rec?.name || s.staffName || '', rec?.nameDe || '')}: ${X(c.text)} (${c.by})`))
           shifts.push({
             staff: L(rec?.name || s.staffName || '', rec?.nameDe || ''),
             time: `${s.start || ''}–${s.end || ''}`,

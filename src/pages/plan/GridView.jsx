@@ -24,6 +24,7 @@ import { useOpenRecipe } from './recipeBridge'
 
 export { TH, TD, gatherComments, Guests, shiftHoursText, daysBetween }
 import { printReport } from '../../utils/printReport'
+import { Tr } from './Tr'
 
 const SPANS = [
   { key: 'week', label: 'Неделя', short: 'Нед' },
@@ -429,7 +430,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                           : blocks.map((b) => (
                             <div key={b.id} className={`mb-1.5 last:mb-0 border-l-4 pl-2 ${ctx.mealColor(b.name).bar}`}>
                               <p className="font-semibold text-slate-800 dark:text-slate-100">
-                                {b.time ? `${b.time} ` : ''}{b.name || '—'}
+                                {b.time ? `${b.time} ` : ''}{b.name ? <Tr text={b.name} ctx={ctx} /> : '—'}
                                 {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
                               </p>
                               {dishesOf(b).map((d) => <DishLine key={d.id} d={d} b={b} date={date} ctx={ctx} bridge={bridge} />)}
@@ -442,7 +443,7 @@ export default function GridView({ plan, data, ctx, renderDay, plans = [], tree 
                           : notes.map((n, i) => (
                             <p key={i} className="mb-1 last:mb-0 text-slate-700 dark:text-slate-200">
                               {n.where && <span className="font-semibold text-orange-600">{n.where}: </span>}
-                              {n.text}
+                              <Tr text={n.text} ctx={ctx} />
                               <span className="text-slate-400"> — {n.by}</span>
                             </p>
                           ))}

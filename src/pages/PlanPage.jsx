@@ -20,6 +20,7 @@ import { RecipeBridgeProvider } from './plan/recipeBridge'
 import { usePlanCtx } from './plan/usePlanCtx'
 import HoursTab from './plan/HoursTab'
 import RecipesTab from './plan/RecipesTab'
+import GlossaryEditor from './plan/GlossaryEditor'
 
 // ---------------------------------------------------------------------------
 // Справочники: сотрудники и типовые смены
@@ -807,6 +808,7 @@ export default function PlanPage({ menuBridge }) {
             <ShiftTemplates />
             <MealTemplateList />
             <MealTypesEditor />
+            <GlossaryEditor />
           </>
         )}
         {config && sub === 'journal' && <JournalPanel />}

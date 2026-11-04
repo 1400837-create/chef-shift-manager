@@ -3,6 +3,7 @@ import { staffLabel, dishLabel } from '../../plan/lang'
 import { blocksOf, dishesOf, shiftsOf } from '../../plan/exchange'
 import { overlapIds } from '../../plan/calc'
 import { Guests, shiftHoursText, gatherComments, DishLine } from './gridShared'
+import { Tr } from './Tr'
 
 // One day, read-only and compact: meals with guests and dishes, who works and
 // for how long, comments. Used by the phone cards, the dashboard and the
@@ -34,7 +35,7 @@ export default function DaySummary({ date, parts, ctx, showTags = false, onOpenP
             {blocks.map((b) => (
               <div key={b.id} className={`mb-1.5 border-l-4 pl-2 ${ctx.mealColor(b.name).bar}`}>
                 <p className="font-semibold text-slate-800 dark:text-slate-100">
-                  {b.time ? `${b.time} ` : ''}{b.name || '—'}
+                  {b.time ? `${b.time} ` : ''}{b.name ? <Tr text={b.name} ctx={ctx} /> : '—'}
                   {b.persons ? <Guests n={b.persons} lang={ctx.lang} /> : null}
                 </p>
                 {dishesOf(b).map((d) => <DishLine key={d.id} d={d} b={b} date={date} ctx={ctx} bridge={bridge} />)}
@@ -70,7 +71,7 @@ export default function DaySummary({ date, parts, ctx, showTags = false, onOpenP
           {notes.map((n, i) => (
             <p key={i} className="mb-0.5 text-slate-700 dark:text-slate-200">
               {n.where && <span className="font-semibold text-orange-600">{n.where}: </span>}
-              {n.text}<span className="text-slate-400"> — {n.by}</span>
+              <Tr text={n.text} ctx={ctx} /><span className="text-slate-400"> — {n.by}</span>
             </p>
           ))}
         </div>

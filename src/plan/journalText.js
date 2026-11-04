@@ -8,6 +8,7 @@ const SUBJECT = {
   mealTemplates: 'шаблон приёма',
   mealTypes: 'тип приёма',
   hourAdjust: 'корректировку часов',
+  glossary: 'перевод',
 }
 
 // Schedule edits carry an explicit `entity` already in the accusative.
@@ -36,6 +37,8 @@ const FIELD = {
   month: 'месяц',
   dateFrom: 'начало периода',
   dateTo: 'конец периода',
+  ru: 'по-русски',
+  de: 'по-немецки',
 }
 
 function fmt(v) {

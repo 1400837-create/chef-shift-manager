@@ -4,6 +4,7 @@ import { shiftMinutes, addDaysKey } from '../../plan/calc'
 import { staffLabel, dishLabel } from '../../plan/lang'
 import { dishesOf, commentsOf } from '../../plan/exchange'
 import { MEAL_PALETTE, OTHER_MEAL_COLOR } from '../../plan/ui'
+import { Tr } from './Tr'
 
 // Every cell gets a full border so the columns read as a table, not a list.
 export const TH = 'px-2 py-2.5 border border-slate-200 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-slate-200/80 dark:from-slate-800 dark:to-slate-900 text-slate-600 dark:text-slate-300'
@@ -16,8 +17,8 @@ export function gatherComments(day, blocks, shifts, ctx) {
   const add = (node, where) => commentsOf(node).forEach((c) => out.push({ where, text: c.text, by: c.by }))
   add(day, '')
   blocks.forEach((b) => {
-    add(b, b.name || 'приём')
-    dishesOf(b).forEach((d) => add(d, dishLabel(d, ctx.recipeById, ctx.lang)))
+    add(b, b.name ? ctx.tr(b.name).text : 'приём')
+    dishesOf(b).forEach((d) => add(d, dishLabel(d, ctx.recipeById, ctx.lang, ctx.tr)))
   })
   shifts.forEach((s) => add(s, staffLabel(ctx.staffById[s.staffId], ctx.lang) || s.staffName || ''))
   return out
@@ -47,6 +48,15 @@ export function daysBetween(from, to) {
   return out
 }
 
+// A dish name in the plan's language: the recipe's German name when it has
+// one, otherwise the hand-typed text through the glossary (with the
+// "no translation yet" mark in DE mode).
+export function DishName({ d, ctx }) {
+  const r = d.recipeId ? ctx.recipeById?.[d.recipeId] : null
+  if (ctx.lang === 'de' && r?.de) return r.de
+  return <Tr text={d.text || ''} ctx={ctx} />
+}
+
 // One dish line in a read-only view: tap opens its tech card (owner device),
 // and a small mark says when the same dish is served a day or two away.
 export function DishLine({ d, b, date, ctx, bridge }) {
@@ -57,7 +67,7 @@ export function DishLine({ d, b, date, ctx, bridge }) {
       onClick={canOpen ? (e) => { e.stopPropagation(); bridge.open(d.recipeId, b.persons) } : undefined}
       className={`pl-2 text-slate-600 dark:text-slate-300 ${d.changed ? '!text-red-600 font-semibold' : ''} ${canOpen ? 'underline decoration-dotted underline-offset-2 cursor-pointer' : ''}`}
     >
-      · {dishLabel(d, ctx.recipeById, ctx.lang)}
+      · <DishName d={d} ctx={ctx} />
       {rep && <span className="ml-1 text-[11px] font-semibold text-orange-600" title={rep}>↻ повтор</span>}
     </p>
   )

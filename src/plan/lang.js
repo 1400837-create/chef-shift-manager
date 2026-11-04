@@ -97,9 +97,10 @@ export function staffLabel(staff, lang) {
 }
 
 // A dish is stored as free text plus an optional link to a recipe; the German
-// name lives on the recipe. Unlinked (hand-typed) dishes have only their text.
-export function dishLabel(dish, recipeById, lang) {
+// name lives on the recipe. Hand-typed dishes, and recipes without a German
+// name, go through the shared glossary when `tr` (ctx.tr) is given.
+export function dishLabel(dish, recipeById, lang, tr) {
   const r = dish.recipeId ? recipeById?.[dish.recipeId] : null
   if (lang === 'de' && r?.de) return r.de
-  return dish.text || ''
+  return tr ? tr(dish.text || '').text : dish.text || ''
 }

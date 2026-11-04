@@ -5,6 +5,7 @@ import { parseHM } from '../../plan/hours'
 import { collectShifts, isDateKey, parseDate, dayTitle } from '../../plan/calc'
 import { byName } from './shared'
 import { makeMealColor, DEFAULT_MEAL_TYPES } from '../../plan/ui'
+import { buildGlossaryMap, makeTranslator } from '../../plan/glossary'
 
 const MS_DAY = 86400000
 const dayDiff = (a, b) => Math.round((parseDate(a) - parseDate(b)) / MS_DAY)
@@ -19,6 +20,7 @@ export function usePlanCtx() {
   const templatesCol = usePlanCollection('shiftTemplates')
   const mealTplCol = usePlanCollection('mealTemplates')
   const mealTypesCol = usePlanCollection('mealTypes')
+  const glossaryCol = usePlanCollection('glossary')
   const recipes = usePlanCollection('recipesSlim')
   const lang = usePlanLang()
   const allData = usePlanCollection('planData').data
@@ -42,6 +44,10 @@ export function usePlanCtx() {
     recipeList.forEach((r) => { recipeById[r.id] = r })
     const staffById = {}
     staffList.forEach((s) => { staffById[s.id] = s })
+    // hand-typed text → German (see plan/glossary.js); ctx.tr(text) gives
+    // { text, missing } for the current language
+    const glossaryMap = buildGlossaryMap(glossaryCol.items)
+    const tr = makeTranslator(glossaryMap, lang)
     const planTitles = {}
     sortedPlans.forEach((p) => { planTitles[p.id] = p.title || '' })
 
@@ -73,9 +79,10 @@ export function usePlanCtx() {
 
     return {
       staffList, staffById, templates, mealTemplates, mealTypes, mealTypesCustom: customTypes.length > 0, mealColor, recipeList, recipeById, lang, planTitles,
+      glossaryItems: glossaryCol.items, glossaryMap, tr,
       allShifts: collectShifts(allData), usageDates, repeatNote,
     }
-  }, [staff.items, templatesCol.items, mealTplCol.items, mealTypesCol.items, recipes.data, lang, sortedPlans, allData])
+  }, [staff.items, templatesCol.items, mealTplCol.items, mealTypesCol.items, recipes.data, glossaryCol.items, lang, sortedPlans, allData])
 
   return { ctx, sortedPlans, allData, plansReady: plans.ready }
 }
